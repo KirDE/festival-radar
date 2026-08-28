@@ -35,7 +35,7 @@ const translations = {
   },
 } as const;
 
-const localeMap: Record<Language, string> = { en: "en-GB", de: "de-DE", ru: "ru-RU" };
+const localeMap: Record<Language, string> = { en: "en-US", de: "de-DE", ru: "ru-RU" };
 const LanguageContext = createContext<{ language: Language; locale: string; setLanguage: (language: Language) => void; t: (key: TranslationKey) => string } | null>(null);
 
 function browserLanguage(): Language {
