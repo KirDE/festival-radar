@@ -1,14 +1,15 @@
 import { notFound } from "next/navigation";
 import { ArtistDetail } from "@/components/ArtistDetail";
-import { allArtists, artistSlug, festivals } from "@/data/festivals";
+import { artistProfiles, getArtistProfile } from "@/data/artists";
+import { festivals } from "@/data/festivals";
 
 export const dynamicParams = false;
-export function generateStaticParams() { return allArtists.map((name) => ({ slug: artistSlug(name) })); }
+export function generateStaticParams() { return artistProfiles.map(({ slug }) => ({ slug })); }
 
 export default async function ArtistPage({ params }: { params: Promise<{ slug: string }> }) {
   const slug = (await params).slug;
-  const name = allArtists.find((artist) => artistSlug(artist) === slug);
-  if (!name) notFound();
-  const appearances = festivals.filter((festival) => [...festival.headliners, ...festival.lineup].includes(name));
-  return <ArtistDetail name={name} appearances={appearances}/>;
+  const artist = getArtistProfile(slug);
+  if (!artist) notFound();
+  const appearances = festivals.filter((festival) => [...festival.headliners, ...festival.lineup].includes(artist.name));
+  return <ArtistDetail artist={artist} appearances={appearances}/>;
 }
