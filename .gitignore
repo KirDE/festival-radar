@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+
+tmp/
+spotify_tokens.json
+*.log
+outputs/
+.next/
+out/
+node_modules/
+*.tsbuildinfo
