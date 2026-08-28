@@ -5,12 +5,14 @@ import { festivals } from "../data/festivals.ts";
 import { festivalSources } from "../data/festival-sources.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
+import { dueFestivalSources } from "../lib/ingestion/schedule.ts";
 
 const args = new Set(process.argv.slice(2));
 const slugArg = process.argv.find((value) => value.startsWith("--slug="))?.slice(7);
 const outputArg = process.argv.find((value) => value.startsWith("--output="))?.slice(9);
 const outputDirectory = path.resolve(outputArg || "outputs/ingestion");
-const selected = festivalSources.filter((source) => source.enabled && (!slugArg || source.festivalSlug === slugArg));
+const eligible = args.has("--due") ? dueFestivalSources(festivalSources) : festivalSources.filter((source) => source.enabled);
+const selected = eligible.filter((source) => !slugArg || source.festivalSlug === slugArg);
 if (selected.length === 0) throw new Error(slugArg ? `Unknown or disabled festival source: ${slugArg}` : "No enabled festival sources");
 
 await mkdir(outputDirectory, { recursive: true });
