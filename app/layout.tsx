@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { LanguageProvider } from "@/components/LanguageProvider";
+import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,12 +14,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body>
-        <header className="siteHeader">
-          <Link className="brand" href="/"><span className="brandMark">FR</span><span>Festival Radar</span></Link>
-          <nav><Link href="/">Festivals</Link><a href="https://github.com/KirDE/festival-radar">About data</a></nav>
-        </header>
-        <main>{children}</main>
-        <footer><span>Festival Radar · Europe 2027</span><span>Always confirm dates and tickets with the official festival.</span></footer>
+        <LanguageProvider>
+          <SiteHeader />
+          <main>{children}</main>
+          <SiteFooter />
+        </LanguageProvider>
       </body>
     </html>
   );
