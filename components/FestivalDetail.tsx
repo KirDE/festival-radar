@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import type { Festival } from "@/data/festivals";
-import { artistSlug } from "@/data/festivals";
+import { artistSlug, festivals } from "@/data/festivals";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
+import { PlanningTools } from "./PlanningTools";
 
 export function FestivalDetail({ item }: { item: Festival }) {
   const { locale, t } = useLanguage();
@@ -18,5 +19,5 @@ export function FestivalDetail({ item }: { item: Festival }) {
     <section className="lineupSection"><div className="sectionHeading"><div><div className="eyebrow">{t("discoverBill")}</div><h2>{t("lineup2027")}</h2></div><span>{item.headliners.length + item.lineup.length} {t("announced")}</span></div>
       {item.headliners.length ? <><h3>{t("headliners")}</h3><div className="headlinerGrid">{item.headliners.map((artist) => <Link href={`/artists/${artistSlug(artist)}/`} key={artist}>{artist}<span>{t("viewArtist")}</span></Link>)}</div></> : <div className="lineupEmpty"><strong>{t("noArtists")}</strong><span>{t("noArtistsText")}</span></div>}
       {item.lineup.length > 0 && <><h3>{t("alsoAnnounced")}</h3><div className="lineupGrid">{item.lineup.map((artist) => <Link href={`/artists/${artistSlug(artist)}/`} key={artist}>{artist}</Link>)}</div></>}
-    </section><section className="sourceNote"><strong>{t("transparency")}</strong><p>{t("sourceText")}</p><a href={item.officialUrl} target="_blank" rel="noreferrer">{t("primarySource")}</a></section></div>;
+    </section><PlanningTools item={item} festivals={festivals}/><section className="sourceNote"><strong>{t("transparency")}</strong><p>{t("sourceText")}</p><a href={item.officialUrl} target="_blank" rel="noreferrer">{t("primarySource")}</a></section></div>;
 }

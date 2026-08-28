@@ -13,6 +13,8 @@ export type Festival = {
   ticketsUrl?: string;
   playlistUrl?: string;
   status: "confirmed" | "partial" | "tba";
+  ticketStatus?: "available" | "unavailable" | "unknown";
+  timetable?: { date: string; stage: string; start: string; artist: string }[];
 };
 
 const festival = (
