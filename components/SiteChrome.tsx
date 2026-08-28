@@ -10,5 +10,5 @@ export function SiteHeader() {
 
 export function SiteFooter() {
   const { language, setLanguage, t } = useLanguage();
-  return <footer><span>Festival Radar · Europe 2027</span><span>{t("footerNote")}</span><label className="languagePicker"><span>{t("language")}</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label={t("language")}><option value="en">English</option><option value="de">Deutsch</option><option value="ru">Русский</option></select></label></footer>;
+  return <footer><span>Festival Radar · Europe 2027</span><span>{t("footerNote")} · Privacy-first: no cookies or cross-site tracking.</span><label className="languagePicker"><span>{t("language")}</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)} aria-label={t("language")}><option value="en">English</option><option value="de">Deutsch</option><option value="ru">Русский</option></select></label></footer>;
 }

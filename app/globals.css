@@ -5,6 +5,10 @@
 html { scroll-behavior:smooth; }
 body { margin:0; color:var(--ink); background:var(--paper); font-family:"DM Sans",sans-serif; }
 a { color:inherit; text-decoration:none; }
+.skipLink { position:fixed; top:8px; left:8px; z-index:100; padding:10px 14px; background:var(--acid); color:var(--ink); font-weight:800; transform:translateY(-150%); }
+.skipLink:focus { transform:translateY(0); }
+:focus-visible { outline:3px solid var(--orange); outline-offset:3px; }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; animation:none!important; } }
 .siteHeader { height:78px; max-width:1440px; margin:auto; padding:0 44px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); }
 .brand { display:flex; align-items:center; gap:12px; font-weight:800; text-transform:uppercase; letter-spacing:-.03em; }
 .brandMark { display:grid; place-items:center; width:38px; height:38px; background:var(--ink); color:var(--acid); font-family:"Archivo Black"; font-size:14px; transform:rotate(-3deg); }

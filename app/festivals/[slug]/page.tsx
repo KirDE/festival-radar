@@ -14,5 +14,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function FestivalPage({ params }: { params: Promise<{ slug: string }> }) {
   const item = getFestival((await params).slug);
   if (!item) notFound();
-  return <FestivalDetail item={item}/>;
+  const event = {
+    "@context": "https://schema.org",
+    "@type": "MusicEvent",
+    name: item.name,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    eventStatus: "https://schema.org/EventScheduled",
+    location: { "@type": "Place", name: item.city || item.country, address: { "@type": "PostalAddress", addressCountry: item.countryCode } },
+    url: `https://festivals.kir-it.de/festivals/${item.slug}/`,
+    sameAs: item.officialUrl,
+    ...(item.ticketsUrl ? { offers: { "@type": "Offer", url: item.ticketsUrl, availability: "https://schema.org/InStock" } } : {}),
+  };
+  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(event).replace(/</g, "\\u003c") }}/><FestivalDetail item={item}/></>;
 }
