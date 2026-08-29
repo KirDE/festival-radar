@@ -22,7 +22,7 @@ footer { max-width:1440px; margin:70px auto 0; padding:30px 44px; display:flex; 
 .heroStats { display:flex; gap:34px; margin-top:44px; font-size:13px; text-transform:uppercase; letter-spacing:.07em; }
 .heroStats strong { font-family:"Archivo Black"; font-size:22px; margin-right:7px; }
 .explorer { max-width:1440px; margin:auto; padding:32px 44px; }
-.filterBar { position:sticky; top:12px; z-index:5; display:grid; grid-template-columns:minmax(250px,1fr) 210px auto; gap:12px; padding:12px; background:rgba(23,23,18,.96); box-shadow:0 10px 30px rgba(0,0,0,.16); }
+.filterBar { position:sticky; top:12px; z-index:5; display:grid; grid-template-columns:minmax(230px,1fr) 170px 150px auto auto; gap:10px; padding:12px; background:rgba(23,23,18,.96); box-shadow:0 10px 30px rgba(0,0,0,.16); }
 .search { background:white; display:flex; align-items:center; padding:0 16px; gap:10px; } .search span { font-size:25px; }
 .search input,.filterBar select { width:100%; border:0; outline:0; background:white; font:600 14px "DM Sans"; padding:15px; }
 .toggle { display:flex; align-items:center; gap:10px; color:white; padding:0 14px; white-space:nowrap; font-size:13px; font-weight:700; cursor:pointer; }
@@ -32,6 +32,11 @@ footer { max-width:1440px; margin:70px auto 0; padding:30px 44px; display:flex; 
 .resultMeta { display:flex; justify-content:space-between; margin:35px 0 15px; color:#6f6c63; font-size:12px; text-transform:uppercase; letter-spacing:.08em; font-weight:700; }
 .festivalGrid { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line); border-left:1px solid var(--line); }
 .festivalCard { min-width:0; min-height:390px; padding:25px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); display:flex; flex-direction:column; transition:.18s; background:rgba(255,255,255,.09); }
+.festivalCard>a { display:flex; flex:1; flex-direction:column; }
+.compareButton { align-self:flex-end; margin:-12px -10px 12px 0; border:1px solid var(--line); background:transparent; padding:6px 9px; font:700 11px "DM Sans"; cursor:pointer; }
+.compareButton.active { background:var(--acid); border-color:var(--ink); }.compareButton:disabled{opacity:.35;cursor:not-allowed}
+.compareTray { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:18px 0 0; padding:12px; border:1px solid var(--ink); background:white; font-size:12px; }
+.compareTray button { border:0; background:var(--soft); padding:7px 9px; cursor:pointer; }.compareTray span{margin-left:auto;color:#5f5c54}
 .festivalCard:hover { background:white; transform:translateY(-4px); box-shadow:0 15px 30px rgba(0,0,0,.09); z-index:2; }
 .cardTop { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:38px; }
 .festivalLogo { width:68px; height:54px; display:grid; place-items:center; background:white; border:1px solid var(--line); padding:8px; overflow:hidden; }
@@ -74,6 +79,10 @@ footer { max-width:1440px; margin:70px auto 0; padding:30px 44px; display:flex; 
 .lineupEmpty { padding:45px; border:1px solid var(--line); margin-top:25px; display:flex; flex-direction:column; gap:10px; }
 .sourceNote { margin-top:60px; padding:24px; background:#e6e2d7; display:grid; grid-template-columns:180px 1fr auto; align-items:center; gap:20px; font-size:13px; }
 .sourceNote p { color:#605e58; }.sourceNote a { text-decoration:underline; font-weight:700; }
+.planningSection { padding:60px 0 0; }.planningSection .sectionHeading h2{font-size:42px}
+.planningActions { display:flex; flex-wrap:wrap; gap:10px; padding:22px 0; }.planningActions a,.planningActions>span{padding:13px 16px;border:1px solid var(--ink);font-size:12px;font-weight:800}.planningActions a:hover{background:var(--acid)}
+.timetable { display:flex; justify-content:space-between; gap:20px; padding:20px; background:var(--soft); font-size:13px; }.timetable span{color:#66635b}
+.recommendations { display:grid; grid-template-columns:180px repeat(3,1fr); margin-top:15px; border:1px solid var(--line); }.recommendations h3,.recommendations a{margin:0;padding:18px;border-right:1px solid var(--line)}.recommendations a{display:flex;flex-direction:column;gap:6px}.recommendations span{font-size:11px;color:#706d65}
 .artistHero { display:flex; align-items:center; gap:30px; padding:65px 0 35px; border-bottom:3px solid var(--ink); }
 .artistHero h1 { font-size:clamp(45px,7vw,90px); }.artistHero p { color:#6a675f; }
 .artistMonogram { width:120px; height:120px; display:grid; place-items:center; background:var(--orange); font:58px "Archivo Black"; transform:rotate(-3deg); }
