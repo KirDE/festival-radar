@@ -10,6 +10,7 @@
     "check:sources": "node scripts/check-festival-sources.mjs",
     "ingest": "node scripts/ingest-festivals.mjs",
     "test:data": "node --test tests/*.test.mjs",
+    "test:admin:integration": "node --test --test-concurrency=1 tests/integration/admin-workflows.test.mjs",
     "playlists:status": "node scripts/build-playlist-status.mjs",
     "test": "python3 -m unittest discover -s tests"
   },
