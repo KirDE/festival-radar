@@ -20,7 +20,8 @@ test("JSON-LD extraction normalizes dates, city, performers, and tickets", () =>
         "endDate": "2027-07-03",
         "location": {"@type": "Place", "address": {"addressLocality": "Berlin"}},
         "performer": [{"@type": "MusicGroup", "name": "Band A"}, {"name": "Band B"}],
-        "offers": {"@type": "Offer", "url": "https://tickets.example/fest"}
+        "offers": {"@type": "Offer", "url": "https://tickets.example/fest", "availability": "https://schema.org/LimitedAvailability"},
+        "subEvent": [{"@type": "MusicEvent", "name": "Band A", "startDate": "2027-07-01T18:30:00Z", "location": {"name": "Main Stage"}}]
       }
     </script>`;
   const candidate = extractJsonLdCandidate(html, source, "2026-08-28T21:00:00.000Z");
@@ -29,8 +30,10 @@ test("JSON-LD extraction normalizes dates, city, performers, and tickets", () =>
   assert.equal(candidate.city, "Berlin");
   assert.deepEqual(candidate.lineup, ["Band A", "Band B"]);
   assert.equal(candidate.ticketsUrl, "https://tickets.example/fest");
+  assert.equal(candidate.ticketStatus, "low");
+  assert.deepEqual(candidate.timetable, [{ date: "2027-07-01", start: "18:30", stage: "Main Stage", artist: "Band A" }]);
   assert.deepEqual(candidate.warnings, []);
-  assert.deepEqual(new Set(candidate.evidence.map(({ field }) => field)), new Set(["startDate", "endDate", "city", "lineup", "ticketsUrl"]));
+  assert.deepEqual(new Set(candidate.evidence.map(({ field }) => field)), new Set(["startDate", "endDate", "city", "lineup", "ticketsUrl", "ticketStatus", "timetable"]));
 });
 
 test("JSON-LD extraction supports @graph and routes risky statuses to review", () => {

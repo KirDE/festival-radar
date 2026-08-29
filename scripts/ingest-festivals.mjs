@@ -6,6 +6,7 @@ import { festivalSources } from "../data/festival-sources.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
 import { dueFestivalSources } from "../lib/ingestion/schedule.ts";
+import { notificationEventsForChanges } from "../lib/ingestion/notification-events.ts";
 
 const args = new Set(process.argv.slice(2));
 const slugArg = process.argv.find((value) => value.startsWith("--slug="))?.slice(7);
@@ -13,10 +14,13 @@ const outputArg = process.argv.find((value) => value.startsWith("--output="))?.s
 const outputDirectory = path.resolve(outputArg || "outputs/ingestion");
 const eligible = args.has("--due") ? dueFestivalSources(festivalSources) : festivalSources.filter((source) => source.enabled);
 const selected = eligible.filter((source) => !slugArg || source.festivalSlug === slugArg);
+const publish = args.has("--publish");
+const notificationEndpoint = process.env.NOTIFICATION_EVENTS_URL || (process.env.APP_URL ? new URL("/api/notifications/events", process.env.APP_URL).toString() : undefined);
+if (publish && (!notificationEndpoint || !process.env.INTERNAL_API_SECRET)) throw new Error("Published ingestion requires APP_URL (or NOTIFICATION_EVENTS_URL) and INTERNAL_API_SECRET");
 if (selected.length === 0) throw new Error(slugArg ? `Unknown or disabled festival source: ${slugArg}` : "No enabled festival sources");
 
 await mkdir(outputDirectory, { recursive: true });
-const summary = { schemaVersion: 1, generatedAt: new Date().toISOString(), dryRun: !args.has("--publish"), processed: 0, changed: 0, publishable: 0, reviewRequired: 0, fetchErrors: 0, results: [] };
+const summary = { schemaVersion: 1, generatedAt: new Date().toISOString(), dryRun: !publish, processed: 0, changed: 0, publishable: 0, reviewRequired: 0, fetchErrors: 0, notificationEvents: 0, results: [] };
 
 for (const source of selected) {
   const current = festivals.find(({ slug }) => slug === source.festivalSlug);
@@ -38,6 +42,14 @@ for (const source of selected) {
     summary.processed += 1;
     if (result.changes.length) summary.changed += 1;
     if (result.publishable) summary.publishable += 1;
+    if (publish && result.publishable) {
+      const events = notificationEventsForChanges(current, result.changes, fetchedAt);
+      for (const event of events) {
+        const notificationResponse = await fetch(notificationEndpoint, { method: "POST", headers: { authorization: `Bearer ${process.env.INTERNAL_API_SECRET}`, "content-type": "application/json" }, body: JSON.stringify(event), signal: AbortSignal.timeout(20_000) });
+        if (!notificationResponse.ok) throw new Error(`Notification event persistence failed with HTTP ${notificationResponse.status}`);
+        summary.notificationEvents += 1;
+      }
+    }
     if (result.reviewReasons.length) summary.reviewRequired += 1;
     summary.results.push({ festivalSlug: source.festivalSlug, status, changes: result.changes.length, reviewReasons: result.reviewReasons });
   } catch (error) {

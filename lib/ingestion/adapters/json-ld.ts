@@ -73,6 +73,27 @@ function ticketUrl(offers: unknown): string | undefined {
   return undefined;
 }
 
+function ticketStatus(offers: unknown): FestivalCandidate["ticketStatus"] {
+  const values = Array.isArray(offers) ? offers : [offers];
+  const availability = values.flatMap((offer) => offer && typeof offer === "object" ? [text((offer as JsonLd).availability)?.toLowerCase()] : []).filter(Boolean);
+  if (availability.some((value) => value?.includes("soldout") || value?.includes("outofstock"))) return "unavailable";
+  if (availability.some((value) => value?.includes("limitedavailability") || value?.includes("limited"))) return "low";
+  if (availability.some((value) => value?.includes("instock") || value?.includes("preorder") || value?.includes("presale"))) return "available";
+  return undefined;
+}
+
+function timetable(value: unknown): FestivalCandidate["timetable"] {
+  const result = records(value).flatMap((entry) => {
+    const artist = text(entry.performer) || text(entry.name);
+    const startDate = text(entry.startDate);
+    if (!artist || !startDate) return [];
+    const parsed = new Date(startDate);
+    if (Number.isNaN(parsed.valueOf())) return [];
+    return [{ date: parsed.toISOString().slice(0, 10), start: parsed.toISOString().slice(11, 16), stage: text(entry.location) || "TBA", artist }];
+  });
+  return result.length ? result : undefined;
+}
+
 export function extractJsonLdCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const matches = eventRecords(html);
   const selected = matches[0];
@@ -96,6 +117,8 @@ export function extractJsonLdCandidate(html: string, source: FestivalSource, fet
     city: city(selected.event.location),
     lineup: names(selected.event.performer),
     ticketsUrl: ticketUrl(selected.event.offers),
+    ticketStatus: ticketStatus(selected.event.offers),
+    timetable: timetable(selected.event.subEvent),
   };
 
   for (const [field, value] of Object.entries(fields)) {

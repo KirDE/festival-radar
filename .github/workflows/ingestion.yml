@@ -26,8 +26,10 @@ jobs:
       - name: Refresh due festival sources
         env:
           FESTIVAL: ${{ inputs.festival }}
+          APP_URL: ${{ secrets.APP_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
         run: |
-          args=(--due --output=outputs/ingestion)
+          args=(--due --publish --output=outputs/ingestion)
           if [[ -n "$FESTIVAL" ]]; then args+=("--slug=$FESTIVAL"); fi
           npm run ingest -- "${args[@]}"
       - name: Retain review and diagnostic artifacts

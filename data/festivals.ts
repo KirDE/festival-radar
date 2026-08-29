@@ -14,7 +14,7 @@ export type Festival = {
   playlistUrl?: string;
   status: "confirmed" | "partial" | "tba";
   editionYear?: number;
-  ticketStatus?: "available" | "unavailable" | "unknown";
+  ticketStatus?: "available" | "low" | "unavailable" | "unknown";
   timetable?: { date: string; stage: string; start: string; artist: string }[];
 };
 
