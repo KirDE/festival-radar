@@ -67,6 +67,7 @@ test("safe additions can publish while removals and empty replacements require r
     fetchedAt: "2026-08-28T20:00:00.000Z",
     evidence: [],
     warnings: [],
+    observedEditionYears: [2027],
   };
   const addition = evaluateCandidate(current, { ...base, lineup: [...current.lineup, "Test Artist"] });
   assert.equal(addition.publishable, true);
