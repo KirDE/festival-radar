@@ -1,0 +1,40 @@
+name: Festival ingestion
+
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+    inputs:
+      festival:
+        description: Optional festival slug
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Refresh due festival sources
+        env:
+          FESTIVAL: ${{ inputs.festival }}
+        run: |
+          args=(--due --output=outputs/ingestion)
+          if [[ -n "$FESTIVAL" ]]; then args+=("--slug=$FESTIVAL"); fi
+          npm run ingest -- "${args[@]}"
+      - name: Retain review and diagnostic artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: festival-ingestion-${{ github.run_id }}
+          path: outputs/ingestion/
+          if-no-files-found: error
+          retention-days: 30

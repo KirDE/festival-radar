@@ -15,6 +15,14 @@ export type Festival = {
   status: "confirmed" | "partial" | "tba";
 };
 
+export type PlaylistStatus = {
+  spotifyUrl: string;
+  youtubeMusicUrl?: string;
+  artists: number;
+  tracks: number;
+  updatedAt: string;
+};
+
 const festival = (
   slug: string,
   name: string,
