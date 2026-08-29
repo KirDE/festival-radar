@@ -9,7 +9,7 @@
     "fetch:logos": "node scripts/fetch-festival-logos.mjs",
     "check:sources": "node scripts/check-festival-sources.mjs",
     "ingest": "node scripts/ingest-festivals.mjs",
-    "test:data": "node --test tests/*.test.mjs",
+    "test:data": "node --test tests/*.test.mjs && node --experimental-strip-types --test tests/*.test.ts",
     "playlists:status": "node scripts/build-playlist-status.mjs",
     "test": "python3 -m unittest discover -s tests"
   },
