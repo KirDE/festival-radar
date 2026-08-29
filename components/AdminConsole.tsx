@@ -16,14 +16,21 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
   const [artistQuery, setArtistQuery] = useState("");
   const artists = useMemo(() => Array.from(new Set(festivals.flatMap((item) => [...item.headliners, ...item.lineup]))).filter((artist) => artist.toLowerCase().includes(artistQuery.toLowerCase())).slice(0, 12), [festivals, artistQuery]);
 
-  const decide = (id: string, status: "approved" | "rejected") => {
+  const decide = async (id: string, status: "approved" | "rejected") => {
+    const response = await fetch(`/api/admin/changes/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision: status === "approved" ? "approve" : "reject" }) });
+    const body = await response.json();
+    if (!response.ok) return setNotice(body.error ?? "Decision failed");
     setChanges((items) => items.map((item) => item.id === id ? { ...item, status } : item));
-    setNotice(`Change ${id} ${status}. The decision was added to the audit trail.`);
+    setNotice(`Change ${id} ${status}. The durable audit trail was updated.`);
   };
-  const refresh = () => {
+  const refresh = async () => {
     setRefreshing(true);
     setNotice("");
-    window.setTimeout(() => { setRefreshing(false); setNotice(`${selected.name} refresh finished. One review item was queued; publication remains gated.`); }, 700);
+    try {
+      const response = await fetch(`/api/admin/refresh/${selected.slug}`, { method: "POST" });
+      const body = await response.json();
+      setNotice(response.ok ? `${selected.name} refresh finished: ${body.message}. Reload to inspect its queued changes and persisted log.` : body.error ?? "Refresh failed");
+    } finally { setRefreshing(false); }
   };
 
   return <main className="adminShell">
