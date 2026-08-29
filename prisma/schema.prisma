@@ -112,6 +112,16 @@ model AdminDraft {
   @@index([createdById, updatedAt])
 }
 
+model AdminResourceState {
+  resourceKind AdminResourceKind
+  resourceKey  String
+  revision     Int               @default(0)
+  values       Json
+  updatedAt    DateTime          @updatedAt
+
+  @@id([resourceKind, resourceKey])
+}
+
 model AdminChange {
   id             String            @id @default(cuid())
   resourceKind   AdminResourceKind
