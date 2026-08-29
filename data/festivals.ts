@@ -13,6 +13,7 @@ export type Festival = {
   ticketsUrl?: string;
   playlistUrl?: string;
   status: "confirmed" | "partial" | "tba";
+  editionYear?: number;
   ticketStatus?: "available" | "unavailable" | "unknown";
   timetable?: { date: string; stage: string; start: string; artist: string }[];
 };
@@ -41,6 +42,7 @@ const festival = (
   headliners: [],
   lineup: [],
   status: "tba",
+  editionYear: 2027,
   dateLabel: "Dates TBA",
   ...options,
 });
@@ -109,3 +111,9 @@ export function getFestival(slug: string) {
 export function artistSlug(name: string) {
   return encodeURIComponent(name.toLocaleLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, ""));
 }
+
+export const supportedLanguages = ["en", "de", "ru"] as const;
+export type SupportedLanguage = (typeof supportedLanguages)[number];
+export function festivalMonth(item: Festival) { return item.startDate?.slice(5, 7); }
+export const archiveYears = [2026] as const;
+export const plannedEditionYears = [2028] as const;

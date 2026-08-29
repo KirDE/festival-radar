@@ -25,7 +25,7 @@ export function SiteFooter() {
   return (
     <footer>
       <span>Festival Radar · Europe 2027</span>
-      <span>{t("footerNote")}</span>
+      <span>{t("footerNote")} · Privacy-first: no cookies or cross-site tracking.</span>
       <label className="languagePicker">
         <span>{t("language")}</span>
         <select

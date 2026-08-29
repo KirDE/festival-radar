@@ -147,6 +147,33 @@ a {
   color: inherit;
   text-decoration: none;
 }
+.skipLink {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 10px 14px;
+  background: var(--acid);
+  color: var(--ink);
+  font-weight: 800;
+  transform: translateY(-150%);
+}
+.skipLink:focus {
+  transform: translateY(0);
+}
+:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
 .siteHeader {
   height: 78px;
   max-width: 1440px;
@@ -769,6 +796,72 @@ footer {
 }
 .artistActions a:hover {
   background: var(--acid);
+}
+.directoryPage {
+  max-width: 1280px;
+  margin: auto;
+  padding: 70px 44px;
+}
+.directoryPage > h1 {
+  max-width: 1000px;
+  font: clamp(42px, 7vw, 88px)/0.95 "Archivo Black";
+  text-transform: uppercase;
+  letter-spacing: -0.05em;
+}
+.directoryPage > p {
+  max-width: 720px;
+  line-height: 1.6;
+}
+.directoryPage section {
+  margin: 48px 0;
+}
+.directoryRow {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 24px;
+  padding: 22px 0;
+  border-top: 1px solid var(--line);
+}
+.textLink {
+  font-weight: 800;
+  text-decoration: underline;
+}
+.submissionForm {
+  max-width: 700px;
+  display: grid;
+  gap: 18px;
+  margin-top: 36px;
+}
+.submissionForm label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+.submissionForm input,
+.submissionForm textarea {
+  padding: 13px;
+  border: 1px solid #888;
+  background: white;
+  font: inherit;
+}
+.submissionForm textarea {
+  min-height: 120px;
+}
+.submissionForm button {
+  width: max-content;
+  border: 0;
+  padding: 15px 20px;
+  background: var(--ink);
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
+}
+.submissionForm button:hover {
+  background: var(--orange);
+}
+.honeypot {
+  position: absolute !important;
+  left: -10000px !important;
 }
 .artistMetadata {
   display: grid;
