@@ -54,8 +54,17 @@ The GitHub `production` environment must define `DEPLOY_HOST`, `DEPLOY_PORT`,
 root-owned mode-0600 environment file on the server and are never committed or
 printed. The configured SSH principal is root because the installer manages
 systemd and the Plesk Apache vhost include.
-The initial PostgreSQL database and role must exist before the first release;
-subsequent schema updates are applied by the checked-in Prisma migrations.
+Provision the initial least-privilege PostgreSQL database and role once on the
+server (the password is read only from the environment):
+
+```bash
+sudo FESTIVAL_DB_PASSWORD='<generated secret>' \
+  bash scripts/deploy/bootstrap-postgres.sh
+```
+
+Store the resulting connection string as the protected `DATABASE_URL` secret.
+The bootstrap is idempotent; subsequent schema updates are applied by the
+checked-in Prisma migrations.
 
 Festival seed data lives in `data/festivals.ts`. Official source availability
 and the setlist.fm API are checked automatically every three days by GitHub
