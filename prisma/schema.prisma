@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SyncKind {
+  FAVORITES
+  COLLECTIONS
+  SAVED_FILTERS
+  FESTIVAL_PLANS
+}
+
+enum NotificationChannel {
+  EMAIL
+  TELEGRAM
+  WEB_PUSH
+}
+
+enum NotificationFrequency {
+  IMMEDIATE
+  DAILY
+  WEEKLY
+}
+
+enum NotificationEventType {
+  ARTIST_ADDED
+  ARTIST_CANCELLED
+  FESTIVAL_DATE_MOVED
+  TICKETS_ON_SALE
+  TICKETS_LOW
+  TICKETS_SOLD_OUT
+  TIMETABLE_PUBLISHED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+model User {
+  id                        String                     @id @default(cuid())
+  email                     String                     @unique
+  passwordHash              String
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  sessions                  Session[]
+  documents                 SyncDocument[]
+  shareLinks                ShareLink[]
+  spotify                   SpotifyConnection?
+  notificationPreferences   NotificationPreference[]
+  notificationSubscriptions NotificationSubscription[]
+  notificationDeliveries    NotificationDelivery[]
+}
+
+model NotificationPreference {
+  id         String                @id @default(cuid())
+  userId     String
+  festivalId String?
+  eventType  NotificationEventType
+  channel    NotificationChannel
+  frequency  NotificationFrequency @default(IMMEDIATE)
+  enabled    Boolean               @default(true)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, festivalId, eventType, channel])
+  @@index([festivalId, eventType, enabled])
+}
+
+model NotificationSubscription {
+  id        String              @id @default(cuid())
+  userId    String
+  channel   NotificationChannel
+  endpoint  String
+  metadata  Json?
+  enabled   Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channel, endpoint])
+  @@index([userId, channel, enabled])
+}
+
+model NotificationEvent {
+  id         String                 @id @default(cuid())
+  dedupeKey  String                 @unique
+  festivalId String
+  type       NotificationEventType
+  title      String
+  message    String
+  url        String?
+  occurredAt DateTime
+  payload    Json?
+  createdAt  DateTime               @default(now())
+  deliveries NotificationDelivery[]
+
+  @@index([festivalId, type, occurredAt])
+}
+
+model NotificationDelivery {
+  id            String                @id @default(cuid())
+  eventId       String
+  userId        String
+  channel       NotificationChannel
+  frequency     NotificationFrequency
+  status        NotificationStatus    @default(PENDING)
+  attempts      Int                   @default(0)
+  nextAttemptAt DateTime?
+  sentAt        DateTime?
+  lastError     String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  event         NotificationEvent     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, channel])
+  @@index([status, frequency, nextAttemptAt])
+  @@index([userId, createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model SyncDocument {
+  id        String     @id @default(cuid())
+  userId    String
+  kind      SyncKind
+  payload   Json
+  revision  Int        @default(1)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareLink ShareLink?
+
+  @@unique([userId, kind])
+}
+
+model ShareLink {
+  id         String       @id @default(cuid())
+  slug       String       @unique
+  userId     String
+  documentId String       @unique
+  expiresAt  DateTime?
+  createdAt  DateTime     @default(now())
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document   SyncDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SpotifyConnection {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  encryptedRefreshToken String
+  spotifyUserId         String
+  lastSyncedAt          DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
