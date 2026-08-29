@@ -11,6 +11,7 @@
     "ingest": "node scripts/ingest-festivals.mjs",
     "test:data": "node --test tests/*.test.mjs",
     "test:admin:integration": "node --test --test-concurrency=1 tests/integration/admin-workflows.test.mjs",
+    "test:admin:e2e": "playwright test",
     "playlists:status": "node scripts/build-playlist-status.mjs",
     "test": "python3 -m unittest discover -s tests"
   },
@@ -27,5 +28,8 @@
     "react-dom": "^19.0.0",
     "typescript": "^5.7.0",
     "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
   }
 }
