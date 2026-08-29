@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import type { Festival } from "@/data/festivals";
-import { artistSlug } from "@/data/festivals";
+import { artistSlug, festivals } from "@/data/festivals";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
+import { PlanningTools } from "./PlanningTools";
+import playlistStatus from "@/data/playlist-status.json";
+import type { PlaylistStatus } from "@/data/festivals";
 import {
   FavoriteButton,
   useLocalPlanner,
@@ -28,6 +31,10 @@ export function FestivalDetail({ item }: { item: Festival }) {
     item.status === "tba"
       ? t("datesLineupTba")
       : t(item.status === "confirmed" ? "confirmedLineup" : "partialLineup");
+  const playlist = (playlistStatus as Record<string, PlaylistStatus>)[
+    item.slug
+  ];
+  const playlistUrl = playlist?.spotifyUrl || item.playlistUrl;
   return (
     <div className="detailPage">
       <Link className="back" href="/">
@@ -79,9 +86,14 @@ export function FestivalDetail({ item }: { item: Festival }) {
             {t(item.ticketsUrl ? "officialTickets" : "ticketsInfo")}
           </strong>
         </a>
-        {item.playlistUrl ? (
-          <a href={item.playlistUrl} target="_blank" rel="noreferrer">
-            <small>{t("listen")}</small>
+        {playlistUrl ? (
+          <a href={playlistUrl} target="_blank" rel="noreferrer">
+            <small>
+              {t("listen")}
+              {playlist
+                ? ` · ${playlist.artists} ${t("artists")} · ${playlist.tracks} ${t("tracks")}`
+                : ""}
+            </small>
             <strong>{t("spotifyPlaylist")}</strong>
           </a>
         ) : (
@@ -136,6 +148,7 @@ export function FestivalDetail({ item }: { item: Festival }) {
           </>
         )}
       </section>
+      <PlanningTools item={item} festivals={festivals} />
       <section className="sourceNote">
         <strong>{t("transparency")}</strong>
         <p>{t("sourceText")}</p>

@@ -56,7 +56,8 @@ def _token_request(data: dict, retries=4) -> dict:
 
 def load_tokens() -> dict:
     if not TOKEN_PATH.exists():
-        return {}
+        refresh_token = os.environ.get('SPOTIFY_REFRESH_TOKEN')
+        return {'refresh_token': refresh_token} if refresh_token else {}
     return json.loads(TOKEN_PATH.read_text(encoding='utf-8'))
 
 

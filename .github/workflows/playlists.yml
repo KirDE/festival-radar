@@ -1,0 +1,44 @@
+name: Refresh festival playlists
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 2,5"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: festival-playlist-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python3 -m pip install -r requirements.txt
+      - name: Refresh Spotify playlists and reports
+        env:
+          SETLIST_API_KEY: ${{ secrets.SETLIST_API_KEY }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
+        run: python3 scripts/spotify_gmm_2026/festival_playlists.py
+      - run: node scripts/build-playlist-status.mjs
+      - name: Propose status update
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automation/playlist-status
+          delete-branch: true
+          commit-message: "Refresh festival playlist status"
+          title: "Refresh festival playlist status"
+          body: "Automated playlist refresh metadata. Playlist safety rules and tests run in Quality before merge."
+          add-paths: data/playlist-status.json
