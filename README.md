@@ -48,7 +48,13 @@ Festival ingestion runs daily and selects sources according to their adaptive
 daily, three-day, weekly, or archived cadence. Run one source with
 `npm run ingest -- --slug=wacken-open-air`; add `--due` to select only sources
 whose last successful check is older than its configured interval. Scheduled
-runs retain normalized candidates and review diagnostics for 30 days.
+runs publish policy-approved additive changes into
+`data/ingestion-publications.json` through an automatically generated pull
+request. Every observation is appended to `data/ingestion-history.jsonl` with
+source URL, fetch time, old/new values and outcome. Destructive, ambiguous and
+date changes are recorded as `review_required` and never auto-published. Dry
+runs record evidence without changing the overlay. Roll back by reverting the
+generated PR (or its overlay/history entries) in a new PR.
 
 ## Main scripts
 
