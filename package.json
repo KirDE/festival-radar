@@ -8,16 +8,23 @@
     "typecheck": "tsc --noEmit",
     "fetch:logos": "node scripts/fetch-festival-logos.mjs",
     "check:sources": "node scripts/check-festival-sources.mjs",
-    "test:data": "node --test tests/festival-data.test.mjs",
+    "ingest": "node scripts/ingest-festivals.mjs",
+    "test:data": "node --test tests/*.test.mjs",
+    "playlists:status": "node scripts/build-playlist-status.mjs",
     "test": "python3 -m unittest discover -s tests"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "bcryptjs": "^3.0.2",
+    "jose": "^6.1.0",
     "next": "^16.3.3",
+    "prisma": "^6.19.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "zod": "^4.1.12"
   }
 }

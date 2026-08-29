@@ -14,6 +14,16 @@ export type Festival = {
   playlistUrl?: string;
   status: "confirmed" | "partial" | "tba";
   editionYear?: number;
+  ticketStatus?: "available" | "unavailable" | "unknown";
+  timetable?: { date: string; stage: string; start: string; artist: string }[];
+};
+
+export type PlaylistStatus = {
+  spotifyUrl: string;
+  youtubeMusicUrl?: string;
+  artists: number;
+  tracks: number;
+  updatedAt: string;
 };
 
 const festival = (

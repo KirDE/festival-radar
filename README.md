@@ -24,9 +24,31 @@ npm run test:data
 npm run build
 ```
 
+Account and sync API routes require a Next.js server deployment plus PostgreSQL:
+
+```bash
+cp .env.example .env
+npx prisma migrate deploy
+npm run dev
+```
+
+The account API uses 30-day opaque, hashed database sessions in an HTTP-only
+cookie. `PUT /api/sync/{favorites|collections|saved-filters|plans}` provides
+optimistic concurrency through a required revision number; stale writes return
+409. Plans can be shared using expiring, unguessable links via `/api/share`.
+Authenticated users can connect Spotify at `/api/spotify/connect`; refresh
+tokens are encrypted at rest using `AUTH_SECRET`, and `/api/spotify/sync`
+imports their owned/followed playlists into the collections sync document.
+
 The deployable static site is written to `out/`. Festival seed data lives in
 `data/festivals.ts`. Official source availability and the setlist.fm API are
 checked automatically every three days by GitHub Actions.
+
+Festival ingestion runs daily and selects sources according to their adaptive
+daily, three-day, weekly, or archived cadence. Run one source with
+`npm run ingest -- --slug=wacken-open-air`; add `--due` to select only sources
+whose last successful check is older than its configured interval. Scheduled
+runs retain normalized candidates and review diagnostics for 30 days.
 
 ## Main scripts
 
