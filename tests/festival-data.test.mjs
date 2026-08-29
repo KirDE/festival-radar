@@ -43,6 +43,8 @@ test("curated identities include provenance and stable provider IDs", () => {
     assert.equal(artist.identities.setlistFm, artist.identities.musicbrainz);
     assert.ok(artist.provenance.length >= 3);
   }
+});
+
 test("every festival has exactly one enabled ingestion source", () => {
   assert.equal(festivalSources.length, festivals.length);
   assert.equal(new Set(festivalSources.map(({ festivalSlug }) => festivalSlug)).size, festivals.length);
