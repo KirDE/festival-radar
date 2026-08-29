@@ -26,6 +26,12 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:data
       - run: npm run build
+        env:
+          DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
+          AUTH_SECRET: build-only-secret-that-is-never-used-at-runtime
+          APP_URL: https://festivals.kir-it.de
+      - name: Package standalone release
+        run: bash scripts/deploy/package-release.sh "$GITHUB_SHA" release.tar.gz
       - name: Configure SSH
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -47,13 +53,47 @@ jobs:
             StrictHostKeyChecking yes
           EOF
           chmod 600 ~/.ssh/config
-      - name: Deploy static export
-        run: rsync -rlptDz --delete out/ production:/
+      - name: Create protected runtime environment
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        run: |
+          for name in DATABASE_URL AUTH_SECRET APP_URL SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
+            test -n "${!name}" || { echo "Missing required production secret: $name" >&2; exit 1; }
+          done
+          umask 077
+          {
+            printf 'DATABASE_URL=%q\n' "$DATABASE_URL"
+            printf 'AUTH_SECRET=%q\n' "$AUTH_SECRET"
+            printf 'APP_URL=%q\n' "$APP_URL"
+            printf 'SPOTIFY_CLIENT_ID=%q\n' "$SPOTIFY_CLIENT_ID"
+            printf 'SPOTIFY_CLIENT_SECRET=%q\n' "$SPOTIFY_CLIENT_SECRET"
+            printf 'DEPLOYED_COMMIT=%q\n' "$GITHUB_SHA"
+          } > production.env
+      - name: Upload and activate release
+        run: |
+          scp release.tar.gz production.env scripts/deploy/install-release.sh production:/tmp/
+          ssh production bash /tmp/install-release.sh \
+            /tmp/release.tar.gz "$GITHUB_SHA" /tmp/production.env
+          ssh production rm -f /tmp/release.tar.gz /tmp/production.env /tmp/install-release.sh
       - name: Verify production
         run: |
           for attempt in {1..12}; do
-            if curl --fail --silent --show-error --retry 2 --max-time 20 \
-              https://festivals.kir-it.de/ | grep --quiet 'Festival Radar'; then
+            marker="$(curl --fail --silent --show-error --retry 2 --max-time 20 \
+              https://festivals.kir-it.de/api/health/deployment/)" || true
+            auth_status="$(curl --silent --output /tmp/auth.json --write-out '%{http_code}' \
+              --max-time 20 https://festivals.kir-it.de/api/auth/me/)" || true
+            if grep --fixed-strings --quiet "\"commit\":\"$GITHUB_SHA\"" <<<"$marker" \
+              && grep --fixed-strings --quiet '"database":"ok"' <<<"$marker" \
+              && test "$auth_status" = 401 \
+              && grep --quiet 'application/json' <(curl --silent --head https://festivals.kir-it.de/api/auth/me/) \
+              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/ | grep --quiet 'Festival Radar' \
+              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/planner/ >/dev/null \
+              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/festivals/wacken-open-air/ >/dev/null \
+              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/artists/iron-maiden/ >/dev/null; then
               exit 0
             fi
             sleep 5

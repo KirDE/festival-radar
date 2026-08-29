@@ -16,7 +16,7 @@ npm install
 npm run dev
 ```
 
-Production export:
+Production build:
 
 ```bash
 npm run typecheck
@@ -40,9 +40,26 @@ Authenticated users can connect Spotify at `/api/spotify/connect`; refresh
 tokens are encrypted at rest using `AUTH_SECRET`, and `/api/spotify/sync`
 imports their owned/followed playlists into the collections sync document.
 
-The deployable static site is written to `out/`. Festival seed data lives in
-`data/festivals.ts`. Official source availability and the setlist.fm API are
-checked automatically every three days by GitHub Actions.
+Production runs as a Next.js standalone server behind Apache, managed by
+systemd, with PostgreSQL-backed account APIs. The deploy workflow packages the
+exact `main` commit together with the supported Node.js 22 runtime, runs
+`prisma migrate deploy`, atomically switches the `/opt/festival-radar/current`
+symlink, and restores the previous release if the
+database-aware health check fails. The public deployed revision is available
+from `/api/health/deployment/`.
+
+The GitHub `production` environment must define `DEPLOY_HOST`, `DEPLOY_PORT`,
+`DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`,
+`SPOTIFY_CLIENT_ID`, and `SPOTIFY_CLIENT_SECRET`. Values are written to a
+root-owned mode-0600 environment file on the server and are never committed or
+printed. The configured SSH principal is root because the installer manages
+systemd and the Plesk Apache vhost include.
+The initial PostgreSQL database and role must exist before the first release;
+subsequent schema updates are applied by the checked-in Prisma migrations.
+
+Festival seed data lives in `data/festivals.ts`. Official source availability
+and the setlist.fm API are checked automatically every three days by GitHub
+Actions.
 
 Festival ingestion runs daily and selects sources according to their adaptive
 daily, three-day, weekly, or archived cadence. Run one source with
