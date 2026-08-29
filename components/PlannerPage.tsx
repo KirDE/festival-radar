@@ -2,6 +2,7 @@
 import Link from "next/link";
 import type { Festival } from "@/data/festivals";
 import { useLocalPlanner, type Attendance } from "./LocalPlanner";
+import { AccountSyncPanel } from "./AccountSyncPanel";
 export function PlannerPage({ festivals }: { festivals: Festival[] }) {
   const p = useLocalPlanner();
   const planned = festivals.filter(
@@ -33,6 +34,7 @@ export function PlannerPage({ festivals }: { festivals: Festival[] }) {
       </div>
       {p.ready && (
         <>
+          <AccountSyncPanel />
           <section className="plannerSection">
             <div className="sectionHeading">
               <div>

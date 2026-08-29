@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Festival } from "@/data/festivals";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
 import { lineupOverlap } from "@/lib/planning";
+import { useLocalPlanner } from "./LocalPlanner";
 
 function formatDates(item: Festival, locale: string, datesTba: string) {
   if (!item.startDate) return datesTba;
@@ -17,11 +18,13 @@ function formatDates(item: Festival, locale: string, datesTba: string) {
 
 export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
   const { locale, t } = useLanguage();
-  const [query, setQuery] = useState("");
-  const [country, setCountry] = useState("all");
-  const [announcedOnly, setAnnouncedOnly] = useState(false);
-  const [month, setMonth] = useState("all");
-  const [ticketsOnly, setTicketsOnly] = useState(false);
+  const planner = useLocalPlanner();
+  const [query, setQuery] = useState(planner.savedFilters.query);
+  const [country, setCountry] = useState(planner.savedFilters.country);
+  const [announcedOnly, setAnnouncedOnly] = useState(planner.savedFilters.announcedOnly);
+  const [month, setMonth] = useState(planner.savedFilters.month);
+  const [ticketsOnly, setTicketsOnly] = useState(planner.savedFilters.ticketsOnly);
+  const [filtersReady, setFiltersReady] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const displayNames = useMemo(() => new Intl.DisplayNames([locale], { type: "region" }), [locale]);
   const countries = useMemo(() => Array.from(new Set(festivals.map((item) => item.countryCode))).sort((a, b) => (displayNames.of(a) || a).localeCompare(displayNames.of(b) || b, locale)), [festivals, displayNames, locale]);
@@ -32,6 +35,8 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
   const compared = festivals.filter((item) => selected.includes(item.slug));
   const overlap = lineupOverlap(compared);
   const toggleSelected = (slug: string) => setSelected((current) => current.includes(slug) ? current.filter((value) => value !== slug) : current.length < 3 ? [...current, slug] : current);
+  useEffect(() => { if (planner.ready && !filtersReady) { setQuery(planner.savedFilters.query); setCountry(planner.savedFilters.country); setAnnouncedOnly(planner.savedFilters.announcedOnly); setMonth(planner.savedFilters.month); setTicketsOnly(planner.savedFilters.ticketsOnly); setFiltersReady(true); } }, [planner.ready, filtersReady]);
+  useEffect(() => { if (filtersReady) planner.setSavedFilters({ query, country, announcedOnly, month, ticketsOnly }); }, [query, country, announcedOnly, month, ticketsOnly, filtersReady]);
 
   return <section className="explorer">
     <div className="filterBar">
