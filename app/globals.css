@@ -301,13 +301,15 @@ footer {
   position: sticky;
   top: 12px;
   z-index: 5;
-  display: grid;
-  grid-template-columns: minmax(230px, 1fr) 170px 150px auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 12px;
   background: rgba(23, 23, 18, 0.96);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
 }
+.filterBar .search { flex: 1 1 230px; }
+.filterBar select { flex: 1 1 145px; width: auto; }
 .search {
   background: white;
   display: flex;
@@ -417,25 +419,26 @@ footer {
   cursor: not-allowed;
 }
 .compareTray {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  display: block;
   margin: 18px 0 0;
   padding: 12px;
   border: 1px solid var(--ink);
   background: white;
   font-size: 12px;
 }
+.compareHeading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.compareHint { margin: 12px 0 0; color: #5f5c54; }
+.comparisonScroll { overflow-x: auto; margin-top: 12px; }
+.comparisonTable { width: 100%; min-width: 680px; border-collapse: collapse; text-align: left; }
+.comparisonTable th, .comparisonTable td { border: 1px solid var(--line); padding: 10px; vertical-align: top; }
+.comparisonTable thead th { background: var(--ink); color: white; }
+.comparisonTable tbody th { width: 190px; background: var(--soft); }
+.comparisonTable a { font-weight: 800; text-decoration: underline; }
 .compareTray button {
   border: 0;
   background: var(--soft);
   padding: 7px 9px;
   cursor: pointer;
-}
-.compareTray span {
-  margin-left: auto;
-  color: #5f5c54;
 }
 .festivalCard:hover {
   background: white;
