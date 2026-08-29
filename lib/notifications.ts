@@ -11,7 +11,13 @@ const nextDigest = (frequency: NotificationFrequency) => { const date = new Date
 export async function recordChange(change: DetectedChange) {
   const event = await db.notificationEvent.upsert({ where: { dedupeKey: change.dedupeKey }, update: {}, create: change });
   const preferences = await db.notificationPreference.findMany({ where: { enabled: true, eventType: change.type, OR: [{ festivalId: change.festivalId }, { festivalId: null }] } });
-  await db.notificationDelivery.createMany({ data: preferences.map((p) => ({ eventId: event.id, userId: p.userId, channel: p.channel, frequency: p.frequency, nextAttemptAt: p.frequency === NotificationFrequency.IMMEDIATE ? new Date() : nextDigest(p.frequency) })), skipDuplicates: true });
+  const effectivePreferences = new Map<string, (typeof preferences)[number]>();
+  for (const preference of preferences) {
+    const key = `${preference.userId}:${preference.channel}`;
+    const current = effectivePreferences.get(key);
+    if (!current || (current.festivalId === null && preference.festivalId !== null)) effectivePreferences.set(key, preference);
+  }
+  await db.notificationDelivery.createMany({ data: [...effectivePreferences.values()].map((p) => ({ eventId: event.id, userId: p.userId, channel: p.channel, frequency: p.frequency, nextAttemptAt: p.frequency === NotificationFrequency.IMMEDIATE ? new Date() : nextDigest(p.frequency) })), skipDuplicates: true });
   return event;
 }
 
