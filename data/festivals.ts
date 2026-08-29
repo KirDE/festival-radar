@@ -17,6 +17,14 @@ export type Festival = {
   timetable?: { date: string; stage: string; start: string; artist: string }[];
 };
 
+export type PlaylistStatus = {
+  spotifyUrl: string;
+  youtubeMusicUrl?: string;
+  artists: number;
+  tracks: number;
+  updatedAt: string;
+};
+
 const festival = (
   slug: string,
   name: string,
