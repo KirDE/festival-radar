@@ -30,8 +30,14 @@ test("admin edits, reviews, diagnostics and audit survive reload", async ({ page
   await page.getByRole("button", { name: "Links & assets" }).click();
   await page.getByLabel("Tickets URL").fill("https://tickets.example.test/wacken");
   await page.getByLabel("Logo URL").fill("https://assets.example.test/wacken.svg");
-  await page.getByRole("button", { name: "Save links draft" }).click();
-  await page.getByRole("button", { name: "Save asset draft" }).click();
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/api/admin") && response.request().method() === "POST" && response.request().postData()?.includes('"resourceKind":"link"')),
+    page.getByRole("button", { name: "Save links draft" }).click(),
+  ]);
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/api/admin") && response.request().method() === "POST" && response.request().postData()?.includes('"resourceKind":"asset"')),
+    page.getByRole("button", { name: "Save asset draft" }).click(),
+  ]);
 
   await page.reload();
   await page.getByRole("button", { name: "Review queue" }).click();
