@@ -248,10 +248,12 @@ model IngestionAttempt {
   startedAt      DateTime
   endedAt        DateTime
   priorAttemptId String?
+  priorAttempt   IngestionAttempt?      @relation("AttemptRetry", fields: [priorAttemptId], references: [id], onDelete: SetNull)
+  retries        IngestionAttempt[]     @relation("AttemptRetry")
   run            IngestionRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
   candidate      IngestionCandidate?
 
-  @@unique([runId, festivalSlug])
+  @@index([runId, festivalSlug])
   @@index([festivalSlug, endedAt])
 }
 
@@ -271,6 +273,8 @@ model IngestionCandidate {
   reviewedAt       DateTime?
   publishedAt      DateTime?
   supersedesId     String?
+  supersedes       IngestionCandidate?  @relation("CandidateVersion", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy     IngestionCandidate[] @relation("CandidateVersion")
   catalogueVersion String?
   createdAt        DateTime             @default(now())
   run              IngestionRun         @relation(fields: [runId], references: [id], onDelete: Restrict)

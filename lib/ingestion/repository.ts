@@ -65,4 +65,5 @@ export const ingestionQueries = {
   latestResult: (db: Client, festivalSlug: string) => db.ingestionAttempt.findFirst({ where: { festivalSlug }, orderBy: { endedAt: "desc" }, include: { candidate: { include: { evidence: true, diffs: true } } } }),
   candidateHistory: (db: Client, festivalSlug: string) => db.ingestionCandidate.findMany({ where: { festivalSlug }, orderBy: { createdAt: "desc" }, include: { evidence: true } }),
   diffHistory: (db: Client, festivalSlug: string) => db.ingestionDiff.findMany({ where: { candidate: { festivalSlug } }, orderBy: { createdAt: "desc" } }),
+  sourceStates: (db: Client) => db.ingestionSourceState.findMany({ select: { festivalSlug: true, lastSuccessfulCheck: true } }),
 };
