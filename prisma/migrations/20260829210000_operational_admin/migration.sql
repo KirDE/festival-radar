@@ -18,6 +18,15 @@ CREATE TABLE "AdminDraft" (
   CONSTRAINT "AdminDraft_pkey" PRIMARY KEY ("id")
 );
 
+CREATE TABLE "AdminResourceState" (
+  "resourceKind" "AdminResourceKind" NOT NULL,
+  "resourceKey" TEXT NOT NULL,
+  "revision" INTEGER NOT NULL DEFAULT 0,
+  "values" JSONB NOT NULL,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "AdminResourceState_pkey" PRIMARY KEY ("resourceKind", "resourceKey")
+);
+
 CREATE TABLE "AdminParserRun" (
   "id" TEXT NOT NULL,
   "festivalSlug" TEXT NOT NULL,
