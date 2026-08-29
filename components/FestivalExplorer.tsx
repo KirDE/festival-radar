@@ -6,6 +6,7 @@ import type { Festival } from "@/data/festivals";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
 import { lineupOverlap } from "@/lib/planning";
+import { hasAvailableTickets } from "@/lib/tickets";
 
 function formatDates(item: Festival, locale: string, datesTba: string) {
   if (!item.startDate) return datesTba;
@@ -27,7 +28,7 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
   const countries = useMemo(() => Array.from(new Set(festivals.map((item) => item.countryCode))).sort((a, b) => (displayNames.of(a) || a).localeCompare(displayNames.of(b) || b, locale)), [festivals, displayNames, locale]);
   const visible = useMemo(() => festivals.filter((item) => {
     const haystack = [item.name, item.country, item.city, ...item.headliners, ...item.lineup].join(" ").toLowerCase();
-    return haystack.includes(query.toLowerCase()) && (country === "all" || item.countryCode === country) && (!announcedOnly || item.headliners.length > 0) && (month === "all" || item.startDate?.slice(5, 7) === month) && (!ticketsOnly || Boolean(item.ticketsUrl));
+    return haystack.includes(query.toLowerCase()) && (country === "all" || item.countryCode === country) && (!announcedOnly || item.headliners.length > 0) && (month === "all" || item.startDate?.slice(5, 7) === month) && (!ticketsOnly || hasAvailableTickets(item));
   }).sort((a, b) => (a.startDate || "9999").localeCompare(b.startDate || "9999")), [festivals, query, country, announcedOnly, month, ticketsOnly]);
   const compared = festivals.filter((item) => selected.includes(item.slug));
   const overlap = lineupOverlap(compared);

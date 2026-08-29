@@ -5,6 +5,7 @@ import { artistProfiles } from "../data/artists.ts";
 import { festivalSources } from "../data/festival-sources.ts";
 import { INGESTION_SCHEMA_VERSION } from "../lib/ingestion/types.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
+import { hasAvailableTickets, ticketPresentation } from "../lib/tickets.ts";
 
 test("the seed contains 50 unique festivals", () => {
   assert.equal(festivals.length, 50);
@@ -21,6 +22,37 @@ test("dated editions have valid chronological dates", () => {
 
 test("official links are HTTPS", () => {
   for (const festival of festivals) assert.match(festival.officialUrl, /^https:\/\//, festival.name);
+});
+
+test("ticket availability is normalized and available tickets have verified HTTPS URLs", () => {
+  for (const festival of festivals) {
+    assert.ok(["available", "unavailable", "unknown"].includes(festival.ticketStatus), festival.name);
+    if (festival.ticketStatus === "available") {
+      assert.match(festival.ticketsUrl, /^https:\/\//, festival.name);
+    } else {
+      assert.equal(festival.ticketsUrl, undefined, `${festival.name} must not expose an unverified ticket URL`);
+    }
+  }
+});
+
+test("ticket UI distinguishes available, unavailable and unknown without homepage fallback", () => {
+  const available = festivals.find(({ slug }) => slug === "rock-am-ring");
+  const unavailable = festivals.find(({ slug }) => slug === "pinkpop");
+  const unknown = festivals.find(({ slug }) => slug === "rock-im-park");
+  assert.ok(available && unavailable && unknown);
+
+  assert.deepEqual(ticketPresentation(available), {
+    status: "available",
+    href: "https://www.rock-am-ring.com/en/tickets",
+    label: "officialTickets",
+  });
+  assert.deepEqual(ticketPresentation(unavailable), { status: "unavailable", label: "ticketsUnavailable" });
+  assert.deepEqual(ticketPresentation(unknown), { status: "unknown", label: "ticketsUnknown" });
+  assert.equal(hasAvailableTickets(available), true);
+  assert.equal(hasAvailableTickets(unavailable), false);
+  assert.equal(hasAvailableTickets(unknown), false);
+  assert.notEqual(unavailable.officialUrl, ticketPresentation(unavailable).href);
+  assert.notEqual(unknown.officialUrl, ticketPresentation(unknown).href);
 });
 
 test("every lineup name has one unambiguous artist profile", () => {
