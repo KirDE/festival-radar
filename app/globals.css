@@ -212,6 +212,16 @@ nav {
 nav a:hover {
   text-decoration: underline;
 }
+.accountMenu { position: relative; }
+.accountButton, .accountPopover button { border: 1px solid var(--ink); background: var(--paper); color: var(--ink); padding: 8px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+.accountPopover { position: absolute; z-index: 20; right: 0; top: calc(100% + 12px); width: min(340px, calc(100vw - 32px)); padding: 20px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 8px 8px 0 var(--ink); }
+.accountPopover form, .accountPopover label { display: grid; gap: 8px; }
+.accountPopover form { gap: 14px; margin-top: 16px; }
+.accountPopover input { min-width: 0; border: 1px solid var(--line); padding: 10px; font: inherit; }
+.accountTabs { display: flex; gap: 8px; }
+.accountTabs [aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.accountHint { color: #66645e; font-size: 13px; }
+.accountClose { position: absolute; top: 6px; right: 6px; border: 0 !important; font-size: 20px !important; }
 main {
   min-height: calc(100vh - 160px);
 }
