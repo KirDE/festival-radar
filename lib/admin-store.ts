@@ -35,6 +35,36 @@ export async function saveDraft(input: { resourceKind: string; resourceKey: stri
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
+export async function updateDraft(id: string, valuesInput: unknown, actor: { id: string; email: string }) {
+  if (typeof valuesInput !== "object" || !valuesInput || Array.isArray(valuesInput) || !Object.keys(valuesInput).length) throw new Error("Draft has no fields");
+  return db.$transaction(async (tx) => {
+    const draft = await tx.adminDraft.findUnique({ where: { id }, include: { queuedChanges: true } });
+    if (!draft || draft.createdById !== actor.id) throw new Error("Draft not found");
+    if (draft.queuedChanges.some((change) => change.status !== AdminChangeStatus.PENDING)) throw new Error("Decided drafts cannot be edited");
+    const resource = await tx.adminResourceState.findUnique({ where: { resourceKind_resourceKey: { resourceKind: draft.resourceKind, resourceKey: draft.resourceKey } } });
+    if ((resource?.revision ?? 0) !== draft.baseRevision) throw new Error(`Revision conflict: expected ${resource?.revision ?? 0}`);
+    const values = valuesInput as Record<string, unknown>;
+    const before = resource?.values && typeof resource.values === "object" && !Array.isArray(resource.values) ? resource.values as Record<string, unknown> : {};
+    await tx.adminChange.deleteMany({ where: { draftId: id } });
+    await tx.adminChange.createMany({ data: Object.entries(values).map(([field, afterValue]) => ({ resourceKind: draft.resourceKind, resourceKey: draft.resourceKey, field, baseRevision: draft.baseRevision, beforeValue: json(before[field] ?? null), afterValue: json(afterValue ?? null), sourceEvidence: json({ kind: "operator-draft", draftId: id }), confidence: 100, draftId: id })) });
+    const updated = await tx.adminDraft.update({ where: { id }, data: { values: json(values), validation: json({ valid: true, checkedAt: new Date().toISOString() }) } });
+    await tx.adminAuditEntry.create({ data: { actorId: actor.id, actorLabel: actor.email, action: "DRAFT_UPDATED", resourceKind: draft.resourceKind, resourceKey: draft.resourceKey, afterValue: json(values), metadata: json({ draftId: id }) } });
+    return updated;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
+export async function deleteDraft(id: string, actor: { id: string; email: string }) {
+  return db.$transaction(async (tx) => {
+    const draft = await tx.adminDraft.findUnique({ where: { id }, include: { queuedChanges: true } });
+    if (!draft || draft.createdById !== actor.id) throw new Error("Draft not found");
+    if (draft.queuedChanges.some((change) => change.status !== AdminChangeStatus.PENDING)) throw new Error("Decided drafts cannot be deleted");
+    await tx.adminChange.deleteMany({ where: { draftId: id } });
+    await tx.adminDraft.delete({ where: { id } });
+    await tx.adminAuditEntry.create({ data: { actorId: actor.id, actorLabel: actor.email, action: "DRAFT_DELETED", resourceKind: draft.resourceKind, resourceKey: draft.resourceKey, beforeValue: json(draft.values), metadata: json({ draftId: id }) } });
+    return { deleted: true };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+}
+
 export async function decideChange(id: string, decision: "approve" | "reject", actor: { id: string; email: string }) {
   return db.$transaction(async (tx) => {
     const change = await tx.adminChange.findUnique({ where: { id } });
@@ -65,10 +95,11 @@ export async function decideChange(id: string, decision: "approve" | "reject", a
 export async function refreshFestival(slug: string, actor: { id: string; email: string }) {
   const source = getFestivalSource(slug); const festival = festivals.find((item) => item.slug === slug);
   if (!source || !festival || !source.enabled) throw new Error("Festival source is not configured");
-  const run = await db.adminParserRun.create({ data: { festivalSlug: slug, sourceId: source.url, adapter: source.strategies.join(","), requestedById: actor.id, log: json([{ at: new Date().toISOString(), message: "Fetch started" }]) } });
+  const sourceUrl = process.env.NODE_ENV !== "production" && process.env.ADMIN_TEST_SOURCE_URL ? process.env.ADMIN_TEST_SOURCE_URL : source.url;
+  const run = await db.adminParserRun.create({ data: { festivalSlug: slug, sourceId: sourceUrl, adapter: source.strategies.join(","), requestedById: actor.id, log: json([{ at: new Date().toISOString(), message: "Fetch started" }]) } });
   const started = Date.now();
   try {
-    const response = await fetch(source.url, { headers: { "User-Agent": "FestivalRadarAdmin/1.0" }, signal: AbortSignal.timeout(20_000) });
+    const response = await fetch(sourceUrl, { headers: { "User-Agent": "FestivalRadarAdmin/1.0" }, signal: AbortSignal.timeout(20_000) });
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
     const candidate = extractFestivalCandidate(await response.text(), source, new Date().toISOString());
     const fields = ["startDate", "endDate", "city", "headliners", "lineup", "ticketsUrl", "status"] as const;
@@ -76,7 +107,7 @@ export async function refreshFestival(slug: string, actor: { id: string; email: 
     if (changes.length) await db.adminChange.createMany({ data: changes });
     const finishedAt = new Date();
     const updated = await db.adminParserRun.update({ where: { id: run.id }, data: { status: candidate.warnings.length ? AdminRunStatus.PARTIAL : AdminRunStatus.SUCCEEDED, finishedAt, durationMs: Date.now() - started, extracted: candidate.evidence.length, message: `${changes.length} change(s) queued`, log: json([{ at: run.startedAt.toISOString(), message: "Fetch started" }, { at: finishedAt.toISOString(), message: "Parse completed", warnings: candidate.warnings, queued: changes.length }]) } });
-    await db.adminAuditEntry.create({ data: { actorId: actor.id, actorLabel: actor.email, action: "FESTIVAL_REFRESHED", resourceKind: AdminResourceKind.FESTIVAL, resourceKey: slug, evidence: json({ source: source.url }), metadata: json({ runId: run.id, queued: changes.length }) } });
+    await db.adminAuditEntry.create({ data: { actorId: actor.id, actorLabel: actor.email, action: "FESTIVAL_REFRESHED", resourceKind: AdminResourceKind.FESTIVAL, resourceKey: slug, evidence: json({ source: sourceUrl }), metadata: json({ runId: run.id, queued: changes.length }) } });
     return updated;
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : "Refresh failed";
