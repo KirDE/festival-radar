@@ -40,7 +40,7 @@ async function musicBrainzJson(url) {
   // polite, rate-limited request over curl. Keep this fallback deterministic and
   // fail closed if either transport cannot return valid JSON.
   const { stdout } = await execFileAsync("curl", [
-    "--fail-with-body", "--silent", "--show-error", "--retry", "5",
+    "--fail", "--silent", "--show-error", "--retry", "5",
     "--retry-all-errors", "--retry-delay", "2", "--user-agent", headers["User-Agent"], url,
   ], { maxBuffer: 10 * 1024 * 1024 });
   return JSON.parse(stdout);
