@@ -82,6 +82,19 @@ footer { max-width:1440px; margin:70px auto 0; padding:30px 44px; display:flex; 
 .artistHero h1 { font-size:clamp(45px,7vw,90px); }.artistHero p { color:#6a675f; }
 .artistMonogram { width:120px; height:120px; display:grid; place-items:center; background:var(--orange); font:58px "Archivo Black"; transform:rotate(-3deg); }
 .artistActions { display:flex; gap:10px; padding:20px 0; }.artistActions a { padding:12px 16px; border:1px solid var(--ink); font-size:12px; font-weight:800; }.artistActions a:hover { background:var(--acid); }
+.directoryPage { max-width:1280px; margin:auto; padding:70px 44px; }
+.directoryPage>h1 { font:clamp(42px,7vw,88px)/.95 "Archivo Black"; text-transform:uppercase; letter-spacing:-.05em; max-width:1000px; }
+.directoryPage>p { max-width:720px; line-height:1.6; }
+.directoryPage section { margin:48px 0; }
+.directoryRow { display:grid; grid-template-columns:120px 1fr; gap:24px; padding:22px 0; border-top:1px solid var(--line); }
+.textLink { font-weight:800; text-decoration:underline; }
+.submissionForm { max-width:700px; display:grid; gap:18px; margin-top:36px; }
+.submissionForm label { display:grid; gap:7px; font-weight:800; }
+.submissionForm input,.submissionForm textarea { padding:13px; border:1px solid #888; background:white; font:inherit; }
+.submissionForm textarea { min-height:120px; }
+.submissionForm button { width:max-content; border:0; padding:15px 20px; background:var(--ink); color:white; font-weight:800; cursor:pointer; }
+.submissionForm button:hover { background:var(--orange); }
+.honeypot { position:absolute!important; left:-10000px!important; }
 .appearances { margin-top:50px; }.appearances>.eyebrow { margin-bottom:14px; }.appearances>a { display:grid; grid-template-columns:50px 1fr 1fr 30px; padding:19px 10px; border-top:1px solid var(--line); align-items:center; }.appearances>a:last-child { border-bottom:1px solid var(--line); }.appearances>a:hover { background:white; }.appearances span,.appearances em { color:#706d65; font-size:13px; font-style:normal; }
 @media(max-width:900px){.festivalGrid{grid-template-columns:repeat(2,1fr)}.filterBar{grid-template-columns:1fr 180px}.toggle{grid-column:1/-1;padding:8px}.actionGrid{grid-template-columns:repeat(2,1fr)}.headlinerGrid{grid-template-columns:repeat(2,1fr)}.lineupGrid{grid-template-columns:repeat(3,1fr)}.sourceNote{grid-template-columns:1fr}.detailHero{padding:35px}.festivalLogo.large{width:110px;height:90px}}
 @media(max-width:600px){.siteHeader,.hero,.explorer,.detailPage,.artistPage{padding-left:20px;padding-right:20px}.siteHeader nav a:last-child{display:none}.hero{padding-top:45px}.heroStats{flex-direction:column;gap:8px}.filterBar{position:relative;top:0;grid-template-columns:1fr}.filterBar select,.toggle{grid-column:auto}.festivalGrid{grid-template-columns:1fr}.festivalCard{min-height:350px}.resultMeta span:last-child{display:none}.detailHero{flex-direction:column;align-items:flex-start;padding:30px 22px;gap:25px}.detailHero h1{font-size:45px}.actionGrid{grid-template-columns:1fr}.actionGrid>a,.actionGrid>div{border-right:0;border-bottom:1px solid var(--line)}.sectionHeading h2{font-size:38px}.headlinerGrid,.lineupGrid{grid-template-columns:1fr}.sourceNote{display:block}.sourceNote p{margin:10px 0 18px}.artistHero{align-items:flex-start;flex-direction:column}.artistMonogram{width:80px;height:80px;font-size:38px}.artistActions{flex-wrap:wrap}.appearances>a{grid-template-columns:40px 1fr 25px}.appearances em{display:none}footer{padding:25px 20px;display:block}footer>span{display:block;margin:6px 0}.languagePicker{margin-top:18px}.languagePicker span{margin:0}}

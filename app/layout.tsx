@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { PrivacyAnalytics } from "@/components/PrivacyAnalytics";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <main id="main-content">{children}</main>
           <SiteFooter />
           <ServiceWorkerRegistration />
+          <PrivacyAnalytics />
         </LanguageProvider>
       </body>
     </html>
