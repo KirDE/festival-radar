@@ -24,6 +24,28 @@ test("release activation explicitly restarts an already-running service", async 
   assert.doesNotMatch(installer, /systemctl enable --now "\$service"/);
 });
 
+test("release activation stages the new environment and rollback restores the previous one", async () => {
+  const installer = await readFile("scripts/deploy/install-release.sh", "utf8");
+
+  const stage = installer.indexOf('install -m 0600 "$env_source" "$staged_env"');
+  const migration = installer.indexOf('migrate deploy');
+  const backup = installer.indexOf('cp -p "$env_file" "$previous_env"');
+  const activateEnv = installer.indexOf('mv -f "$staged_env" "$env_file"');
+  const activateRelease = installer.indexOf('ln -sfn "$release" "$app_root/current"');
+  const rollbackRelease = installer.indexOf('ln -sfn "$previous" "$app_root/current"');
+  const rollbackEnv = installer.indexOf('mv -f "$previous_env" "$env_file"');
+  const rollbackRestart = installer.indexOf('systemctl restart "$service"', rollbackRelease);
+
+  assert.ok(stage >= 0, "new environment is staged with protected permissions");
+  assert.ok(stage < migration, "staged environment is available to migrations");
+  assert.ok(migration < backup, "shared environment remains unchanged until activation");
+  assert.ok(backup < activateEnv && activateEnv < activateRelease, "environment and release activate in order");
+  assert.ok(activateRelease < rollbackRelease, "rollback follows activation health failure");
+  assert.ok(rollbackRelease < rollbackEnv, "previous release is restored before its environment");
+  assert.ok(rollbackEnv < rollbackRestart, "previous environment is restored before service restart");
+  assert.match(installer, /else\n\s+rm -f "\$env_file"\n\s+fi\n\s+if \[\[ -n "\$previous"/);
+});
+
 async function executable(file, contents) {
   await writeFile(file, `#!/usr/bin/env bash\nset -euo pipefail\n${contents}\n`);
   await chmod(file, 0o755);

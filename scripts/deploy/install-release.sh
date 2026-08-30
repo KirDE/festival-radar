@@ -12,13 +12,17 @@ port="${PORT:-3100}"
 release="$app_root/releases/$commit"
 shared="$app_root/shared"
 previous="$(readlink -f "$app_root/current" 2>/dev/null || true)"
+env_file="$shared/production.env"
+staged_env="$shared/.production.env.$commit.tmp"
+previous_env="$shared/.production.env.$commit.previous"
+had_previous_env=false
 
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid commit" >&2; exit 2; }
 [[ "$app_root" == /opt/festival-radar ]] || { echo "unsupported APP_ROOT" >&2; exit 2; }
 test -s "$archive"
 test -s "$env_source"
 install -d -m 0755 "$app_root/releases" "$shared"
-install -m 0600 "$env_source" "$shared/production.env"
+install -m 0600 "$env_source" "$staged_env"
 
 rm -rf "$release"
 install -d -m 0755 "$release"
@@ -29,7 +33,7 @@ cd "$release"
 npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 set -a
 # shellcheck disable=SC1090
-source "$shared/production.env"
+source "$staged_env"
 set +a
 export DEPLOYED_COMMIT="$commit" PORT="$port" HOSTNAME=127.0.0.1
 "$release/.runtime/node" node_modules/prisma/build/index.js generate
@@ -71,6 +75,11 @@ ProxyPassReverse / http://127.0.0.1:$port/
 RequestHeader set X-Forwarded-Proto "https" env=HTTPS
 APACHE
 
+if [[ -f "$env_file" ]]; then
+  cp -p "$env_file" "$previous_env"
+  had_previous_env=true
+fi
+mv -f "$staged_env" "$env_file"
 ln -sfn "$release" "$app_root/current"
 chown -R www-data:www-data "$release" "$shared"
 systemctl daemon-reload
@@ -92,11 +101,20 @@ done
 if [[ "$healthy" != true ]]; then
   if [[ -n "$previous" && -d "$previous" ]]; then
     ln -sfn "$previous" "$app_root/current"
+  fi
+  if [[ "$had_previous_env" == true ]]; then
+    mv -f "$previous_env" "$env_file"
+  else
+    rm -f "$env_file"
+  fi
+  if [[ -n "$previous" && -d "$previous" ]]; then
     systemctl restart "$service"
   fi
   echo "release health check failed; previous release restored" >&2
   exit 1
 fi
+
+rm -f "$previous_env"
 
 find "$app_root/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
   | sort -nr | awk 'NR > 5 { sub(/^[^ ]+ /, ""); print }' \
