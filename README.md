@@ -84,7 +84,8 @@ generated PR (or its overlay/history entries) in a new PR.
 
 ## Main scripts
 
-- `scripts/spotify_gmm_2026/festival_playlists.py` - current playlist builder for Graspop, Wacken, Rock im Park, Summer Breeze, and Impericon.
+- `scripts/export-playlist-catalog.mjs` exports all normalized festivals for the single current edition.
+- `scripts/spotify_gmm_2026/festival_playlists.py` builds playlists from that catalog, rejects mixed/wrong editions before mutation, and writes explicit empty-lineup skips to `_catalog_summary.json`.
 - `scripts/spotify_gmm_2026/spotify_auth.py` - Spotify OAuth token loading and refresh.
 - `scripts/spotify_gmm_2026/init_spotify_auth.py` - exchanges a Spotify callback `code` for local tokens or refreshes the token file.
 - `scripts/spotify_gmm_2026/init_youtube_music_auth.py` - starts YouTube Music OAuth device-flow and saves local tokens.
@@ -119,6 +120,12 @@ python3 scripts/spotify_gmm_2026/init_spotify_auth.py "<code>"
 ```
 
 ## Build playlists
+
+Export the canonical catalog first. Set `FESTIVAL_SEASON` to enforce the expected edition; a mismatch aborts before Spotify is changed.
+
+```bash
+npm run playlists:catalog
+```
 
 ```bash
 python3 scripts/spotify_gmm_2026/festival_playlists.py
