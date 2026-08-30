@@ -1,7 +1,7 @@
 import { Prisma, SyncKind } from "@prisma/client";
 import { db } from "@/lib/db";
 import { error, requireUser } from "@/lib/api";
-import { spotifyAccessToken } from "@/lib/spotify";
+import { spotifyAccessToken, spotifyEndpoints } from "@/lib/spotify";
 
 type SpotifyPlaylist = { id: string; name: string; external_urls: { spotify: string }; images: Array<{ url: string }>; owner: { id: string; display_name: string | null }; tracks: { total: number } };
 
@@ -13,7 +13,7 @@ export async function POST() {
   try {
     const token = await spotifyAccessToken(connection.encryptedRefreshToken);
     const playlists: SpotifyPlaylist[] = [];
-    let next: string | null = "https://api.spotify.com/v1/me/playlists?limit=50";
+    let next: string | null = `${spotifyEndpoints().api}/v1/me/playlists?limit=50`;
     while (next && playlists.length < 500) {
       const response: Response = await fetch(next, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
       if (!response.ok) throw new Error("Spotify playlist lookup failed");
