@@ -32,6 +32,21 @@ npx prisma migrate deploy
 npm run dev
 ```
 
+Run the route-level integration suite against an isolated PostgreSQL database
+after applying the migrations:
+
+```bash
+DATABASE_URL=postgresql://festival:festival@127.0.0.1:5432/festival_integration \
+  npx prisma migrate deploy
+DATABASE_URL=postgresql://festival:festival@127.0.0.1:5432/festival_integration \
+  npm run test:integration
+```
+
+The suite resets only the database named by `DATABASE_URL`, starts a local
+Next.js server, and mocks Spotify OAuth and Web API traffic. Never point it at
+a shared or production database. CI provisions a fresh PostgreSQL 16 service
+for every job before running this required check.
+
 The account API uses 30-day opaque, hashed database sessions in an HTTP-only
 cookie. `PUT /api/sync/{favorites|collections|saved-filters|plans}` provides
 optimistic concurrency through a required revision number; stale writes return

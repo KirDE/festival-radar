@@ -1,5 +1,10 @@
 import { decrypt } from "@/lib/secrets";
 
+export const spotifyEndpoints = () => ({
+  accounts: (process.env.SPOTIFY_ACCOUNTS_URL ?? "https://accounts.spotify.com").replace(/\/$/, ""),
+  api: (process.env.SPOTIFY_API_URL ?? "https://api.spotify.com").replace(/\/$/, ""),
+});
+
 export const spotifyConfig = () => {
   const clientId = process.env.SPOTIFY_CLIENT_ID;
   const clientSecret = process.env.SPOTIFY_CLIENT_SECRET;
@@ -10,7 +15,7 @@ export const spotifyConfig = () => {
 
 export async function spotifyAccessToken(encryptedRefreshToken: string) {
   const config = spotifyConfig();
-  const response = await fetch("https://accounts.spotify.com/api/token", {
+  const response = await fetch(`${spotifyEndpoints().accounts}/api/token`, {
     method: "POST", headers: { Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: decrypt(encryptedRefreshToken) }), cache: "no-store",
   });
