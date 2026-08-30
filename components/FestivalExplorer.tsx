@@ -6,6 +6,7 @@ import type { Festival } from "@/data/festivals";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
 import { lineupOverlap } from "@/lib/planning";
+import { hasAvailableTickets } from "@/lib/tickets";
 import { distanceKm, festivalGenres, festivalMatchesDiscoveryFilters, type Coordinates } from "@/lib/festival-discovery";
 
 const origins: Record<string, { label: string; coordinates: Coordinates }> = {
@@ -41,7 +42,7 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
   const originCoordinates = origins[origin]?.coordinates;
   const visible = useMemo(() => festivals.filter((item) => {
     const haystack = [item.name, item.country, item.city, ...item.headliners, ...item.lineup].join(" ").toLowerCase();
-    return haystack.includes(query.toLowerCase()) && (country === "all" || item.countryCode === country) && (!announcedOnly || item.headliners.length > 0) && (month === "all" || item.startDate?.slice(5, 7) === month) && (!ticketsOnly || Boolean(item.ticketsUrl)) && festivalMatchesDiscoveryFilters(item, { genre: genre === "all" ? undefined : genre, origin: originCoordinates, maxDistanceKm: maxDistance === "all" ? undefined : Number(maxDistance) });
+    return haystack.includes(query.toLowerCase()) && (country === "all" || item.countryCode === country) && (!announcedOnly || item.headliners.length > 0) && (month === "all" || item.startDate?.slice(5, 7) === month) && (!ticketsOnly || hasAvailableTickets(item)) && festivalMatchesDiscoveryFilters(item, { genre: genre === "all" ? undefined : genre, origin: originCoordinates, maxDistanceKm: maxDistance === "all" ? undefined : Number(maxDistance) });
   }).sort((a, b) => (a.startDate || "9999").localeCompare(b.startDate || "9999")), [festivals, query, country, announcedOnly, month, ticketsOnly, genre, originCoordinates, maxDistance]);
   const compared = festivals.filter((item) => selected.includes(item.slug));
   const overlap = lineupOverlap(compared);

@@ -14,7 +14,7 @@ export type Festival = {
   playlistUrl?: string;
   status: "confirmed" | "partial" | "tba";
   editionYear?: number;
-  ticketStatus?: "available" | "unavailable" | "unknown";
+  ticketStatus: "available" | "unavailable" | "unknown";
   genres: string[];
   coordinates?: { latitude: number; longitude: number };
   timetable?: { date: string; stage: string; start: string; artist: string }[];
@@ -44,6 +44,7 @@ const festival = (
   headliners: [],
   lineup: [],
   status: "tba",
+  ticketStatus: "unknown",
   editionYear: 2027,
   dateLabel: "Dates TBA",
   genres: ["rock", "metal"],
@@ -51,7 +52,7 @@ const festival = (
 });
 
 const baseFestivals: Festival[] = [
-  festival("rock-am-ring", "Rock am Ring", "Germany", "DE", "https://www.rock-am-ring.com/", { city: "Nürburg", startDate: "2027-06-04", endDate: "2027-06-06", headliners: ["blink-182"], status: "partial" }),
+  festival("rock-am-ring", "Rock am Ring", "Germany", "DE", "https://www.rock-am-ring.com/", { city: "Nürburg", startDate: "2027-06-04", endDate: "2027-06-06", headliners: ["blink-182"], status: "partial", ticketStatus: "available", ticketsUrl: "https://www.rock-am-ring.com/en/tickets" }),
   festival("rock-im-park", "Rock im Park", "Germany", "DE", "https://www.rock-im-park.com/", { city: "Nürnberg", startDate: "2027-06-04", endDate: "2027-06-06", headliners: ["blink-182"], status: "partial" }),
   festival("wacken-open-air", "Wacken Open Air", "Germany", "DE", "https://www.wacken.com/", { city: "Wacken", startDate: "2027-07-28", endDate: "2027-07-31", headliners: ["Electric Callboy", "Five Finger Death Punch", "Helloween", "Heaven Shall Burn", "Jinjer", "Knocked Loose"], lineup: ["Avatar", "Beast in Black", "Belphegor", "Between Two Worlds", "Blue Medusa", "Carnifex", "Cavalera Conspiracy", "Children of Bodom", "Creeper", "Crypta", "Dark Tranquillity", "Dethklok", "DragonForce", "Edguy", "Feuerschwanz", "Gaerea", "Halestorm", "HammerFall", "Heaven's Gate", "Hiraes", "Imminence", "John 5", "John Bush", "Kanonenfieber", "Make Them Suffer", "Malevolence", "Metal Church", "Mittel Alta", "Napalm Death", "Overkill", "Seven Blood", "Shadow of Intent", "Sylosis", "Tailgunner", "The Browning", "The New Roses", "Towards the Sinister", "Tyketto", "U.D.O.", "Victorious", "Witch Club Satan"], status: "confirmed" }),
   festival("summer-breeze", "Summer Breeze Open Air", "Germany", "DE", "https://www.summer-breeze.de/", { city: "Dinkelsbühl", startDate: "2027-08-18", endDate: "2027-08-21", headliners: ["Electric Callboy", "Halestorm", "Helloween", "HammerFall", "Lord of the Lost", "Saltatio Mortis", "Children of Bodom", "Eluveitie"], lineup: ["Wind Rose", "Edguy", "H-Blockx", "Clawfinger", "Kataklysm", "Mono Inc.", "Warkings", "Dark Funeral", "Gloryhammer", "Finntroll", "Atreyu", "Shadow of Intent", "Emil Bulls", "Equilibrium", "John Bush", "Carnifex", "The Browning", "Gaerea", "Long Distance Calling", "Make Them Suffer", "Mittel Alta", "Any Given Day", "Gutalax", "Blue Medusa", "Insomnium", "Combichrist", "PeelingFlesh", "Anaal Nathrakh", "Fleshgod Apocalypse", "Primal Fear", "Nasty", "Burning Witches", "Kupfergold", "End of Green", "Wolfheart", "Legion of the Damned", "Ellende", "Angelus Apatrida", "Abbie Falls", "Samurai Pizza Cats", "Necrotted", "Left to Suffer", "Evil Invaders", "Hiraes", "Lavina", "Asenblut", "ACCVSED", "Spitting Glass", "Ahab", "Sunborn", "The Night Eternal", "Defiance HC", "Regarde Les Hommes Tomber", "Capacopter"], status: "confirmed" }),
@@ -88,7 +89,7 @@ const baseFestivals: Festival[] = [
   festival("rock-in-roma", "Rock in Roma", "Italy", "IT", "https://rockinroma.com/", { city: "Rome" }),
   festival("alpen-flair", "Alpen Flair", "Italy", "IT", "https://www.alpen-flair.com/", { city: "Natz-Schabs", startDate: "2027-06-23", endDate: "2027-06-26" }),
   festival("pistoia-blues", "Pistoia Blues Festival", "Italy", "IT", "https://pistoiablues.com/", { city: "Pistoia" }),
-  festival("pinkpop", "Pinkpop", "Netherlands", "NL", "https://www.pinkpop.nl/", { city: "Landgraaf", startDate: "2027-06-18", endDate: "2027-06-20" }),
+  festival("pinkpop", "Pinkpop", "Netherlands", "NL", "https://www.pinkpop.nl/", { city: "Landgraaf", startDate: "2027-06-18", endDate: "2027-06-20", ticketStatus: "unavailable" }),
   festival("roadburn", "Roadburn Festival", "Netherlands", "NL", "https://roadburn.com/", { city: "Tilburg", startDate: "2027-04-15", endDate: "2027-04-18" }),
   festival("dynamo-metal-fest", "Dynamo Metal Fest", "Netherlands", "NL", "https://dynamo-metalfest.nl/", { city: "Eindhoven" }),
   festival("greenfield", "Greenfield Festival", "Switzerland", "CH", "https://greenfieldfestival.ch/", { city: "Interlaken", startDate: "2027-06-10", endDate: "2027-06-12" }),
