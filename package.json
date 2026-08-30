@@ -19,6 +19,7 @@
     "test:integration": "node --test --test-concurrency=1 tests/integration/account-routes.test.mjs tests/integration/notification-routes.test.mjs tests/integration/admin-workflows.test.mjs",
     "test:notifications:e2e": "node tests/notification-e2e.mjs",
     "test:admin:integration": "node --test --test-concurrency=1 tests/integration/admin-workflows.test.mjs",
+    "test:admin:e2e": "playwright test",
     "playlists:status": "node scripts/build-playlist-status.mjs",
     "playlists:catalog": "node scripts/export-playlist-catalog.mjs",
     "test": "python3 -m unittest discover -s tests",
@@ -39,5 +40,8 @@
     "typescript": "^5.7.0",
     "zod": "^4.1.12"
   },
-  "devDependencies": { "tsx": "^4.20.5" }
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "tsx": "^4.20.5"
+  }
 }
