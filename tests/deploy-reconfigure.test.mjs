@@ -7,6 +7,15 @@ import test from "node:test";
 
 const script = path.resolve("scripts/deploy/reconfigure-webserver.sh");
 
+test("release packaging includes the helper required by the installer", async () => {
+  const packager = await readFile("scripts/deploy/package-release.sh", "utf8");
+  const installer = await readFile("scripts/deploy/install-release.sh", "utf8");
+
+  assert.match(packager, /cp scripts\/deploy\/reconfigure-webserver\.sh/);
+  assert.match(packager, /app\/scripts\/deploy\/reconfigure-webserver\.sh/);
+  assert.match(installer, /scripts\/deploy\/reconfigure-webserver\.sh/);
+});
+
 async function executable(file, contents) {
   await writeFile(file, `#!/usr/bin/env bash\nset -euo pipefail\n${contents}\n`);
   await chmod(file, 0o755);
