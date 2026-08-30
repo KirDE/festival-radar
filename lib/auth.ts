@@ -22,7 +22,7 @@ export async function currentUser() {
   if (!token) return null;
   const session = await db.session.findUnique({ where: { tokenHash: digest(token) }, include: { user: true } });
   if (!session || session.expiresAt <= new Date()) return null;
-  return { id: session.user.id, email: session.user.email };
+  return { id: session.user.id, email: session.user.email, role: session.user.role };
 }
 
 export async function destroySession() {

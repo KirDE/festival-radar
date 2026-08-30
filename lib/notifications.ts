@@ -1,12 +1,11 @@
 import { NotificationChannel, NotificationEventType, NotificationFrequency, NotificationStatus, Prisma } from "@prisma/client";
-import { db } from "@/lib/db";
+import { db } from "./db.ts";
+import { nextDigest } from "./notification-schedule.ts";
 
 export const eventTypes = Object.values(NotificationEventType);
 export const channels = Object.values(NotificationChannel);
 export const frequencies = Object.values(NotificationFrequency);
 export type DetectedChange = { dedupeKey: string; festivalId: string; type: NotificationEventType; title: string; message: string; url?: string; occurredAt: Date; payload?: Prisma.InputJsonValue };
-
-const nextDigest = (frequency: NotificationFrequency) => { const date = new Date(); date.setUTCDate(date.getUTCDate() + (frequency === NotificationFrequency.DAILY ? 1 : 7)); date.setUTCHours(8, 0, 0, 0); return date; };
 
 export async function recordChange(change: DetectedChange) {
   const event = await db.notificationEvent.upsert({ where: { dedupeKey: change.dedupeKey }, update: {}, create: change });

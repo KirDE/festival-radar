@@ -131,7 +131,9 @@ test("notification routes and PostgreSQL delivery invariants", async () => {
   const weekly = await db.notificationDelivery.findFirstOrThrow({ where: { event: { dedupeKey: "weekly" }, frequency: "WEEKLY" } });
   assert.ok(daily.nextAttemptAt.getTime() > before && daily.nextAttemptAt.getTime() - before < 2 * 86_400_000);
   assert.equal(daily.nextAttemptAt.getUTCHours(), 8);
-  assert.ok(weekly.nextAttemptAt.getTime() - before > 6 * 86_400_000);
+  assert.ok(weekly.nextAttemptAt.getTime() > before);
+  assert.ok(weekly.nextAttemptAt.getTime() - before <= 7 * 86_400_000);
+  assert.equal(weekly.nextAttemptAt.getUTCDay(), 1);
   assert.equal(weekly.nextAttemptAt.getUTCHours(), 8);
 
   providerCalls = [];
