@@ -783,6 +783,40 @@ footer {
   font: 58px "Archivo Black";
   transform: rotate(-3deg);
 }
+.artistPortrait {
+  width: 190px;
+  height: 190px;
+  flex: 0 0 auto;
+  border: 1px solid var(--ink);
+  object-fit: cover;
+  background: var(--soft);
+}
+.artistSetlists {
+  margin-top: 28px;
+}
+.artistSetlists ul {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.artistSetlists li {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+.artistSetlists time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+.freshnessNote {
+  margin: 12px 0 0;
+  color: #67655f;
+  font-size: 12px;
+}
 .artistActions {
   display: flex;
   gap: 10px;
