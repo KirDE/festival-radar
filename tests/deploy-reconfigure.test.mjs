@@ -16,6 +16,14 @@ test("release packaging includes the helper required by the installer", async ()
   assert.match(installer, /scripts\/deploy\/reconfigure-webserver\.sh/);
 });
 
+test("release activation explicitly restarts an already-running service", async () => {
+  const installer = await readFile("scripts/deploy/install-release.sh", "utf8");
+
+  assert.match(installer, /systemctl enable "\$service"/);
+  assert.match(installer, /systemctl restart "\$service"/);
+  assert.doesNotMatch(installer, /systemctl enable --now "\$service"/);
+});
+
 async function executable(file, contents) {
   await writeFile(file, `#!/usr/bin/env bash\nset -euo pipefail\n${contents}\n`);
   await chmod(file, 0o755);
