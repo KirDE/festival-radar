@@ -33,7 +33,7 @@ export function ArtistDetail({
           <h1>{artist.name}</h1>
           <p>{sentence}</p>
           {artist.aliases.length > 0 && (
-            <small>Also known as {artist.aliases.join(", ")}</small>
+            <small>{t("alsoKnownAs")} {artist.aliases.join(", ")}</small>
           )}
         </div>
       </div>
@@ -52,22 +52,22 @@ export function ArtistDetail({
       {(artist.biography || artist.genres.length > 0) && (
         <section className="artistMetadata">
           <div>
-            <div className="eyebrow">Profile</div>
+            <div className="eyebrow">{t("profile")}</div>
             {artist.biography && <p>{artist.biography}</p>}
             {artist.origin && (
               <p>
-                <strong>Origin:</strong> {artist.origin}
+                <strong>{t("origin")}:</strong> {artist.origin}
               </p>
             )}
             {artist.genres.length > 0 && (
               <p>
-                <strong>Genres:</strong> {artist.genres.join(" · ")}
+                <strong>{t("genres")}:</strong> {artist.genres.join(" · ")}
               </p>
             )}
           </div>
           {artist.topTracks.length > 0 && (
             <div>
-              <div className="eyebrow">Top tracks</div>
+              <div className="eyebrow">{t("topTracks")}</div>
               <ol>
                 {artist.topTracks.map((track) => (
                   <li key={track}>{track}</li>
@@ -89,7 +89,7 @@ export function ArtistDetail({
         ))}
       </section>
       <details className="artistSources">
-        <summary>Sources and canonical identities</summary>
+        <summary>{t("sourcesAndIdentities")}</summary>
         {Object.entries(artist.identities).map(
           ([source, id]) =>
             id && (
@@ -105,7 +105,7 @@ export function ArtistDetail({
             target="_blank"
             rel="noreferrer"
           >
-            {item.field}: {item.source} · checked {item.checkedAt}
+            {item.field}: {item.source} · {t("checked")} {item.checkedAt}
           </a>
         ))}
       </details>
