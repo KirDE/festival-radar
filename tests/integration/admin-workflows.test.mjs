@@ -9,6 +9,7 @@ if (!databaseUrl || !/(?:test|integration)/i.test(new URL(databaseUrl).pathname)
 const db = new PrismaClient();
 const port = 3244;
 const origin = `http://127.0.0.1:${port}`;
+const adminEmail = `admin-${process.pid}-${Date.now()}@example.test`;
 let app;
 
 class Client {
@@ -28,8 +29,8 @@ class Client {
 }
 
 test.before(async () => {
-  await db.adminChange.deleteMany(); await db.adminDraft.deleteMany(); await db.adminParserRun.deleteMany(); await db.adminResourceState.deleteMany(); await db.session.deleteMany(); await db.adminAuditEntry.deleteMany().catch(() => {}); await db.user.deleteMany();
-  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(port)], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "admin-integration-secret-at-least-32", ADMIN_EMAILS: "admin@example.test" }, stdio: "ignore" });
+  await db.adminChange.deleteMany(); await db.adminDraft.deleteMany(); await db.adminParserRun.deleteMany(); await db.adminResourceState.deleteMany(); await db.session.deleteMany();
+  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(port)], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "admin-integration-secret-at-least-32" }, stdio: "ignore" });
   for (let attempt = 0; attempt < 120; attempt += 1) { try { if ((await fetch(origin)).status < 500) return; } catch {} await new Promise((resolve) => setTimeout(resolve, 250)); }
   throw new Error("Integration server did not start");
 });
@@ -39,8 +40,8 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   const anonymous = new Client();
   assert.equal((await anonymous.json("/api/admin")).status, 403);
   const admin = new Client();
-  assert.equal((await admin.json("/api/auth/register", "POST", { email: "admin@example.test", password: "correct horse battery staple" })).status, 201);
-  await db.user.update({ where: { email: "admin@example.test" }, data: { role: "ADMIN" } });
+  assert.equal((await admin.json("/api/auth/register", "POST", { email: adminEmail, password: "correct horse battery staple" })).status, 201);
+  await db.user.update({ where: { email: adminEmail }, data: { role: "ADMIN" } });
   const draftResponse = await admin.json("/api/admin", "POST", { resourceKind: "festival", resourceKey: "wacken-open-air", baseRevision: 0, values: { city: "Wacken Preview", status: "confirmed" } });
   assert.equal(draftResponse.status, 201);
   const draft = await draftResponse.json();
@@ -53,8 +54,9 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   assert.equal((await admin.json(`/api/admin/changes/${status.id}`, "POST", { decision: "reject" })).status, 200);
   assert.equal((await db.adminResourceState.findUniqueOrThrow({ where: { resourceKind_resourceKey: { resourceKind: "FESTIVAL", resourceKey: "wacken-open-air" } } })).values.city, "Wacken Preview");
   const audit = await db.adminAuditEntry.findMany({ orderBy: { createdAt: "asc" } });
-  assert.deepEqual(audit.map((entry) => entry.action), ["DRAFT_SAVED", "CHANGE_APPROVED", "CHANGE_REJECTED"]);
-  assert.equal(audit[1].actorLabel, "admin@example.test"); assert.equal(audit[1].afterValue, "Wacken Preview"); assert.ok(audit[1].evidence);
-  await assert.rejects(db.adminAuditEntry.update({ where: { id: audit[1].id }, data: { action: "TAMPERED" } }), /append-only/);
+  const currentAudit = audit.slice(-3);
+  assert.deepEqual(currentAudit.map((entry) => entry.action), ["DRAFT_SAVED", "CHANGE_APPROVED", "CHANGE_REJECTED"]);
+  assert.equal(currentAudit[1].actorLabel, adminEmail); assert.equal(currentAudit[1].afterValue, "Wacken Preview"); assert.ok(currentAudit[1].evidence);
+  await assert.rejects(db.adminAuditEntry.update({ where: { id: currentAudit[1].id }, data: { action: "TAMPERED" } }), /append-only/);
   assert.equal((await admin.json("/api/admin")).status, 200);
 });
