@@ -15,6 +15,7 @@ export type Festival = {
   status: "confirmed" | "partial" | "tba";
   editionYear?: number;
   ticketStatus?: "available" | "unavailable" | "unknown";
+  updatedAt: string;
   timetable?: { date: string; stage: string; start: string; artist: string }[];
 };
 
@@ -44,6 +45,7 @@ const festival = (
   status: "tba",
   editionYear: 2027,
   dateLabel: "Dates TBA",
+  updatedAt: "2026-08-29T10:59:59.000Z",
   ...options,
 });
 
