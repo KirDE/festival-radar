@@ -10,7 +10,8 @@ on:
         required: false
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   refresh:
@@ -26,10 +27,25 @@ jobs:
       - name: Refresh due festival sources
         env:
           FESTIVAL: ${{ inputs.festival }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          INGESTION_MAX_FETCH_ERRORS: "10"
         run: |
-          args=(--due --output=outputs/ingestion)
+          args=(--due --publish --output=outputs/ingestion)
           if [[ -n "$FESTIVAL" ]]; then args+=("--slug=$FESTIVAL"); fi
           npm run ingest -- "${args[@]}"
+      - name: Open auditable publication pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- data/ingestion-publications.json data/ingestion-history.jsonl; then exit 0; fi
+          branch="automation/ingestion-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add data/ingestion-publications.json data/ingestion-history.jsonl
+          git commit -m "chore(data): publish approved festival ingestion"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "chore(data): publish approved festival ingestion" --body "Automated policy-approved additive ingestion. Review-required changes remain in durable history and diagnostics."
       - name: Retain review and diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@v4

@@ -20,6 +20,30 @@ export function similarFestivals(item: Festival, festivals: Festival[], limit = 
 
 function compactDate(value: string) { return value.replaceAll("-", ""); }
 
+function escapeIcs(value: string) {
+  return value.replaceAll("\\", "\\\\").replaceAll(";", "\\;").replaceAll(",", "\\,").replaceAll(/\r?\n/g, "\\n");
+}
+
+export function calendarFile(items: Festival[]) {
+  const events = items.filter((item) => item.startDate).flatMap((item) => {
+    const end = new Date(`${item.endDate || item.startDate}T12:00:00Z`);
+    end.setUTCDate(end.getUTCDate() + 1);
+    const location = [item.city, item.country].filter(Boolean).join(", ");
+    return [
+      "BEGIN:VEVENT",
+      `UID:${item.slug}-${item.editionYear || 2027}@festival-radar`,
+      `DTSTART;VALUE=DATE:${compactDate(item.startDate!)}`,
+      `DTEND;VALUE=DATE:${compactDate(end.toISOString().slice(0, 10))}`,
+      `SUMMARY:${escapeIcs(item.name)}`,
+      `LOCATION:${escapeIcs(location)}`,
+      `DESCRIPTION:${escapeIcs(`Official information: ${item.officialUrl}`)}`,
+      `URL:${item.officialUrl}`,
+      "END:VEVENT",
+    ];
+  });
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "PRODID:-//Festival Radar//European Festivals//EN", ...events, "END:VCALENDAR"].join("\r\n");
+}
+
 export function calendarUrls(item: Festival) {
   if (!item.startDate) return null;
   const end = new Date(`${item.endDate || item.startDate}T12:00:00Z`);
@@ -30,6 +54,7 @@ export function calendarUrls(item: Festival) {
   const query = new URLSearchParams({ action: "TEMPLATE", text: item.name, dates, details, location: [item.city, item.country].filter(Boolean).join(", ") });
   return {
     google: `https://calendar.google.com/calendar/render?${query}`,
-    ics: `data:text/calendar;charset=utf-8,${encodeURIComponent(["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Festival Radar//EN", "BEGIN:VEVENT", `UID:${item.slug}-2027@festival-radar`, `DTSTART;VALUE=DATE:${compactDate(item.startDate)}`, `DTEND;VALUE=DATE:${compactDate(exclusiveEnd)}`, `SUMMARY:${item.name}`, `LOCATION:${[item.city, item.country].filter(Boolean).join(", ")}`, `URL:${item.officialUrl}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n"))}`,
+    ics: `data:text/calendar;charset=utf-8,${encodeURIComponent(calendarFile([item]))}`,
+    apple: `data:text/calendar;charset=utf-8,${encodeURIComponent(calendarFile([item]))}`,
   };
 }
