@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 export type Language = "en" | "de" | "ru";
 type TranslationKey = keyof typeof translations.en;
+type TranslationValues = Record<string, string | number>;
 
 const translations = {
   en: {
@@ -16,6 +17,8 @@ const translations = {
     festivalDirectory: "Festival directory", artist: "ARTIST", europeanFestival: "European festival", europeanFestivals: "European festivals", announcedFor: "announced for 2027", appearances: "2027 APPEARANCES", myPlan: "My plan", skip: "Skip to content", privacy: "Privacy-first: no cookies or cross-site tracking.", submitFestival: "Submit a festival", submitEyebrow: "COMMUNITY SOURCES", submitIntro: "Every suggestion is reviewed before publication. Please link only to the festival organizer or an official ticketing partner.", festivalName: "Festival name", officialSource: "Official source URL", editionYear: "Edition year", notes: "Notes", sendReview: "Send for editorial review", submitting: "Submitting…", received: "Received for review", failed: "Submission failed.",
     alsoKnownAs: "Also known as", profile: "Profile", origin: "Origin", genres: "Genres", topTracks: "Top tracks", sourcesAndIdentities: "Sources and canonical identities", checked: "checked",
     recentSetlists: "Recent setlists", viewSetlist: "View setlist", freshnessProfile: "Profile refreshed every", freshnessMusic: "music every", freshnessSetlists: "setlists every", freshnessDays: "days",
+    filterSearch: "Search festivals, artists or cities", filterMonth: "Filter by month", allMonths: "All months", filterGenre: "Filter by genre", allGenres: "All genres", filterOrigin: "Distance origin", fromOrigin: "From {origin}", filterDistance: "Maximum distance", anyDistance: "Any distance", withinDistance: "Within {distance} km", officialTicketsOnly: "Official tickets only",
+    compare: "Compare", compareFestival: "Compare {festival}", removeFestivalComparison: "Remove {festival} from comparison", comparisonSelected: "{festival} selected for comparison ({count} of 3)", comparisonRemoved: "{festival} removed from comparison ({count} of 3)", comparisonLimit: "Comparison limit reached. Remove a festival before selecting {festival}.", comparisonInstructions: "Select one or two more festivals to compare planning details.", planningDetail: "Planning detail", dates: "Dates", locationDistance: "Location / distance from {origin}", distanceUnavailable: "distance unavailable", tickets: "Tickets", unavailable: "Unavailable", availabilityNotConfirmed: "Availability not confirmed", lineupOverlap: "Lineup overlap", sharedActs: "{count} shared acts", noLineupOverlap: "No announced lineup overlap yet", noDiscoveryMatches: "Try a wider distance, another origin, or remove a genre filter. Your comparison selections are preserved.",
   },
   de: {
     festivals: "Festivals", aboutData: "Über die Daten", footerNote: "Termine und Tickets immer auf der offiziellen Festival-Seite prüfen.", language: "Sprache",
@@ -27,6 +30,8 @@ const translations = {
     festivalDirectory: "Festival-Verzeichnis", artist: "KÜNSTLER", europeanFestival: "europäisches Festival", europeanFestivals: "europäische Festivals", announcedFor: "für 2027 angekündigt", appearances: "AUFTRITTE 2027", myPlan: "Mein Plan", skip: "Zum Inhalt springen", privacy: "Datenschutzfreundlich: keine Cookies oder websiteübergreifende Verfolgung.", submitFestival: "Festival vorschlagen", submitEyebrow: "QUELLEN AUS DER COMMUNITY", submitIntro: "Jeder Vorschlag wird vor der Veröffentlichung geprüft. Bitte verlinke nur den Veranstalter oder einen offiziellen Ticketanbieter.", festivalName: "Festivalname", officialSource: "Offizielle Quell-URL", editionYear: "Ausgabejahr", notes: "Anmerkungen", sendReview: "Zur redaktionellen Prüfung senden", submitting: "Wird gesendet…", received: "Zur Prüfung eingegangen", failed: "Senden fehlgeschlagen.",
     alsoKnownAs: "Auch bekannt als", profile: "Profil", origin: "Herkunft", genres: "Genres", topTracks: "Top-Titel", sourcesAndIdentities: "Quellen und kanonische Identitäten", checked: "geprüft",
     recentSetlists: "Aktuelle Setlists", viewSetlist: "Setlist ansehen", freshnessProfile: "Profil aktualisiert alle", freshnessMusic: "Musik alle", freshnessSetlists: "Setlists alle", freshnessDays: "Tage",
+    filterSearch: "Festivals, Künstler oder Städte durchsuchen", filterMonth: "Nach Monat filtern", allMonths: "Alle Monate", filterGenre: "Nach Genre filtern", allGenres: "Alle Genres", filterOrigin: "Ausgangspunkt für die Entfernung", fromOrigin: "Ab {origin}", filterDistance: "Maximale Entfernung", anyDistance: "Beliebige Entfernung", withinDistance: "Innerhalb von {distance} km", officialTicketsOnly: "Nur offizielle Tickets",
+    compare: "Vergleichen", compareFestival: "{festival} vergleichen", removeFestivalComparison: "{festival} aus dem Vergleich entfernen", comparisonSelected: "{festival} zum Vergleich ausgewählt ({count} von 3)", comparisonRemoved: "{festival} aus dem Vergleich entfernt ({count} von 3)", comparisonLimit: "Vergleichslimit erreicht. Entferne ein Festival, bevor du {festival} auswählst.", comparisonInstructions: "Wähle ein oder zwei weitere Festivals aus, um Planungsdetails zu vergleichen.", planningDetail: "Planungsdetail", dates: "Termine", locationDistance: "Ort / Entfernung ab {origin}", distanceUnavailable: "Entfernung nicht verfügbar", tickets: "Tickets", unavailable: "Nicht verfügbar", availabilityNotConfirmed: "Verfügbarkeit nicht bestätigt", lineupOverlap: "Überschneidung im Line-up", sharedActs: "{count} gemeinsame Acts", noLineupOverlap: "Noch keine Überschneidung der angekündigten Line-ups", noDiscoveryMatches: "Wähle eine größere Entfernung oder einen anderen Ausgangspunkt oder entferne den Genre-Filter. Deine Vergleichsauswahl bleibt erhalten.",
   },
   ru: {
     festivals: "Фестивали", aboutData: "О данных", footerNote: "Всегда проверяйте даты и билеты на официальном сайте фестиваля.", language: "Язык",
@@ -38,11 +43,17 @@ const translations = {
     festivalDirectory: "Каталог фестивалей", artist: "АРТИСТ", europeanFestival: "европейский фестиваль", europeanFestivals: "европейских фестивалей", announcedFor: "объявлено на 2027 год", appearances: "ВЫСТУПЛЕНИЯ В 2027", myPlan: "Мой план", skip: "Перейти к содержимому", privacy: "Без ущерба для приватности: без cookies и межсайтового отслеживания.", submitFestival: "Предложить фестиваль", submitEyebrow: "ИСТОЧНИКИ СООБЩЕСТВА", submitIntro: "Каждое предложение проверяется перед публикацией. Добавляйте только сайт организатора или официального билетного партнёра.", festivalName: "Название фестиваля", officialSource: "Официальный URL источника", editionYear: "Год проведения", notes: "Примечания", sendReview: "Отправить редакции", submitting: "Отправка…", received: "Получено на проверку", failed: "Не удалось отправить.",
     alsoKnownAs: "Также известен как", profile: "Профиль", origin: "Страна происхождения", genres: "Жанры", topTracks: "Популярные треки", sourcesAndIdentities: "Источники и канонические идентификаторы", checked: "проверено",
     recentSetlists: "Недавние сетлисты", viewSetlist: "Открыть сетлист", freshnessProfile: "Профиль обновляется каждые", freshnessMusic: "музыка — каждые", freshnessSetlists: "сетлисты — каждые", freshnessDays: "дней",
+    filterSearch: "Поиск по фестивалям, артистам и городам", filterMonth: "Фильтр по месяцу", allMonths: "Все месяцы", filterGenre: "Фильтр по жанру", allGenres: "Все жанры", filterOrigin: "Точка отсчёта расстояния", fromOrigin: "От {origin}", filterDistance: "Максимальное расстояние", anyDistance: "Любое расстояние", withinDistance: "В пределах {distance} км", officialTicketsOnly: "Только официальные билеты",
+    compare: "Сравнить", compareFestival: "Сравнить {festival}", removeFestivalComparison: "Убрать {festival} из сравнения", comparisonSelected: "{festival} выбран для сравнения ({count} из 3)", comparisonRemoved: "{festival} убран из сравнения ({count} из 3)", comparisonLimit: "Достигнут лимит сравнения. Уберите фестиваль, прежде чем выбрать {festival}.", comparisonInstructions: "Выберите ещё один или два фестиваля, чтобы сравнить детали поездки.", planningDetail: "Деталь поездки", dates: "Даты", locationDistance: "Место / расстояние от {origin}", distanceUnavailable: "расстояние недоступно", tickets: "Билеты", unavailable: "Недоступны", availabilityNotConfirmed: "Наличие не подтверждено", lineupOverlap: "Совпадения в лайнапах", sharedActs: "Общих артистов: {count}", noLineupOverlap: "В объявленных лайнапах пока нет совпадений", noDiscoveryMatches: "Увеличьте расстояние, выберите другую точку отсчёта или уберите фильтр по жанру. Выбранные для сравнения фестивали сохранятся.",
   },
 } as const;
 
+export function translate(language: Language, key: TranslationKey, values: TranslationValues = {}) {
+  return Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), translations[language][key] as string);
+}
+
 const localeMap: Record<Language, string> = { en: "en-US", de: "de-DE", ru: "ru-RU" };
-const LanguageContext = createContext<{ language: Language; locale: string; setLanguage: (language: Language) => void; t: (key: TranslationKey) => string } | null>(null);
+const LanguageContext = createContext<{ language: Language; locale: string; setLanguage: (language: Language) => void; t: (key: TranslationKey, values?: TranslationValues) => string } | null>(null);
 
 function browserLanguage(): Language {
   for (const value of navigator.languages || [navigator.language]) {
@@ -66,7 +77,7 @@ export function LanguageProvider({ children, initialLanguage }: { children: Reac
     document.documentElement.lang = selected;
   }, [initialLanguage]);
   const setLanguage = (selected: Language) => { localStorage.setItem("festival-radar-language", selected); window.location.assign(`/${selected}/`); };
-  const value = useMemo(() => ({ language, locale: localeMap[language], setLanguage, t: (key: TranslationKey) => translations[language][key] }), [language]);
+  const value = useMemo(() => ({ language, locale: localeMap[language], setLanguage, t: (key: TranslationKey, values?: TranslationValues) => translate(language, key, values) }), [language]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
 
