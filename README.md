@@ -50,6 +50,11 @@ daily, three-day, weekly, or archived cadence. Run one source with
 whose last successful check is older than its configured interval. Scheduled
 runs retain normalized candidates and review diagnostics for 30 days.
 
+Stage schedules use a separate provenance-aware reviewed import because official
+running orders are often published later and change rapidly. See
+[`docs/timetables.md`](docs/timetables.md) for validation, conflict handling,
+cancellations, timezone rules and the atomic import procedure.
+
 ## Main scripts
 
 - `scripts/spotify_gmm_2026/festival_playlists.py` - current playlist builder for Graspop, Wacken, Rock im Park, Summer Breeze, and Impericon.

@@ -740,6 +740,84 @@ footer {
 .timetable span {
   color: #66635b;
 }
+.timetablePublished {
+  display: block;
+}
+.timetableHeader,
+.timetablePublished footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+.timetableHeader > div {
+  display: grid;
+  gap: 5px;
+}
+.timetableWarning {
+  margin-top: 16px;
+  padding: 12px;
+  border: 2px solid #9b2f1d;
+  color: #7c2113;
+  font-weight: 800;
+}
+.timetableDay {
+  margin-top: 22px;
+}
+.timetableDay h3,
+.timetableStage h4 {
+  margin: 0 0 10px;
+}
+.timetableStages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.timetableStage {
+  padding: 14px;
+  background: white;
+  border: 1px solid var(--line);
+}
+.timetableStage ol {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.timetableStage li {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 10px;
+}
+.timetableStage time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+.timetableStage li.cancelled span {
+  text-decoration: line-through;
+}
+.timetableStage em {
+  color: #9b2f1d;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.timetablePublished footer {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.timetablePublished footer a {
+  font-weight: 800;
+  text-decoration: underline;
+}
+@media (max-width: 640px) {
+  .timetableEmpty,
+  .timetableHeader,
+  .timetablePublished footer { flex-direction: column; }
+}
 .recommendations {
   display: grid;
   grid-template-columns: 180px repeat(3, 1fr);
