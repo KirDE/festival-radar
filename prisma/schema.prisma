@@ -73,6 +73,12 @@ enum AdminRunStatus {
   FAILED
 }
 
+enum FestivalSubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id                        String                     @id @default(cuid())
   email                     String                     @unique
@@ -90,6 +96,44 @@ model User {
   adminDecisions            AdminChange[]              @relation("AdminChangeDecisionActor")
   adminRuns                 AdminParserRun[]           @relation("AdminRunActor")
   adminAuditEntries         AdminAuditEntry[]
+  reviewedSubmissions       FestivalSubmission[]       @relation("SubmissionReviewer")
+  submissionAuditEntries    FestivalSubmissionAudit[]
+}
+
+model FestivalSubmission {
+  id              String                    @id @default(cuid())
+  publicReference String                    @unique
+  fingerprint     String                    @unique
+  name            String
+  editionYear     Int
+  officialUrl     String
+  notes           String?
+  status          FestivalSubmissionStatus  @default(PENDING)
+  submitterHash   String
+  submittedAt     DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  reviewedAt      DateTime?
+  reviewedById    String?
+  reviewNote      String?
+  reviewedBy      User?                     @relation("SubmissionReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  audit           FestivalSubmissionAudit[]
+
+  @@index([status, submittedAt])
+  @@index([submitterHash, submittedAt])
+}
+
+model FestivalSubmissionAudit {
+  id           String             @id @default(cuid())
+  submissionId String
+  actorId      String?
+  action       String
+  detail       Json?
+  createdAt    DateTime           @default(now())
+  submission   FestivalSubmission @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  actor        User?              @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([submissionId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model AdminDraft {

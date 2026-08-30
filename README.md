@@ -40,6 +40,11 @@ Authenticated users can connect Spotify at `/api/spotify/connect`; refresh
 tokens are encrypted at rest using `AUTH_SECRET`, and `/api/spotify/sync`
 imports their owned/followed playlists into the collections sync document.
 
+Festival suggestions are persisted only after successful validation and are
+reviewed by authenticated editors under `/admin`. Configure `ADMIN_EMAILS` and
+`SUBMISSION_HASH_SALT`; the latter creates privacy-preserving rate-limit keys,
+so raw client addresses and honeypot values are never stored.
+
 The deployable static site is written to `out/`. Festival seed data lives in
 `data/festivals.ts`. Official source availability and the setlist.fm API are
 checked automatically every three days by GitHub Actions.

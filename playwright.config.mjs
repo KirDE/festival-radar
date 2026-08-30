@@ -14,6 +14,7 @@ export default defineConfig({
       DATABASE_URL: process.env.DATABASE_URL,
       AUTH_SECRET: "admin-e2e-secret-at-least-32-characters",
       ADMIN_EMAILS: "browser-admin@example.test",
+      SUBMISSION_HASH_SALT: "browser-submission-test-salt",
     },
   },
 });

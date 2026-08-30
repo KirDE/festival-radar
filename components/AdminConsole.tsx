@@ -4,13 +4,15 @@ import { useMemo, useState } from "react";
 import type { Festival } from "@/data/festivals";
 import type { AuditEntry, ParserRun, ReviewChange } from "@/lib/admin";
 
-type Section = "content" | "review" | "assets" | "diagnostics" | "audit";
+type Section = "content" | "review" | "submissions" | "assets" | "diagnostics" | "audit";
+type Submission = { reference:string; name:string; year:number; officialUrl:string; notes:string|null; status:"pending"|"approved"|"rejected"; submittedAt:string; audit:{action:string;at:string}[] };
 
-export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntries }: { festivals: Festival[]; initialChanges: ReviewChange[]; parserRuns: ParserRun[]; auditEntries: AuditEntry[] }) {
+export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntries, submissions: initialSubmissions }: { festivals: Festival[]; initialChanges: ReviewChange[]; parserRuns: ParserRun[]; auditEntries: AuditEntry[]; submissions: Submission[] }) {
   const [section, setSection] = useState<Section>("review");
   const [selectedSlug, setSelectedSlug] = useState(festivals[0]?.slug ?? "");
   const selected = festivals.find((item) => item.slug === selectedSlug) ?? festivals[0];
   const [changes, setChanges] = useState(initialChanges);
+  const [submissions, setSubmissions] = useState(initialSubmissions);
   const [notice, setNotice] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [artistQuery, setArtistQuery] = useState("");
@@ -27,6 +29,7 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
     setChanges((items) => items.map((item) => item.id === id ? { ...item, status } : item));
     setNotice(`Change ${id} ${status}. The durable audit trail was updated.`);
   };
+  const decideSubmission = async (reference:string,status:"approved"|"rejected") => { const response=await fetch(`/api/admin/submissions/${reference}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({decision:status==="approved"?"approve":"reject"})}); const body=await response.json(); if(!response.ok)return setNotice(body.error??"Submission decision failed"); setSubmissions((items)=>items.map((item)=>item.reference===reference?{...item,status}:item)); setNotice(`Submission ${reference} ${status}; append-only audit updated.`); };
   const refresh = async () => {
     setRefreshing(true);
     setNotice("");
@@ -49,7 +52,7 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
   return <main className="adminShell">
     <aside className="adminNav" aria-label="Administration sections">
       <div><div className="eyebrow">Festival Radar</div><h1>Admin console</h1><p>Review-first content operations</p></div>
-      {([ ["review", "Review queue"], ["content", "Festivals & artists"], ["assets", "Links & assets"], ["diagnostics", "Parser diagnostics"], ["audit", "Audit history"] ] as [Section, string][]).map(([id, label]) => <button key={id} className={section === id ? "active" : ""} onClick={() => setSection(id)}>{label}{id === "review" && <b>{changes.filter((item) => item.status === "pending").length}</b>}</button>)}
+      {([ ["review", "Review queue"], ["submissions", "Festival submissions"], ["content", "Festivals & artists"], ["assets", "Links & assets"], ["diagnostics", "Parser diagnostics"], ["audit", "Audit history"] ] as [Section, string][]).map(([id, label]) => <button key={id} className={section === id ? "active" : ""} onClick={() => setSection(id)}>{label}{id === "review" && <b>{changes.filter((item) => item.status === "pending").length}</b>}{id === "submissions" && <b>{submissions.filter((item)=>item.status==="pending").length}</b>}</button>)}
       <a href="/">← Public site</a>
     </aside>
     <section className="adminMain">
@@ -65,6 +68,8 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
           {change.status === "pending" ? <div className="reviewActions"><button className="secondary" onClick={() => decide(change.id, "rejected")}>Reject</button><button onClick={() => decide(change.id, "approved")}>Approve change</button></div> : <strong className="decision">{change.status}</strong>}
         </article>)}
       </div>}
+
+      {section === "submissions" && <div className="reviewList">{submissions.map((item)=><article className={`reviewCard ${item.status}`} key={item.reference}><div className="reviewMeta"><span className={item.status==="pending"?"risk":"safe"}>{item.status}</span><small>{item.reference} · {item.submittedAt}</small></div><h3>{item.name} <span>· {item.year}</span></h3><p><a href={item.officialUrl} rel="noreferrer" target="_blank">{item.officialUrl}</a></p><p>{item.notes||"No notes supplied."}</p><p>History: {item.audit.map((entry)=>`${entry.action} ${entry.at}`).join(" · ")}</p>{item.status==="pending"&&<div className="reviewActions"><button className="secondary" onClick={()=>decideSubmission(item.reference,"rejected")}>Reject</button><button onClick={()=>decideSubmission(item.reference,"approved")}>Approve submission</button></div>}</article>)}</div>}
 
       {section === "content" && selected && <div className="editorGrid">
         <div className="adminPanel"><label>Festival<select value={selectedSlug} onChange={(event) => { setSelectedSlug(event.target.value); setFestivalDraft({}); }}>{festivals.map((item) => <option value={item.slug} key={item.slug}>{item.name}</option>)}</select></label><div className="fieldPair"><label>Name<input defaultValue={selected.name} onChange={(e) => setFestivalDraft((v) => ({...v, name:e.target.value}))}/></label><label>Status<select defaultValue={selected.status} onChange={(e) => setFestivalDraft((v) => ({...v, status:e.target.value}))}><option>confirmed</option><option>partial</option><option>tba</option></select></label></div><div className="fieldPair"><label>City<input defaultValue={selected.city} onChange={(e) => setFestivalDraft((v) => ({...v, city:e.target.value}))}/></label><label>Country<input defaultValue={selected.country} onChange={(e) => setFestivalDraft((v) => ({...v, country:e.target.value}))}/></label></div><div className="fieldPair"><label>Start date<input type="date" defaultValue={selected.startDate} onChange={(e) => setFestivalDraft((v) => ({...v, startDate:e.target.value}))}/></label><label>End date<input type="date" defaultValue={selected.endDate} onChange={(e) => setFestivalDraft((v) => ({...v, endDate:e.target.value}))}/></label></div><label>Headliners<textarea defaultValue={selected.headliners.join("\n")} rows={5} onChange={(e) => setFestivalDraft((v) => ({...v, headliners:e.target.value}))}/></label><button disabled={!Object.keys(festivalDraft).length} onClick={() => save("festival", selected.slug, festivalDraft)}>Save festival draft</button></div>
