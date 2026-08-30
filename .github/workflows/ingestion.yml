@@ -23,18 +23,33 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Restore durable ingestion freshness
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/festival-ingestion/freshness.json
+          key: ${{ runner.os }}-festival-freshness-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-festival-freshness-${{ github.ref_name }}-
       - name: Refresh due festival sources
         env:
           FESTIVAL: ${{ inputs.festival }}
         run: |
-          args=(--due --output=outputs/ingestion)
+          args=(--due --output=outputs/ingestion --state=.cache/festival-ingestion/freshness.json)
           if [[ -n "$FESTIVAL" ]]; then args+=("--slug=$FESTIVAL"); fi
           npm run ingest -- "${args[@]}"
+      - name: Save durable ingestion freshness
+        if: always() && hashFiles('.cache/festival-ingestion/freshness.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/festival-ingestion/freshness.json
+          key: ${{ runner.os }}-festival-freshness-${{ github.ref_name }}-${{ github.run_id }}
       - name: Retain review and diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: festival-ingestion-${{ github.run_id }}
-          path: outputs/ingestion/
+          path: |
+            outputs/ingestion/
+            .cache/festival-ingestion/freshness.json
           if-no-files-found: error
           retention-days: 30

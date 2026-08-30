@@ -6,17 +6,24 @@ import { festivalSources } from "../data/festival-sources.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
 import { dueFestivalSources } from "../lib/ingestion/schedule.ts";
+import { applyFreshnessState, readFreshnessState, recordCheckResult, writeFreshnessState } from "../lib/ingestion/freshness-state.ts";
 
 const args = new Set(process.argv.slice(2));
 const slugArg = process.argv.find((value) => value.startsWith("--slug="))?.slice(7);
 const outputArg = process.argv.find((value) => value.startsWith("--output="))?.slice(9);
+const stateArg = process.argv.find((value) => value.startsWith("--state="))?.slice(8);
 const outputDirectory = path.resolve(outputArg || "outputs/ingestion");
-const eligible = args.has("--due") ? dueFestivalSources(festivalSources) : festivalSources.filter((source) => source.enabled);
+const statePath = path.resolve(stateArg || ".cache/festival-ingestion/freshness.json");
+let freshnessState = await readFreshnessState(statePath);
+const hydratedSources = applyFreshnessState(festivalSources, freshnessState);
+const eligible = args.has("--due") ? dueFestivalSources(hydratedSources) : hydratedSources.filter((source) => source.enabled);
 const selected = eligible.filter((source) => !slugArg || source.festivalSlug === slugArg);
-if (selected.length === 0) throw new Error(slugArg ? `Unknown or disabled festival source: ${slugArg}` : "No enabled festival sources");
+if (slugArg && !hydratedSources.some((source) => source.enabled && source.festivalSlug === slugArg)) {
+  throw new Error(`Unknown or disabled festival source: ${slugArg}`);
+}
 
 await mkdir(outputDirectory, { recursive: true });
-const summary = { schemaVersion: 1, generatedAt: new Date().toISOString(), dryRun: !args.has("--publish"), processed: 0, changed: 0, publishable: 0, reviewRequired: 0, fetchErrors: 0, results: [] };
+const summary = { schemaVersion: 1, generatedAt: new Date().toISOString(), dryRun: !args.has("--publish"), freshnessStatePath: statePath, enabledSources: hydratedSources.filter(({ enabled }) => enabled).length, dueSources: selected.length, processed: 0, changed: 0, publishable: 0, reviewRequired: 0, fetchErrors: 0, results: [] };
 
 for (const source of selected) {
   const current = festivals.find(({ slug }) => slug === source.festivalSlug);
@@ -40,6 +47,8 @@ for (const source of selected) {
     if (result.publishable) summary.publishable += 1;
     if (result.reviewReasons.length) summary.reviewRequired += 1;
     summary.results.push({ festivalSlug: source.festivalSlug, status, changes: result.changes.length, reviewReasons: result.reviewReasons });
+    freshnessState = recordCheckResult(freshnessState, source.festivalSlug, fetchedAt, true);
+    await writeFreshnessState(statePath, freshnessState);
   } catch (error) {
     summary.fetchErrors += 1;
     summary.results.push({ festivalSlug: source.festivalSlug, status: "fetch_error", error: error instanceof Error ? error.message : String(error) });

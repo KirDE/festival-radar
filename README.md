@@ -48,7 +48,10 @@ Festival ingestion runs daily and selects sources according to their adaptive
 daily, three-day, weekly, or archived cadence. Run one source with
 `npm run ingest -- --slug=wacken-open-air`; add `--due` to select only sources
 whose last successful check is older than its configured interval. Scheduled
-runs retain normalized candidates and review diagnostics for 30 days.
+runs restore and save `.cache/festival-ingestion/freshness.json` through the
+Actions cache, and expose that state alongside normalized candidates and review
+diagnostics in the 30-day workflow artifact. Only a successful HTTP fetch and
+candidate evaluation advances a source timestamp; fetch failures remain due.
 
 ## Main scripts
 
