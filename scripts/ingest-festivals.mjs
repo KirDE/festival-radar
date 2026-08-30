@@ -6,6 +6,8 @@ import { festivalSources } from "../data/festival-sources.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
 import { dueFestivalSources } from "../lib/ingestion/schedule.ts";
+import { db } from "../lib/db.ts";
+import { createIngestionRun, finishIngestionRun, ingestionQueries, persistAttempt } from "../lib/ingestion/repository.ts";
 import { applyPublication, historyRecord } from "../lib/ingestion/publication.ts";
 
 const args = new Set(process.argv.slice(2));
@@ -16,11 +18,17 @@ const publicationsPath = path.resolve(process.argv.find((value) => value.startsW
 const historyPath = path.resolve(process.argv.find((value) => value.startsWith("--history="))?.slice(10) || "data/ingestion-history.jsonl");
 const fixturePath = process.argv.find((value) => value.startsWith("--fixture="))?.slice(10);
 const publish = args.has("--publish");
-const eligible = args.has("--due") ? dueFestivalSources(festivalSources) : festivalSources.filter((source) => source.enabled);
+const persistenceEnabled = Boolean(process.env.DATABASE_URL);
+const persistedStates = args.has("--due") && persistenceEnabled ? await ingestionQueries.sourceStates(db) : [];
+const lastSuccessfulChecks = new Map(persistedStates.map((state) => [state.festivalSlug, state.lastSuccessfulCheck?.toISOString()]));
+const hydratedSources = festivalSources.map((source) => ({ ...source, lastSuccessfulCheck: lastSuccessfulChecks.get(source.festivalSlug) ?? source.lastSuccessfulCheck }));
+const eligible = args.has("--due") ? dueFestivalSources(hydratedSources) : hydratedSources.filter((source) => source.enabled);
 const selected = eligible.filter((source) => !slugArg || source.festivalSlug === slugArg);
 if (selected.length === 0) throw new Error(slugArg ? `Unknown or disabled festival source: ${slugArg}` : "No enabled festival sources");
 
 await mkdir(outputDirectory, { recursive: true });
+const trigger = process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL";
+const run = persistenceEnabled ? await createIngestionRun(db, { trigger, sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length }) : null;
 const summary = { schemaVersion: 1, generatedAt: new Date().toISOString(), dryRun: !publish, processed: 0, changed: 0, publishable: 0, published: 0, reviewRequired: 0, fetchErrors: 0, results: [] };
 let publicationStore = JSON.parse(await readFile(publicationsPath, "utf8"));
 const history = [];
@@ -29,6 +37,7 @@ for (const source of selected) {
   const current = festivals.find(({ slug }) => slug === source.festivalSlug);
   if (!current) throw new Error(`No current festival for ${source.festivalSlug}`);
   const fetchedAt = new Date().toISOString();
+  const startedAt = new Date();
   try {
     const response = fixturePath ? null : await fetch(source.url, {
       redirect: "follow",
@@ -41,6 +50,7 @@ for (const source of selected) {
     const result = evaluateCandidate(current, candidate);
     const status = result.reviewReasons.length ? "review" : result.publishable ? "publishable" : "unchanged";
     const artifact = { status, source: { ...source, httpStatus: response?.status ?? null, finalUrl: response?.url ?? source.url }, result };
+    if (run) await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, finalUrl: response?.url ?? source.url, httpStatus: response?.status ?? null, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), result });
     await writeFile(path.join(outputDirectory, `${source.festivalSlug}.json`), `${JSON.stringify(artifact, null, 2)}\n`);
     summary.processed += 1;
     if (result.changes.length) summary.changed += 1;
@@ -55,14 +65,16 @@ for (const source of selected) {
     history.push(historyRecord(result, outcome));
     summary.results.push({ festivalSlug: source.festivalSlug, status, outcome, changes: result.changes.length, reviewReasons: result.reviewReasons });
   } catch (error) {
+    if (run) await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), error: error instanceof Error ? error.message : String(error) });
     summary.fetchErrors += 1;
     summary.results.push({ festivalSlug: source.festivalSlug, status: "fetch_error", error: error instanceof Error ? error.message : String(error) });
   }
 }
 
+if (run) await finishIngestionRun(db, run.id);
 if (publish) await writeFile(publicationsPath, `${JSON.stringify(publicationStore, null, 2)}\n`);
 if (history.length) await appendFile(historyPath, `${history.map((record) => JSON.stringify(record)).join("\n")}\n`);
-
 await writeFile(path.join(outputDirectory, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
 console.log(JSON.stringify(summary));
 if (summary.fetchErrors) process.exitCode = 2;
+if (persistenceEnabled) await db.$disconnect();

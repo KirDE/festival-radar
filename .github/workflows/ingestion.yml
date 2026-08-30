@@ -27,6 +27,7 @@ jobs:
       - name: Refresh due festival sources
         env:
           FESTIVAL: ${{ inputs.festival }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           args=(--due --publish --output=outputs/ingestion)
           if [[ -n "$FESTIVAL" ]]; then args+=("--slug=$FESTIVAL"); fi

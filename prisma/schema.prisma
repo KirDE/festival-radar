@@ -43,6 +43,35 @@ enum NotificationStatus {
   SKIPPED
 }
 
+enum IngestionRunStatus {
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum IngestionTrigger {
+  SCHEDULE
+  MANUAL
+  API
+  TEST
+}
+
+enum IngestionAttemptStatus {
+  UNCHANGED
+  REVIEW
+  PUBLISHABLE
+  FAILED
+}
+
+enum IngestionReviewState {
+  PENDING
+  APPROVED
+  REJECTED
+  SUPERSEDED
+  PUBLISHED
+}
+
 enum UserRole {
   USER
   EDITOR
@@ -195,4 +224,113 @@ model SpotifyConnection {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model IngestionRun {
+  id             String               @id @default(cuid())
+  schemaVersion  Int
+  trigger        IngestionTrigger
+  sourceCommit   String
+  startedAt      DateTime             @default(now())
+  endedAt        DateTime?
+  status         IngestionRunStatus   @default(RUNNING)
+  totalSources   Int                  @default(0)
+  successful     Int                  @default(0)
+  unchanged      Int                  @default(0)
+  reviewRequired Int                  @default(0)
+  publishable    Int                  @default(0)
+  failed         Int                  @default(0)
+  attempts       IngestionAttempt[]
+  candidates     IngestionCandidate[]
+  createdAt      DateTime             @default(now())
+
+  @@index([startedAt])
+}
+
+model IngestionSourceState {
+  festivalSlug        String    @id
+  lastSuccessfulCheck DateTime?
+  lastAttemptId       String?
+  updatedAt           DateTime  @updatedAt
+}
+
+model IngestionAttempt {
+  id             String                 @id @default(cuid())
+  runId          String
+  festivalSlug   String
+  requestedUrl   String
+  finalUrl       String?
+  httpStatus     Int?
+  durationMs     Int
+  retryCount     Int                    @default(0)
+  error          String?
+  parserVersions Json
+  status         IngestionAttemptStatus
+  startedAt      DateTime
+  endedAt        DateTime
+  priorAttemptId String?
+  priorAttempt   IngestionAttempt?      @relation("AttemptRetry", fields: [priorAttemptId], references: [id], onDelete: SetNull)
+  retries        IngestionAttempt[]     @relation("AttemptRetry")
+  run            IngestionRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
+  candidate      IngestionCandidate?
+
+  @@index([runId, festivalSlug])
+  @@index([festivalSlug, endedAt])
+}
+
+model IngestionCandidate {
+  id               String               @id @default(cuid())
+  runId            String
+  attemptId        String               @unique
+  festivalSlug     String
+  schemaVersion    Int
+  sourceEdition    String?
+  sourceYear       Int?
+  normalized       Json
+  warnings         Json
+  publishable      Boolean
+  reviewState      IngestionReviewState @default(PENDING)
+  reviewActor      String?
+  reviewedAt       DateTime?
+  publishedAt      DateTime?
+  supersedesId     String?
+  supersedes       IngestionCandidate?  @relation("CandidateVersion", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy     IngestionCandidate[] @relation("CandidateVersion")
+  catalogueVersion String?
+  createdAt        DateTime             @default(now())
+  run              IngestionRun         @relation(fields: [runId], references: [id], onDelete: Restrict)
+  attempt          IngestionAttempt     @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  evidence         IngestionEvidence[]
+  diffs            IngestionDiff[]
+
+  @@index([festivalSlug, createdAt])
+}
+
+model IngestionEvidence {
+  id            String             @id @default(cuid())
+  candidateId   String
+  field         String
+  observedValue Json?
+  sourceUrl     String
+  excerpt       String?
+  contentHash   String
+  observedAt    DateTime
+  adapter       String
+  candidate     IngestionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId, field])
+}
+
+model IngestionDiff {
+  id             String             @id @default(cuid())
+  candidateId    String
+  field          String
+  beforeValue    Json?
+  afterValue     Json?
+  reviewRequired Boolean
+  policyVersion  String
+  createdAt      DateTime           @default(now())
+  candidate      IngestionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId, createdAt])
 }
