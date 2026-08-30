@@ -115,5 +115,3 @@ export function artistSlug(name: string) {
 export const supportedLanguages = ["en", "de", "ru"] as const;
 export type SupportedLanguage = (typeof supportedLanguages)[number];
 export function festivalMonth(item: Festival) { return item.startDate?.slice(5, 7); }
-export const archiveYears = [2026] as const;
-export const plannedEditionYears = [2028] as const;
