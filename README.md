@@ -58,6 +58,7 @@ runs retain normalized candidates and review diagnostics for 30 days.
 - `scripts/spotify_gmm_2026/init_spotify_auth.py` - exchanges a Spotify callback `code` for local tokens or refreshes the token file.
 - `scripts/spotify_gmm_2026/init_youtube_music_auth.py` - starts YouTube Music OAuth device-flow and saves local tokens.
 - `scripts/spotify_gmm_2026/youtube_music_transfer.py` - transfers a generated festival report to YouTube Music.
+- `scripts/refresh-youtube-music-playlists.py` - refreshes every eligible persisted YouTube Music playlist independently and records per-provider failures.
 
 ## Setup
 
@@ -140,6 +141,14 @@ Resume an existing YouTube Music playlist after the daily quota resets:
 ```bash
 YOUTUBE_MUSIC_PLAYLIST_ID=... python3 scripts/spotify_gmm_2026/youtube_music_transfer.py --publish --resume-publish
 ```
+
+The scheduled workflow requires three encrypted repository secrets:
+`YOUTUBE_MUSIC_CREDENTIALS_JSON`, `YOUTUBE_MUSIC_OAUTH_JSON`, and
+`YOUTUBE_MUSIC_PLAYLIST_IDS` (a JSON object mapping canonical festival slugs to
+persisted playlist IDs). Missing IDs fail closed so an unattended retry cannot
+create duplicate playlists. A failure for one festival is recorded without
+preventing later festivals from being attempted; the job itself remains failed
+until every eligible provider refresh succeeds.
 
 For unattended quota checks, use the auto-resume wrapper. It first verifies that the playlist can be read, then runs the same quota-capped resume publish and prints one JSON line for each step:
 

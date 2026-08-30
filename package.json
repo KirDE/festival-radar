@@ -12,6 +12,7 @@
     "test:data": "node --test tests/*.test.mjs",
     "playlists:status": "node scripts/build-playlist-status.mjs",
     "playlists:catalog": "node scripts/export-playlist-catalog.mjs",
+    "playlists:youtube": "python3 scripts/refresh-youtube-music-playlists.py",
     "test": "python3 -m unittest discover -s tests"
   },
   "dependencies": {
