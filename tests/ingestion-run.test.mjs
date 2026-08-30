@@ -7,7 +7,7 @@ import { runIngestion } from "../lib/ingestion/run.ts";
 
 const festival = { slug: "example", name: "Example", officialUrl: "https://example.test", startDate: "2027-06-01", endDate: "2027-06-02", city: "Example", country: "DE", headliners: [], lineup: [], genres: [], status: "announced" };
 const source = { festivalSlug: "example", url: festival.officialUrl, strategies: ["html_fallback"], refreshPolicy: "daily", enabled: true };
-const html = `<html><body><h1>Example</h1><time datetime="2027-06-01"></time><time datetime="2027-06-02"></time></body></html>`;
+const html = `<html><body><h1>Example</h1><time class="start" datetime="2027-06-01"></time><time class="end" datetime="2027-06-02"></time></body></html>`;
 const response = (status, body = "") => new Response(body, { status });
 
 async function execute(sequence, threshold = 3, stateFile) {
@@ -23,6 +23,9 @@ test("403 is retried with bounded exponential backoff and can recover", async ()
   assert.equal(result.summary.status, "healthy");
   assert.deepEqual(result.delays, [10, 20]);
   assert.equal(result.summary.results[0].attempts, 3);
+  assert.deepEqual(result.summary.results[0].extractionPath, ["html_fallback"]);
+  assert.deepEqual(result.summary.results[0].evidenceFields, ["startDate", "endDate"]);
+  assert.equal(result.summary.results[0].lastSuccessfulExtraction, "2026-08-30T03:00:00.000Z");
 });
 
 test("source-specific headers and approved fetch URL are passed to the adapter", async () => {
@@ -49,6 +52,7 @@ test("failure state and last success persist, then escalate", async () => {
   assert.equal(final.summary.results[0].lastSuccessfulCheck, "2026-08-30T03:00:00.000Z");
   const persisted = JSON.parse(await readFile(stateFile, "utf8"));
   assert.equal(persisted.sources.example.consecutiveFailures, 2);
+  assert.equal(persisted.sources.example.lastSuccessfulExtraction, "2026-08-30T03:00:00.000Z");
 });
 
 test("mixed results retain successes and report partial degradation", async () => {

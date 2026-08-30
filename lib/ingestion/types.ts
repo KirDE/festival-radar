@@ -2,7 +2,7 @@ import type { Festival } from "../../data/festivals.ts";
 
 export const INGESTION_SCHEMA_VERSION = 1 as const;
 export type RefreshPolicy = "daily" | "every_3_days" | "weekly" | "archived";
-export type ParserStrategy = "json_ld_event" | "html_fallback" | "manual_review";
+export type ParserStrategy = "json_ld_event" | "html_fallback" | "official_markup" | "manual_review";
 
 export type FestivalSource = {
   festivalSlug: string;
@@ -13,6 +13,7 @@ export type FestivalSource = {
   lastSuccessfulCheck?: string;
   fetchUrl?: string;
   headers?: Record<string, string>;
+  manualReviewReason?: string;
 };
 
 export type FieldEvidence = {
