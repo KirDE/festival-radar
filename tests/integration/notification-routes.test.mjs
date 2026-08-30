@@ -63,7 +63,7 @@ test.before(async () => {
   await db.notificationSubscription.deleteMany();
   await db.notificationPreference.deleteMany();
   await db.session.deleteMany();
-  await db.user.deleteMany();
+  await db.user.deleteMany({ where: { adminAuditEntries: { none: {} } } });
   provider = http.createServer(async (request, response) => {
     let body = "";
     for await (const chunk of request) body += chunk;

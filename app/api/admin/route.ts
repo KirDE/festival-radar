@@ -1,19 +1,7 @@
-import { festivals } from "@/data/festivals";
-import { auditEntries, parserRuns, reviewChanges } from "@/lib/admin";
-import { requireAdminActor } from "@/lib/admin-auth";
-import { db } from "@/lib/db";
+import { NextResponse } from "next/server";
+import { currentAdmin } from "@/lib/admin-access";
+import { adminSnapshot, saveDraft } from "@/lib/admin-store";
+import { error } from "@/lib/api";
 
-export async function GET() {
-  const auth = await requireAdminActor();
-  if (auth.response) return auth.response;
-  const persistedAudit = await db.adminAuditEntry.findMany({
-    orderBy: { createdAt: "desc" }, take: 100, include: { actor: { select: { email: true } } },
-  });
-  return Response.json({
-    actor: { email: auth.actor.email, role: auth.actor.role }, festivals, reviewChanges, parserRuns,
-    auditEntries: [
-      ...persistedAudit.map((entry) => ({ id: entry.id, at: entry.createdAt.toISOString(), actor: entry.actor.email, action: entry.action, target: entry.target, detail: JSON.stringify(entry.detail ?? {}) })),
-      ...auditEntries,
-    ],
-  }, { headers: { "Cache-Control": "private, no-store" } });
-}
+export async function GET() { const admin = await currentAdmin(); return admin ? NextResponse.json(await adminSnapshot()) : error("Forbidden", 403); }
+export async function POST(request: Request) { const admin = await currentAdmin(); if (!admin) return error("Forbidden", 403); try { return NextResponse.json(await saveDraft(await request.json(), admin), { status: 201 }); } catch (cause) { return error(cause instanceof Error ? cause.message : "Invalid draft", 409); } }

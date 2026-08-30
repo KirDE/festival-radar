@@ -44,6 +44,36 @@ enum NotificationStatus {
   SKIPPED
 }
 
+enum AdminResourceKind {
+  FESTIVAL
+  ARTIST
+  LINK
+  ASSET
+  PLAYLIST
+}
+
+enum AdminDraftStatus {
+  DRAFT
+  QUEUED
+  APPLIED
+  REJECTED
+  CONFLICT
+}
+
+enum AdminChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CONFLICT
+}
+
+enum AdminRunStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
 enum IngestionRunStatus {
   RUNNING
   COMPLETED
@@ -93,19 +123,106 @@ model User {
   notificationPreferences   NotificationPreference[]
   notificationSubscriptions NotificationSubscription[]
   notificationDeliveries    NotificationDelivery[]
+  adminDrafts               AdminDraft[]
+  adminDecisions            AdminChange[]              @relation("AdminChangeDecisionActor")
+  adminRuns                 AdminParserRun[]           @relation("AdminRunActor")
   adminAuditEntries         AdminAuditEntry[]
 }
 
+model AdminDraft {
+  id            String            @id @default(cuid())
+  resourceKind  AdminResourceKind
+  resourceKey   String
+  baseRevision  Int
+  revision      Int               @default(1)
+  status        AdminDraftStatus  @default(DRAFT)
+  values        Json
+  validation    Json?
+  createdById   String
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  createdBy     User              @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  queuedChanges AdminChange[]
+
+  @@unique([resourceKind, resourceKey, revision])
+  @@index([resourceKind, resourceKey, status])
+  @@index([createdById, updatedAt])
+}
+
+model AdminResourceState {
+  resourceKind AdminResourceKind
+  resourceKey  String
+  revision     Int               @default(0)
+  values       Json
+  updatedAt    DateTime          @updatedAt
+
+  @@id([resourceKind, resourceKey])
+}
+
+model AdminChange {
+  id             String            @id @default(cuid())
+  resourceKind   AdminResourceKind
+  resourceKey    String
+  field          String
+  baseRevision   Int
+  beforeValue    Json
+  afterValue     Json
+  sourceEvidence Json
+  confidence     Int?
+  status         AdminChangeStatus @default(PENDING)
+  draftId        String?
+  parserRunId    String?
+  decidedById    String?
+  decidedAt      DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  draft          AdminDraft?       @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  parserRun      AdminParserRun?   @relation(fields: [parserRunId], references: [id], onDelete: SetNull)
+  decidedBy      User?             @relation("AdminChangeDecisionActor", fields: [decidedById], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([resourceKind, resourceKey, status])
+  @@index([parserRunId])
+}
+
+model AdminParserRun {
+  id            String         @id @default(cuid())
+  festivalSlug  String
+  sourceId      String
+  adapter       String
+  status        AdminRunStatus @default(RUNNING)
+  requestedById String?
+  startedAt     DateTime       @default(now())
+  finishedAt    DateTime?
+  durationMs    Int?
+  extracted     Int            @default(0)
+  message       String?
+  log           Json
+  requestedBy   User?          @relation("AdminRunActor", fields: [requestedById], references: [id], onDelete: Restrict)
+  changes       AdminChange[]
+
+  @@index([festivalSlug, startedAt])
+  @@index([status, startedAt])
+}
+
 model AdminAuditEntry {
-  id        String   @id @default(cuid())
-  actorId   String
-  action    String
-  target    String
-  detail    Json?
-  createdAt DateTime @default(now())
-  actor     User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  id           String             @id @default(cuid())
+  actorId      String?
+  actorLabel   String
+  action       String
+  resourceKind AdminResourceKind?
+  resourceKey  String?
+  beforeValue  Json?
+  afterValue   Json?
+  evidence     Json?
+  metadata     Json?
+  target       String?
+  detail       Json?
+  createdAt    DateTime           @default(now())
+  actor        User?              @relation(fields: [actorId], references: [id], onDelete: Restrict)
 
   @@index([createdAt])
+  @@index([resourceKind, resourceKey, createdAt])
   @@index([actorId, createdAt])
 }
 

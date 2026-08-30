@@ -39,6 +39,7 @@ jobs:
       - run: npm run prisma:generate
       - run: npx prisma migrate deploy
       - run: npm run test:integration
+      - run: npm run test:admin:integration
       - run: npm run typecheck
       - run: npm run test:data
       - run: npm run test:notifications:e2e

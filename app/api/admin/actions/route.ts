@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   const auth = await requireAdminActor(allowed);
   if (auth.response) return auth.response;
   const entry = await db.adminAuditEntry.create({ data: {
-    actorId: auth.actor.id, action: parsed.data.action, target: parsed.data.target,
+    actorId: auth.actor.id, actorLabel: auth.actor.email, action: parsed.data.action, target: parsed.data.target,
     detail: "decision" in parsed.data ? { decision: parsed.data.decision } : undefined,
   } });
   return Response.json({ accepted: true, auditId: entry.id }, { status: 202, headers: { "Cache-Control": "no-store" } });

@@ -14,24 +14,34 @@ export function AdminConsole({ actor, festivals, initialChanges, parserRuns, aud
   const [notice, setNotice] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [artistQuery, setArtistQuery] = useState("");
+  const [festivalDraft, setFestivalDraft] = useState<Record<string, string>>({});
+  const [assetDraft, setAssetDraft] = useState<Record<string, string>>({});
   const artists = useMemo(() => Array.from(new Set(festivals.flatMap((item) => [...item.headliners, ...item.lineup]))).filter((artist) => artist.toLowerCase().includes(artistQuery.toLowerCase())).slice(0, 12), [festivals, artistQuery]);
 
-  const runAction = async (body: Record<string, string>) => {
-    const response = await fetch("/api/admin/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Administrative action failed.");
-  };
   const decide = async (id: string, status: "approved" | "rejected") => {
-    try { await runAction({ action: "review.decide", target: id, decision: status }); }
-    catch (cause) { setNotice(cause instanceof Error ? cause.message : "Administrative action failed."); return; }
+    const response = await fetch(`/api/admin/changes/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision: status === "approved" ? "approve" : "reject" }) });
+    const body = await response.json();
+    if (!response.ok) return setNotice(body.error ?? "Decision failed");
     setChanges((items) => items.map((item) => item.id === id ? { ...item, status } : item));
-    setNotice(`Change ${id} ${status}. The decision was added to the audit trail.`);
+    setNotice(`Change ${id} ${status}. The durable audit trail was updated.`);
   };
   const refresh = async () => {
     setRefreshing(true);
     setNotice("");
-    try { await runAction({ action: "festival.refresh", target: selected.slug }); setNotice(`${selected.name} refresh was accepted and recorded in the audit trail.`); }
-    catch (cause) { setNotice(cause instanceof Error ? cause.message : "Refresh failed."); }
-    finally { setRefreshing(false); }
+    try {
+      const response = await fetch(`/api/admin/refresh/${selected.slug}`, { method: "POST" });
+      const body = await response.json();
+      setNotice(response.ok ? `${selected.name} refresh finished: ${body.message}. Reload to inspect its queued changes and persisted log.` : body.error ?? "Refresh failed");
+    } finally { setRefreshing(false); }
+  };
+  const save = async (resourceKind: "festival" | "link", values: Record<string, string>) => {
+    const snapshotResponse = await fetch("/api/admin");
+    const snapshot = await snapshotResponse.json();
+    if (!snapshotResponse.ok) return setNotice(snapshot.error ?? "Unable to load current revision");
+    const resource = snapshot.resources.find((item: { resourceKind: string; resourceKey: string }) => item.resourceKind === resourceKind.toUpperCase() && item.resourceKey === selected.slug);
+    const response = await fetch("/api/admin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ resourceKind, resourceKey: selected.slug, baseRevision: resource?.revision ?? 0, values }) });
+    const body = await response.json();
+    setNotice(response.ok ? `Draft revision ${body.revision} persisted and queued for review.` : body.error ?? "Draft save failed");
   };
 
   return <main className="adminShell">
@@ -55,11 +65,12 @@ export function AdminConsole({ actor, festivals, initialChanges, parserRuns, aud
       </div>}
 
       {section === "content" && selected && <div className="editorGrid">
-        <div className="adminPanel"><label>Festival<select value={selectedSlug} onChange={(event) => setSelectedSlug(event.target.value)}>{festivals.map((item) => <option value={item.slug} key={item.slug}>{item.name}</option>)}</select></label><div className="fieldPair"><label>Name<input defaultValue={selected.name}/></label><label>Status<select defaultValue={selected.status}><option>confirmed</option><option>partial</option><option>tba</option></select></label></div><div className="fieldPair"><label>City<input defaultValue={selected.city}/></label><label>Country<input defaultValue={selected.country}/></label></div><div className="fieldPair"><label>Start date<input type="date" defaultValue={selected.startDate}/></label><label>End date<input type="date" defaultValue={selected.endDate}/></label></div><label>Headliners<textarea defaultValue={selected.headliners.join("\n")} rows={5}/></label><button onClick={async () => { try { await runAction({ action: "festival.save-draft", target: selected.slug }); setNotice("Draft saved and attributed in the audit trail. It will not be published until reviewed."); } catch (cause) { setNotice(cause instanceof Error ? cause.message : "Save failed."); } }}>Save festival draft</button></div>
+        <div className="adminPanel"><label>Festival<select value={selectedSlug} onChange={(event) => { setSelectedSlug(event.target.value); setFestivalDraft({}); }}>{festivals.map((item) => <option value={item.slug} key={item.slug}>{item.name}</option>)}</select></label><div className="fieldPair"><label>Name<input defaultValue={selected.name} onChange={(e) => setFestivalDraft((v) => ({...v, name:e.target.value}))}/></label><label>Status<select defaultValue={selected.status} onChange={(e) => setFestivalDraft((v) => ({...v, status:e.target.value}))}><option>confirmed</option><option>partial</option><option>tba</option></select></label></div><div className="fieldPair"><label>City<input defaultValue={selected.city} onChange={(e) => setFestivalDraft((v) => ({...v, city:e.target.value}))}/></label><label>Country<input defaultValue={selected.country} onChange={(e) => setFestivalDraft((v) => ({...v, country:e.target.value}))}/></label></div><div className="fieldPair"><label>Start date<input type="date" defaultValue={selected.startDate} onChange={(e) => setFestivalDraft((v) => ({...v, startDate:e.target.value}))}/></label><label>End date<input type="date" defaultValue={selected.endDate} onChange={(e) => setFestivalDraft((v) => ({...v, endDate:e.target.value}))}/></label></div><label>Headliners<textarea defaultValue={selected.headliners.join("\n")} rows={5} onChange={(e) => setFestivalDraft((v) => ({...v, headliners:e.target.value}))}/></label><button disabled={!Object.keys(festivalDraft).length} onClick={() => save("festival", festivalDraft)}>Save festival draft</button></div>
+        <div className="adminPanel"><label>Festival<select value={selectedSlug} onChange={(event) => { setSelectedSlug(event.target.value); setFestivalDraft({}); }}>{festivals.map((item) => <option value={item.slug} key={item.slug}>{item.name}</option>)}</select></label><div className="fieldPair"><label>Name<input defaultValue={selected.name} onChange={(e) => setFestivalDraft((v) => ({...v, name:e.target.value}))}/></label><label>Status<select defaultValue={selected.status} onChange={(e) => setFestivalDraft((v) => ({...v, status:e.target.value}))}><option>confirmed</option><option>partial</option><option>tba</option></select></label></div><div className="fieldPair"><label>City<input defaultValue={selected.city} onChange={(e) => setFestivalDraft((v) => ({...v, city:e.target.value}))}/></label><label>Country<input defaultValue={selected.country} onChange={(e) => setFestivalDraft((v) => ({...v, country:e.target.value}))}/></label></div><div className="fieldPair"><label>Start date<input type="date" defaultValue={selected.startDate} onChange={(e) => setFestivalDraft((v) => ({...v, startDate:e.target.value}))}/></label><label>End date<input type="date" defaultValue={selected.endDate} onChange={(e) => setFestivalDraft((v) => ({...v, endDate:e.target.value}))}/></label></div><label>Headliners<textarea defaultValue={selected.headliners.join("\n")} rows={5} onChange={(e) => setFestivalDraft((v) => ({...v, headliners:e.target.value}))}/></label><button disabled={!Object.keys(festivalDraft).length} onClick={() => save("festival", festivalDraft)}>Save festival draft</button></div>
         <div><div className="adminPanel"><h3>Manual refresh</h3><p>Run only this festival’s configured adapters. Any differences go to the review queue.</p><button onClick={refresh} disabled={refreshing}>{refreshing ? "Refreshing…" : `Refresh ${selected.name}`}</button></div><div className="adminPanel"><h3>Artist editor</h3><input placeholder="Find an artist" value={artistQuery} onChange={(event) => setArtistQuery(event.target.value)}/><ul className="artistAdminList">{artists.map((artist) => <li key={artist}><span>{artist}</span><button className="textButton" onClick={() => setNotice(`${artist} opened for canonical identity and link editing.`)}>Edit</button></li>)}</ul></div></div>
       </div>}
 
-      {section === "assets" && selected && <div className="editorGrid"><div className="adminPanel"><label>Festival<select value={selectedSlug} onChange={(event) => setSelectedSlug(event.target.value)}>{festivals.map((item) => <option value={item.slug} key={item.slug}>{item.name}</option>)}</select></label><label>Official URL<input type="url" defaultValue={selected.officialUrl}/></label><label>Tickets URL<input type="url" defaultValue={selected.ticketsUrl}/></label><label>Spotify / playlist URL<input type="url" defaultValue={selected.playlistUrl}/></label><label>Logo URL<input type="url" placeholder="https://…/logo.svg"/></label><button onClick={() => setNotice("Link and asset draft saved for review.")}>Save asset draft</button></div><div className="adminPanel assetPreview"><h3>Validation</h3><span className="safe">Official URL · reachable</span><span className="safe">HTTPS · valid</span><span className="risk">Logo · manual review needed</span><p>External links are validated before a draft can be approved.</p></div></div>}
+      {section === "assets" && selected && <div className="editorGrid"><div className="adminPanel"><label>Festival<select value={selectedSlug} onChange={(event) => { setSelectedSlug(event.target.value); setAssetDraft({}); }}>{festivals.map((item) => <option value={item.slug} key={item.slug}>{item.name}</option>)}</select></label>{([["officialUrl", "Official URL", selected.officialUrl], ["ticketsUrl", "Tickets URL", selected.ticketsUrl], ["playlistUrl", "Spotify / playlist URL", selected.playlistUrl], ["logoUrl", "Logo URL", ""]] as const).map(([field,label,value]) => <label key={field}>{label}<input type="url" defaultValue={value} placeholder="https://…" onChange={(e) => setAssetDraft((v) => ({...v, [field]:e.target.value}))}/></label>)}<button disabled={!Object.keys(assetDraft).length} onClick={() => save("link", assetDraft)}>Save asset draft</button></div><div className="adminPanel assetPreview"><h3>Validation</h3><span className="safe">HTTPS URLs are validated by the browser and server workflow.</span><p>Every persisted edit enters the review queue before it updates durable resource state.</p></div></div>}
 
       {section === "diagnostics" && <div className="diagnosticGrid">{parserRuns.map((run) => <article className="adminPanel" key={run.festival}><div className="reviewMeta"><span className={run.status === "healthy" ? "safe" : "risk"}>{run.status}</span><small>{run.lastRun}</small></div><h3>{run.festival}</h3><p>{run.message}</p><dl><div><dt>Adapter</dt><dd>{run.source}</dd></div><div><dt>Duration</dt><dd>{run.durationMs} ms</dd></div><div><dt>Records</dt><dd>{run.extracted}</dd></div></dl><button className="secondary" onClick={() => setNotice(`${run.festival} parser log opened.`)}>View parser log</button></article>)}</div>}
 
