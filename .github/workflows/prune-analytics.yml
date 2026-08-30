@@ -1,0 +1,30 @@
+name: Prune privacy analytics
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prune-privacy-analytics
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run analytics:prune
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ANALYTICS_RETENTION_DAYS: ${{ vars.ANALYTICS_RETENTION_DAYS || '90' }}
