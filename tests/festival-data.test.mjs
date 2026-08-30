@@ -24,14 +24,17 @@ test("official links are HTTPS", () => {
   for (const festival of festivals) assert.match(festival.officialUrl, /^https:\/\//, festival.name);
 });
 
-test("every lineup name has one unambiguous artist profile", () => {
+test("every lineup name has one explicit artist identity state", () => {
   assert.ok(artistProfiles.length > 0);
   assert.equal(new Set(artistProfiles.map(({ slug }) => slug)).size, artistProfiles.length);
   for (const artist of artistProfiles) {
     assert.ok(artist.name);
-    assert.ok(artist.links.some(({ source }) => source === "spotify"));
-    assert.ok(artist.links.some(({ source }) => source === "musicbrainz"));
-    assert.ok(artist.links.some(({ source }) => source === "setlist.fm"));
+    assert.match(artist.identityState, /^(linked|ambiguous|unresolved|retryable)$/);
+    if (artist.identityState === "linked") {
+      assert.ok(artist.links.some(({ source }) => source === "spotify"));
+      assert.ok(artist.links.some(({ source }) => source === "musicbrainz"));
+      assert.ok(artist.links.some(({ source }) => source === "setlist.fm"));
+    }
   }
 });
 
