@@ -28,6 +28,7 @@ jobs:
         env:
           FESTIVAL: ${{ inputs.festival }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          INGESTION_MAX_FETCH_ERRORS: "10"
         run: |
           args=(--due --publish --output=outputs/ingestion)
           if [[ -n "$FESTIVAL" ]]; then args+=("--slug=$FESTIVAL"); fi
