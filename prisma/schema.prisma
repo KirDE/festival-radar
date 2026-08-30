@@ -38,6 +38,7 @@ enum NotificationEventType {
 
 enum NotificationStatus {
   PENDING
+  CLAIMED
   SENT
   FAILED
   SKIPPED
@@ -164,6 +165,8 @@ model NotificationDelivery {
   status        NotificationStatus    @default(PENDING)
   attempts      Int                   @default(0)
   nextAttemptAt DateTime?
+  claimedAt     DateTime?
+  claimToken    String?
   sentAt        DateTime?
   lastError     String?
   createdAt     DateTime              @default(now())
@@ -173,6 +176,7 @@ model NotificationDelivery {
 
   @@unique([eventId, userId, channel])
   @@index([status, frequency, nextAttemptAt])
+  @@index([claimToken])
   @@index([userId, createdAt])
 }
 

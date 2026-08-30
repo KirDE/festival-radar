@@ -17,6 +17,7 @@
     "test:data": "node --test $(find tests -maxdepth 1 -name '*.test.mjs' ! -name '*.e2e.test.mjs' -print) && node --experimental-strip-types --test tests/selection-playlist.test.ts",
     "test:ingestion-db": "node --test tests/ingestion-repository.e2e.test.mjs",
     "test:integration": "node --test --test-concurrency=1 tests/integration/*.test.mjs",
+    "test:notifications:e2e": "node tests/notification-e2e.mjs",
     "playlists:status": "node scripts/build-playlist-status.mjs",
     "playlists:catalog": "node scripts/export-playlist-catalog.mjs",
     "test": "python3 -m unittest discover -s tests",

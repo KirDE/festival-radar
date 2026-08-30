@@ -41,6 +41,7 @@ jobs:
       - run: npm run test:integration
       - run: npm run typecheck
       - run: npm run test:data
+      - run: npm run test:notifications:e2e
       - run: python3 -m pip install -r requirements.txt
       - run: python3 -m unittest discover -s tests
       - run: npm run build

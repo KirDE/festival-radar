@@ -1,12 +1,11 @@
 import { NotificationChannel, NotificationEventType, NotificationFrequency, NotificationStatus, Prisma } from "@prisma/client";
-import { db } from "@/lib/db";
+import { db } from "./db.ts";
+import { nextDigest } from "./notification-schedule.ts";
 
 export const eventTypes = Object.values(NotificationEventType);
 export const channels = Object.values(NotificationChannel);
 export const frequencies = Object.values(NotificationFrequency);
 export type DetectedChange = { dedupeKey: string; festivalId: string; type: NotificationEventType; title: string; message: string; url?: string; occurredAt: Date; payload?: Prisma.InputJsonValue };
-
-const nextDigest = (frequency: NotificationFrequency) => { const date = new Date(); date.setUTCDate(date.getUTCDate() + (frequency === NotificationFrequency.DAILY ? 1 : 7)); date.setUTCHours(8, 0, 0, 0); return date; };
 
 export async function recordChange(change: DetectedChange) {
   const event = await db.notificationEvent.upsert({ where: { dedupeKey: change.dedupeKey }, update: {}, create: change });
@@ -15,33 +14,49 @@ export async function recordChange(change: DetectedChange) {
   return event;
 }
 
-async function send(channel: NotificationChannel, endpoint: string, title: string, message: string, url?: string) {
+async function send(deliveryId: string, channel: NotificationChannel, endpoint: string, title: string, message: string, url?: string) {
+  const commonHeaders = { "content-type": "application/json", "idempotency-key": deliveryId };
   if (channel === NotificationChannel.EMAIL) {
     if (!process.env.EMAIL_WEBHOOK_URL) throw new Error("Email provider is not configured");
-    return fetch(process.env.EMAIL_WEBHOOK_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: endpoint, subject: title, text: `${message}${url ? `\n${url}` : ""}` }) });
+    return fetch(process.env.EMAIL_WEBHOOK_URL, { method: "POST", headers: commonHeaders, body: JSON.stringify({ deliveryId, to: endpoint, subject: title, text: `${message}${url ? `\n${url}` : ""}` }) });
   }
   if (channel === NotificationChannel.TELEGRAM) {
     if (!process.env.TELEGRAM_BOT_TOKEN) throw new Error("Telegram provider is not configured");
-    return fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chat_id: endpoint, text: `${title}\n${message}${url ? `\n${url}` : ""}` }) });
+    return fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: commonHeaders, body: JSON.stringify({ chat_id: endpoint, text: `${title}\n${message}${url ? `\n${url}` : ""}` }) });
   }
   if (!process.env.WEB_PUSH_WEBHOOK_URL) throw new Error("Web push provider is not configured");
-  return fetch(process.env.WEB_PUSH_WEBHOOK_URL, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint, title, body: message, url }) });
+  return fetch(process.env.WEB_PUSH_WEBHOOK_URL, { method: "POST", headers: commonHeaders, body: JSON.stringify({ deliveryId, endpoint, title, body: message, url }) });
 }
 
 export async function dispatchDue(frequency?: NotificationFrequency, limit = 100) {
-  const deliveries = await db.notificationDelivery.findMany({ where: { status: NotificationStatus.PENDING, nextAttemptAt: { lte: new Date() }, ...(frequency ? { frequency } : {}) }, include: { event: true, user: { select: { email: true, notificationSubscriptions: { where: { enabled: true } } } } }, orderBy: { createdAt: "asc" }, take: Math.min(limit, 500) });
+  const claimToken = crypto.randomUUID();
+  const boundedLimit = Math.min(limit, 500);
+  await db.$executeRaw`
+    WITH due AS (
+      SELECT id FROM "NotificationDelivery"
+      WHERE ((status = 'PENDING' AND "nextAttemptAt" <= NOW()) OR (status = 'CLAIMED' AND "claimedAt" < NOW() - INTERVAL '15 minutes'))
+      ${frequency ? Prisma.sql`AND frequency = ${frequency}::"NotificationFrequency"` : Prisma.empty}
+      ORDER BY "createdAt" ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT ${boundedLimit}
+    )
+    UPDATE "NotificationDelivery" AS delivery
+    SET status = 'CLAIMED', "claimedAt" = NOW(), "claimToken" = ${claimToken}, "updatedAt" = NOW()
+    FROM due WHERE delivery.id = due.id
+  `;
+  const deliveries = await db.notificationDelivery.findMany({ where: { claimToken, status: NotificationStatus.CLAIMED }, include: { event: true, user: { select: { email: true, notificationSubscriptions: { where: { enabled: true } } } } }, orderBy: { createdAt: "asc" } });
   const results: { id: string; status: string }[] = [];
   for (const delivery of deliveries) {
     const subscription = delivery.user.notificationSubscriptions.find((item) => item.channel === delivery.channel);
     const endpoint = delivery.channel === NotificationChannel.EMAIL ? delivery.user.email : subscription?.endpoint;
-    if (!endpoint) { await db.notificationDelivery.update({ where: { id: delivery.id }, data: { status: NotificationStatus.SKIPPED, lastError: "No active channel subscription" } }); results.push({ id: delivery.id, status: "skipped" }); continue; }
+    if (!endpoint) { await db.notificationDelivery.updateMany({ where: { id: delivery.id, claimToken }, data: { status: NotificationStatus.SKIPPED, claimToken: null, claimedAt: null, lastError: "No active channel subscription" } }); results.push({ id: delivery.id, status: "skipped" }); continue; }
     try {
-      const response = await send(delivery.channel, endpoint, delivery.event.title, delivery.event.message, delivery.event.url ?? undefined);
+      const response = await send(delivery.id, delivery.channel, endpoint, delivery.event.title, delivery.event.message, delivery.event.url ?? undefined);
       if (!response.ok) throw new Error(`Provider returned ${response.status}`);
-      await db.notificationDelivery.update({ where: { id: delivery.id }, data: { status: NotificationStatus.SENT, sentAt: new Date(), attempts: { increment: 1 }, lastError: null } }); results.push({ id: delivery.id, status: "sent" });
+      await db.notificationDelivery.updateMany({ where: { id: delivery.id, claimToken }, data: { status: NotificationStatus.SENT, sentAt: new Date(), attempts: { increment: 1 }, claimToken: null, claimedAt: null, lastError: null } }); results.push({ id: delivery.id, status: "sent" });
     } catch (cause) {
       const attempts = delivery.attempts + 1;
-      await db.notificationDelivery.update({ where: { id: delivery.id }, data: { attempts, status: attempts >= 5 ? NotificationStatus.FAILED : NotificationStatus.PENDING, nextAttemptAt: new Date(Date.now() + Math.min(2 ** attempts * 60_000, 3_600_000)), lastError: cause instanceof Error ? cause.message.slice(0, 500) : "Delivery failed" } }); results.push({ id: delivery.id, status: attempts >= 5 ? "failed" : "retry" });
+      await db.notificationDelivery.updateMany({ where: { id: delivery.id, claimToken }, data: { attempts, status: attempts >= 5 ? NotificationStatus.FAILED : NotificationStatus.PENDING, nextAttemptAt: new Date(Date.now() + Math.min(2 ** attempts * 60_000, 3_600_000)), claimToken: null, claimedAt: null, lastError: cause instanceof Error ? cause.message.slice(0, 500) : "Delivery failed" } }); results.push({ id: delivery.id, status: attempts >= 5 ? "failed" : "retry" });
     }
   }
   return results;
