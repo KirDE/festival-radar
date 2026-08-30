@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { festivals } from "../data/festivals.ts";
 import { artistProfiles } from "../data/artists.ts";
@@ -32,6 +33,14 @@ test("every lineup name has one unambiguous artist profile", () => {
     assert.ok(artist.links.some(({ source }) => source === "musicbrainz"));
     assert.ok(artist.links.some(({ source }) => source === "setlist.fm"));
   }
+});
+
+test("the production deploy smoke uses an existing artist profile", async () => {
+  const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
+  const match = workflow.match(/festivals\.kir-it\.de\/artists\/([a-z0-9-]+)\//);
+
+  assert.ok(match, "deploy workflow must smoke-test an artist route");
+  assert.ok(artistProfiles.some(({ slug }) => slug === match[1]), match[1]);
 });
 
 test("curated identities include provenance and stable provider IDs", () => {
