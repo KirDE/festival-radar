@@ -8,6 +8,7 @@ const source = {
   strategies: ["json_ld_event"],
   refreshPolicy: "daily",
   enabled: true,
+  editionYear: 2027,
 };
 
 test("JSON-LD extraction normalizes dates, city, performers, and tickets", () => {

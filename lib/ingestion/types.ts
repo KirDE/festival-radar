@@ -10,6 +10,7 @@ export type FestivalSource = {
   strategies: ParserStrategy[];
   refreshPolicy: RefreshPolicy;
   enabled: boolean;
+  editionYear: number;
   lastSuccessfulCheck?: string;
 };
 
@@ -27,6 +28,7 @@ export type FestivalCandidate = Partial<Pick<Festival, "startDate" | "endDate" |
   fetchedAt: string;
   evidence: FieldEvidence[];
   warnings: string[];
+  observedEditionYears: number[];
 };
 
 export type ChangeKind = "date_changed" | "city_changed" | "artist_added" | "artist_removed" | "headliner_added" | "headliner_removed" | "tickets_changed" | "ticket_status_changed" | "timetable_published" | "status_changed";

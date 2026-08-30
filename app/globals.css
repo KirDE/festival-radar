@@ -110,6 +110,14 @@
   font-weight: 700;
   cursor: pointer;
 }
+.playlistActions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.25rem; }
+.playlistActions .primaryButton { border: 0; cursor: pointer; }
+.playlistActions .primaryButton:disabled { cursor: wait; opacity: .65; }
+.playlistStatus { margin: .8rem 0; }
+.playlistStatus.created { color: #8ee6ae; }
+.playlistStatus.error { color: #ff9e9e; }
+.plannerSection details { margin-top: 1rem; }
+.plannerSection details p { max-width: 54rem; }
 .artistChips {
   display: flex;
   flex-wrap: wrap;
@@ -131,6 +139,7 @@
   font-size: 12px;
   font-weight: 800;
 }
+.viewHeading{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:24px}.viewHeading h2{margin:8px 0 0;font:clamp(32px,5vw,58px)/1 "Archivo Black";text-transform:uppercase;letter-spacing:-.05em}.viewHeading p{max-width:390px;color:#67655f}.monthNav{display:flex;align-items:center;gap:14px}.monthNav button{width:42px;height:42px;border:1px solid var(--ink);background:transparent;cursor:pointer;font-size:20px}.calendarGrid{min-height:170px;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:22px}.calendarGrid>a{display:flex;gap:14px;padding:17px;background:var(--paper)}.calendarGrid time{display:grid;place-items:center;min-width:42px;height:42px;background:var(--acid);font:18px "Archivo Black"}.calendarGrid span{display:flex;flex-direction:column;gap:4px}.calendarGrid small{color:#67655f}.calendarGrid>p{padding:20px;background:var(--paper);grid-column:1/-1}.europeMap{position:relative;min-height:560px;overflow:visible;border:1px solid var(--line);background:linear-gradient(135deg,#cce5ed,#e8f3f5)}.mapLand{position:absolute;inset:9% 15% 8% 18%;display:grid;place-items:center;color:#9a9a85;font:clamp(60px,13vw,170px) "Archivo Black";letter-spacing:-.08em;background:#dbdcc4;clip-path:polygon(23% 8%,45% 14%,55% 2%,73% 22%,92% 34%,81% 56%,91% 82%,64% 91%,51% 73%,36% 94%,24% 65%,2% 55%,14% 36%)}.mapMarker{position:absolute;transform:translate(-50%,-50%);z-index:2}.mapMarker summary{list-style:none;display:grid;place-items:center;width:40px;height:40px;border:3px solid white;border-radius:50%;background:var(--orange);color:white;font-weight:900;cursor:pointer;box-shadow:0 3px 12px #0005}.mapMarker summary::-webkit-details-marker{display:none}.mapMarker summary span{position:absolute;top:42px;color:var(--ink);font-size:10px}.mapMarker>div{position:absolute;left:24px;top:24px;width:235px;max-height:240px;overflow:auto;background:var(--paper);border:2px solid var(--ink);box-shadow:7px 7px 0 #17171244}.mapMarker>div a{display:flex;flex-direction:column;padding:10px 12px;border-bottom:1px solid var(--line)}.mapMarker>div small{color:#67655f}@media(max-width:700px){.plannerPage{padding:24px 18px}.viewHeading{align-items:flex-start;flex-direction:column}.calendarGrid{grid-template-columns:1fr}.europeMap{min-height:440px}.mapMarker>div{position:fixed;left:18px;right:18px;top:auto;bottom:18px;width:auto;z-index:20}}
 * {
   box-sizing: border-box;
 }
@@ -212,6 +221,16 @@ nav {
 nav a:hover {
   text-decoration: underline;
 }
+.accountMenu { position: relative; }
+.accountButton, .accountPopover button { border: 1px solid var(--ink); background: var(--paper); color: var(--ink); padding: 8px 12px; font: inherit; font-weight: 700; cursor: pointer; }
+.accountPopover { position: absolute; z-index: 20; right: 0; top: calc(100% + 12px); width: min(340px, calc(100vw - 32px)); padding: 20px; border: 1px solid var(--ink); background: var(--paper); box-shadow: 8px 8px 0 var(--ink); }
+.accountPopover form, .accountPopover label { display: grid; gap: 8px; }
+.accountPopover form { gap: 14px; margin-top: 16px; }
+.accountPopover input { min-width: 0; border: 1px solid var(--line); padding: 10px; font: inherit; }
+.accountTabs { display: flex; gap: 8px; }
+.accountTabs [aria-selected="true"] { background: var(--ink); color: var(--paper); }
+.accountHint { color: #66645e; font-size: 13px; }
+.accountClose { position: absolute; top: 6px; right: 6px; border: 0 !important; font-size: 20px !important; }
 main {
   min-height: calc(100vh - 160px);
 }
@@ -301,13 +320,15 @@ footer {
   position: sticky;
   top: 12px;
   z-index: 5;
-  display: grid;
-  grid-template-columns: minmax(230px, 1fr) 170px 150px auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 12px;
   background: rgba(23, 23, 18, 0.96);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
 }
+.filterBar .search { flex: 1 1 230px; }
+.filterBar select { flex: 1 1 145px; width: auto; }
 .search {
   background: white;
   display: flex;
@@ -417,25 +438,26 @@ footer {
   cursor: not-allowed;
 }
 .compareTray {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  display: block;
   margin: 18px 0 0;
   padding: 12px;
   border: 1px solid var(--ink);
   background: white;
   font-size: 12px;
 }
+.compareHeading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.compareHint { margin: 12px 0 0; color: #5f5c54; }
+.comparisonScroll { overflow-x: auto; margin-top: 12px; }
+.comparisonTable { width: 100%; min-width: 680px; border-collapse: collapse; text-align: left; }
+.comparisonTable th, .comparisonTable td { border: 1px solid var(--line); padding: 10px; vertical-align: top; }
+.comparisonTable thead th { background: var(--ink); color: white; }
+.comparisonTable tbody th { width: 190px; background: var(--soft); }
+.comparisonTable a { font-weight: 800; text-decoration: underline; }
 .compareTray button {
   border: 0;
   background: var(--soft);
   padding: 7px 9px;
   cursor: pointer;
-}
-.compareTray span {
-  margin-left: auto;
-  color: #5f5c54;
 }
 .festivalCard:hover {
   background: white;
@@ -1052,3 +1074,6 @@ footer {
 /* Administration console */
 .adminShell{min-height:100vh;display:grid;grid-template-columns:260px 1fr;background:#ebe8df}.adminNav{position:sticky;top:0;height:100vh;background:var(--ink);color:white;padding:30px 22px;display:flex;flex-direction:column;gap:8px}.adminNav h1{font:25px "Archivo Black";text-transform:uppercase;margin:8px 0}.adminNav p{color:#aaa79f;font-size:13px;margin:0 0 30px}.adminNav button{border:0;background:transparent;color:#d6d3ca;padding:13px 12px;text-align:left;font:700 13px "DM Sans";display:flex;justify-content:space-between;cursor:pointer}.adminNav button.active{background:var(--acid);color:var(--ink)}.adminNav button b{background:var(--orange);color:white;border-radius:20px;padding:1px 7px}.adminNav>a{margin-top:auto;color:#aaa79f;font-size:13px}.adminMain{padding:38px 44px 70px;max-width:1240px;width:100%;margin:auto}.adminHeader{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--ink);padding-bottom:20px;margin-bottom:24px}.adminHeader h2{font:46px "Archivo Black";text-transform:uppercase;letter-spacing:-.04em;margin:9px 0 0}.adminRole{font-size:12px;border:1px solid var(--line);padding:9px;background:white}.adminNotice{background:var(--acid);padding:14px 18px;margin-bottom:18px;display:flex;justify-content:space-between;font-size:13px;font-weight:700}.adminNotice button{border:0;background:transparent;font-size:18px;cursor:pointer}.adminToolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.adminToolbar p{font-size:13px;color:#65625b}.adminToolbar select,.adminPanel input,.adminPanel select,.adminPanel textarea{border:1px solid var(--line);background:white;padding:11px;font:500 13px "DM Sans";width:100%}.reviewCard,.adminPanel{background:#f7f5ef;border:1px solid var(--line);padding:22px;margin-bottom:14px}.reviewCard.approved{border-left:5px solid #579000}.reviewCard.rejected{opacity:.62}.reviewMeta{display:flex;justify-content:space-between;align-items:center}.reviewMeta small{color:#77746d}.safe,.risk{display:inline-flex;width:max-content;padding:5px 8px;text-transform:uppercase;font-size:10px;font-weight:800;letter-spacing:.06em}.safe{background:#dfffb8;color:#386800}.risk{background:#ffe0b7;color:#8b3700}.reviewCard h3,.adminPanel h3{font:20px "Archivo Black";text-transform:uppercase;margin:17px 0}.reviewCard h3 span{color:#77746d}.diff{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line)}.diff>div{padding:13px}.diff>div+div{border-left:1px solid var(--line);background:white}.diff small,.adminPanel label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;color:#6d6a62}.diff p{margin:7px 0;font-size:14px}.reviewActions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}.adminMain button{border:1px solid var(--ink);background:var(--ink);color:white;padding:10px 14px;font:800 11px "DM Sans";text-transform:uppercase;cursor:pointer}.adminMain button.secondary{background:transparent;color:var(--ink)}.adminMain button:disabled{opacity:.5}.decision{display:block;margin-top:14px;text-align:right;text-transform:uppercase;font-size:11px}.editorGrid{display:grid;grid-template-columns:2fr 1fr;gap:18px}.adminPanel label{display:grid;gap:7px;margin-bottom:15px}.fieldPair{display:grid;grid-template-columns:1fr 1fr;gap:12px}.adminPanel p{color:#66635c;font-size:13px;line-height:1.5}.artistAdminList{list-style:none;margin:12px 0 0;padding:0}.artistAdminList li{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding:9px 0;font-size:13px}.adminMain button.textButton{border:0;background:transparent;color:var(--ink);padding:4px;text-decoration:underline}.assetPreview{display:flex;flex-direction:column;gap:10px;height:max-content}.diagnosticGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.diagnosticGrid dl{border-top:1px solid var(--line)}.diagnosticGrid dl div{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}.diagnosticGrid dt{color:#77746d}.diagnosticGrid dd{margin:0;font-weight:700}.auditTable article{display:grid;grid-template-columns:190px 1fr 180px;gap:18px;padding:14px 5px;border-bottom:1px solid var(--line);font-size:12px}.auditTable time,.auditTable span{color:#77746d}.auditTable p{margin:4px 0}
 @media(max-width:900px){.adminShell{grid-template-columns:1fr}.adminNav{position:relative;height:auto}.adminNav>a{margin-top:20px}.adminMain{padding:28px 22px}.diagnosticGrid{grid-template-columns:1fr}.editorGrid{grid-template-columns:1fr}.adminHeader h2{font-size:34px}}@media(max-width:600px){.adminHeader{align-items:flex-start;gap:20px;flex-direction:column}.diff,.fieldPair{grid-template-columns:1fr}.diff>div+div{border-left:0;border-top:1px solid var(--line)}.adminToolbar{align-items:flex-start;gap:12px;flex-direction:column}.auditTable article{grid-template-columns:1fr;gap:5px}}
+
+/* Account sync and sharing */
+.accountSync{border:2px solid var(--ink);background:#fff}.syncActions{display:flex;flex-wrap:wrap;gap:10px}.accountSync button,.accountSync input{border:1px solid var(--ink);padding:10px 12px;font:700 12px "DM Sans";background:white}.accountSync button{cursor:pointer}.accountSync button:disabled{opacity:.5;cursor:wait}.syncConflict{margin-top:16px;padding:16px;background:#fff0c2;border-left:5px solid var(--orange)}.syncConflict div{display:flex;gap:8px;margin-top:12px}.syncGrid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:24px}.syncGrid>div{display:grid;align-content:start;gap:12px;padding:18px;background:var(--soft)}.syncGrid h3{margin:0}.syncGrid label{display:grid;gap:6px}.shareResult{display:flex;gap:8px;align-items:center}.shareResult a{overflow-wrap:anywhere}.accountMenu{position:relative}.accountPopover{position:absolute;right:0;top:44px;z-index:20;width:min(360px,90vw);padding:20px;background:white;border:2px solid var(--ink);box-shadow:8px 8px 0 rgba(0,0,0,.18)}.accountPopover form,.accountPopover label{display:grid;gap:8px}.accountPopover form{gap:12px}.accountTabs{display:flex;gap:6px;margin-bottom:12px}.accountClose{position:absolute;right:8px;top:8px}.accountHint{font-size:12px}.accountButton{white-space:nowrap}@media(max-width:700px){.syncGrid{grid-template-columns:1fr}.shareResult{align-items:flex-start;flex-direction:column}}
