@@ -75,12 +75,7 @@ ln -sfn "$release" "$app_root/current"
 chown -R www-data:www-data "$release" "$shared"
 systemctl daemon-reload
 systemctl enable --now "$service"
-if command -v plesk >/dev/null 2>&1; then
-  plesk bin httpdmng --reconfigure-domain "$domain"
-else
-  apache2ctl configtest
-  systemctl reload apache2
-fi
+bash "$release/scripts/deploy/reconfigure-webserver.sh" "$domain"
 
 healthy=false
 for _ in $(seq 1 20); do
