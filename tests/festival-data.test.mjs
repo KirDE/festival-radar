@@ -57,14 +57,14 @@ test("only verified artist links are identity evidence and enriched records are 
   }
 });
 
-test("curated identities include provenance and stable provider IDs", () => {
-  const curated = artistProfiles.filter(({ identities }) => Object.keys(identities).length > 0);
-  assert.ok(curated.length >= 3);
-  for (const artist of curated) {
-    assert.match(artist.identities.spotify, /^[A-Za-z0-9]{22}$/);
+test("resolved identities include provenance and stable provider IDs", () => {
+  const resolved = artistProfiles.filter(({ identities }) => identities.musicbrainz);
+  assert.ok(resolved.length > 3);
+  for (const artist of resolved) {
+    if (artist.identities.spotify) assert.match(artist.identities.spotify, /^[A-Za-z0-9]{22}$/);
     assert.match(artist.identities.musicbrainz, /^[0-9a-f-]{36}$/);
     assert.equal(artist.identities.setlistFm, artist.identities.musicbrainz);
-    assert.ok(artist.provenance.length >= 2);
+    assert.ok(artist.provenance.some(({ field, source }) => field === "identity" && source === "musicbrainz"));
   }
 });
 

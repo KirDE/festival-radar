@@ -1,4 +1,5 @@
 import { allArtists, artistSlug } from "./festivals.ts";
+import enrichment from "./artist-enrichment.json" with { type: "json" };
 
 export type ArtistSource = "official" | "spotify" | "musicbrainz" | "setlist.fm" | "wikimedia";
 
@@ -87,6 +88,26 @@ const curated: Record<string, Partial<ArtistProfile>> = {
   },
 };
 
+type GeneratedProfile = {
+  origin?: string;
+  genres: string[];
+  identities: { musicbrainz: string; setlistFm: string };
+  links: ArtistProfile["links"];
+  provenance: ArtistProfile["provenance"];
+};
+
+function generatedProfile(slug: string): Partial<ArtistProfile> {
+  const profile = (enrichment.profiles as Record<string, GeneratedProfile | undefined>)[slug];
+  if (!profile) return {};
+  return {
+    origin: profile.origin,
+    genres: profile.genres,
+    identities: profile.identities,
+    links: profile.links as ArtistProfile["links"],
+    provenance: profile.provenance as ArtistProfile["provenance"],
+  };
+}
+
 function searchLinks(name: string): ArtistProfile["links"] {
   const query = encodeURIComponent(name);
   return [
@@ -98,7 +119,19 @@ function searchLinks(name: string): ArtistProfile["links"] {
 
 export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
   const slug = artistSlug(name);
-  const entry = curated[slug] || {};
+  const generated = generatedProfile(slug);
+  const override = curated[slug] || {};
+  const entry: Partial<ArtistProfile> = {
+    ...generated,
+    ...override,
+    identities: { ...generated.identities, ...override.identities },
+    genres: override.genres || generated.genres,
+    links: [...(generated.links || []), ...(override.links || [])],
+    provenance: [
+      ...(generated.provenance || []).filter(({ field }) => field !== "identity" || !override.identities?.musicbrainz),
+      ...(override.provenance || []),
+    ],
+  };
   const identityLinks: ArtistProfile["links"] = [
     ...(entry.identities?.spotify ? [{ label: "Spotify", url: `https://open.spotify.com/artist/${entry.identities.spotify}`, source: "spotify" as const, verified: true }] : []),
     ...(entry.identities?.musicbrainz ? [{ label: "MusicBrainz", url: `https://musicbrainz.org/artist/${entry.identities.musicbrainz}`, source: "musicbrainz" as const, verified: true }] : []),

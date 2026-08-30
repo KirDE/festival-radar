@@ -1,0 +1,2785 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-30T06:44:13.435Z",
+  "source": "musicbrainz",
+  "profiles": {
+    "abbie-falls": {
+      "identities": {
+        "musicbrainz": "693ce51c-1933-4387-b227-e84545125593",
+        "setlistFm": "693ce51c-1933-4387-b227-e84545125593"
+      },
+      "origin": "Czechia",
+      "genres": [
+        "metalcore",
+        "metal",
+        "deathcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/693ce51c-1933-4387-b227-e84545125593",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/693ce51c-1933-4387-b227-e84545125593",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/693ce51c-1933-4387-b227-e84545125593",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "accvsed": {
+      "identities": {
+        "musicbrainz": "6fe49f68-ef74-4157-a015-647acd458a8c",
+        "setlistFm": "6fe49f68-ef74-4157-a015-647acd458a8c"
+      },
+      "origin": "Wiesbaden",
+      "genres": [
+        "metalcore",
+        "post-hardcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/6fe49f68-ef74-4157-a015-647acd458a8c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/6fe49f68-ef74-4157-a015-647acd458a8c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/6fe49f68-ef74-4157-a015-647acd458a8c",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "anaal-nathrakh": {
+      "identities": {
+        "musicbrainz": "9bf82496-9d7b-43ac-b3ee-076c90ada9d7",
+        "setlistFm": "9bf82496-9d7b-43ac-b3ee-076c90ada9d7"
+      },
+      "origin": "United Kingdom",
+      "genres": [
+        "black metal",
+        "grindcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9bf82496-9d7b-43ac-b3ee-076c90ada9d7",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9bf82496-9d7b-43ac-b3ee-076c90ada9d7",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9bf82496-9d7b-43ac-b3ee-076c90ada9d7",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "angelus-apatrida": {
+      "identities": {
+        "musicbrainz": "46507379-c53e-4f63-a045-d444c253d547",
+        "setlistFm": "46507379-c53e-4f63-a045-d444c253d547"
+      },
+      "origin": "Spain",
+      "genres": [
+        "thrash metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/46507379-c53e-4f63-a045-d444c253d547",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/46507379-c53e-4f63-a045-d444c253d547",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/46507379-c53e-4f63-a045-d444c253d547",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "architects": {
+      "identities": {
+        "musicbrainz": "05dffdbe-dc6e-4c8d-a075-50a09c4cb45c",
+        "setlistFm": "05dffdbe-dc6e-4c8d-a075-50a09c4cb45c"
+      },
+      "origin": "United Kingdom",
+      "genres": [
+        "metalcore",
+        "metal",
+        "alternative metal",
+        "rock and indie",
+        "djent"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/05dffdbe-dc6e-4c8d-a075-50a09c4cb45c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/05dffdbe-dc6e-4c8d-a075-50a09c4cb45c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/05dffdbe-dc6e-4c8d-a075-50a09c4cb45c",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "asenblut": {
+      "identities": {
+        "musicbrainz": "5bc58cc0-fc93-44ad-bbb8-206417cb0997",
+        "setlistFm": "5bc58cc0-fc93-44ad-bbb8-206417cb0997"
+      },
+      "origin": "Germany",
+      "genres": [
+        "black metal",
+        "pagan black metal",
+        "heroes",
+        "paganism",
+        "music"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/5bc58cc0-fc93-44ad-bbb8-206417cb0997",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/5bc58cc0-fc93-44ad-bbb8-206417cb0997",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/5bc58cc0-fc93-44ad-bbb8-206417cb0997",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "atreyu": {
+      "identities": {
+        "musicbrainz": "17e137fb-59e5-4fd7-af48-afc34995396c",
+        "setlistFm": "17e137fb-59e5-4fd7-af48-afc34995396c"
+      },
+      "origin": "United States",
+      "genres": [
+        "metalcore",
+        "rock",
+        "heavy metal",
+        "metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/17e137fb-59e5-4fd7-af48-afc34995396c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/17e137fb-59e5-4fd7-af48-afc34995396c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/17e137fb-59e5-4fd7-af48-afc34995396c",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "avralize": {
+      "identities": {
+        "musicbrainz": "de331713-b83b-4c8b-8e1e-3b86cb1e33a5",
+        "setlistFm": "de331713-b83b-4c8b-8e1e-3b86cb1e33a5"
+      },
+      "origin": "Germany",
+      "genres": [
+        "metalcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/de331713-b83b-4c8b-8e1e-3b86cb1e33a5",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/de331713-b83b-4c8b-8e1e-3b86cb1e33a5",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/de331713-b83b-4c8b-8e1e-3b86cb1e33a5",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "beast-in-black": {
+      "identities": {
+        "musicbrainz": "bba23ba3-5f01-4b19-b57b-8ce3230573de",
+        "setlistFm": "bba23ba3-5f01-4b19-b57b-8ce3230573de"
+      },
+      "origin": "Finland",
+      "genres": [
+        "power metal",
+        "heavy metal",
+        "metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/bba23ba3-5f01-4b19-b57b-8ce3230573de",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/bba23ba3-5f01-4b19-b57b-8ce3230573de",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/bba23ba3-5f01-4b19-b57b-8ce3230573de",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "belphegor": {
+      "identities": {
+        "musicbrainz": "a41cc6b0-ff0c-4331-9add-907025607e95",
+        "setlistFm": "a41cc6b0-ff0c-4331-9add-907025607e95"
+      },
+      "origin": "Austria",
+      "genres": [
+        "death metal",
+        "blackened death metal",
+        "black metal",
+        "metal",
+        "rock and indie"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/a41cc6b0-ff0c-4331-9add-907025607e95",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/a41cc6b0-ff0c-4331-9add-907025607e95",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/a41cc6b0-ff0c-4331-9add-907025607e95",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "between-two-worlds": {
+      "identities": {
+        "musicbrainz": "d82705a5-edb4-4ddc-9e32-47da29308f27",
+        "setlistFm": "d82705a5-edb4-4ddc-9e32-47da29308f27"
+      },
+      "genres": [],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/d82705a5-edb4-4ddc-9e32-47da29308f27",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "blink-182": {
+      "identities": {
+        "musicbrainz": "0743b15a-3c32-48c8-ad58-cb325350befa",
+        "setlistFm": "0743b15a-3c32-48c8-ad58-cb325350befa"
+      },
+      "origin": "United States",
+      "genres": [
+        "pop punk",
+        "punk rock",
+        "alternative rock",
+        "skate punk",
+        "punk"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/0743b15a-3c32-48c8-ad58-cb325350befa",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/0743b15a-3c32-48c8-ad58-cb325350befa",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/0743b15a-3c32-48c8-ad58-cb325350befa",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "blue-medusa": {
+      "identities": {
+        "musicbrainz": "66a0df65-4dc6-45d5-bbd5-27b39e9dbc76",
+        "setlistFm": "66a0df65-4dc6-45d5-bbd5-27b39e9dbc76"
+      },
+      "genres": [],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/66a0df65-4dc6-45d5-bbd5-27b39e9dbc76",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "capacopter": {
+      "identities": {
+        "musicbrainz": "70652e56-89f0-4de9-bb59-604d577b65eb",
+        "setlistFm": "70652e56-89f0-4de9-bb59-604d577b65eb"
+      },
+      "origin": "Mannheim",
+      "genres": [
+        "rock",
+        "stoner rock",
+        "psychedelic rock"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/70652e56-89f0-4de9-bb59-604d577b65eb",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/70652e56-89f0-4de9-bb59-604d577b65eb",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/70652e56-89f0-4de9-bb59-604d577b65eb",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "cavalera-conspiracy": {
+      "identities": {
+        "musicbrainz": "5bd1060b-8608-4817-93ca-207f7c828e2f",
+        "setlistFm": "5bd1060b-8608-4817-93ca-207f7c828e2f"
+      },
+      "origin": "United States",
+      "genres": [
+        "death metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/5bd1060b-8608-4817-93ca-207f7c828e2f",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/5bd1060b-8608-4817-93ca-207f7c828e2f",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/5bd1060b-8608-4817-93ca-207f7c828e2f",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "children-of-bodom": {
+      "identities": {
+        "musicbrainz": "f57e14e4-b030-467c-b202-539453f504ec",
+        "setlistFm": "f57e14e4-b030-467c-b202-539453f504ec"
+      },
+      "origin": "Finland",
+      "genres": [
+        "melodic death metal",
+        "metal",
+        "death metal",
+        "finnish"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f57e14e4-b030-467c-b202-539453f504ec",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f57e14e4-b030-467c-b202-539453f504ec",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f57e14e4-b030-467c-b202-539453f504ec",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "clawfinger": {
+      "identities": {
+        "musicbrainz": "f16d25c6-556f-42f9-b648-5f48a8f96ec2",
+        "setlistFm": "f16d25c6-556f-42f9-b648-5f48a8f96ec2"
+      },
+      "origin": "Sweden",
+      "genres": [
+        "swedish",
+        "industrial metal",
+        "rap metal",
+        "sweden"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f16d25c6-556f-42f9-b648-5f48a8f96ec2",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f16d25c6-556f-42f9-b648-5f48a8f96ec2",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f16d25c6-556f-42f9-b648-5f48a8f96ec2",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "combichrist": {
+      "identities": {
+        "musicbrainz": "c29f4522-f710-4bb5-a06b-d436fcc3b2fd",
+        "setlistFm": "c29f4522-f710-4bb5-a06b-d436fcc3b2fd"
+      },
+      "origin": "Atlanta",
+      "genres": [
+        "aggrotech",
+        "ebm",
+        "harsh ebm",
+        "industrial metal",
+        "industrial"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/c29f4522-f710-4bb5-a06b-d436fcc3b2fd",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/c29f4522-f710-4bb5-a06b-d436fcc3b2fd",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/c29f4522-f710-4bb5-a06b-d436fcc3b2fd",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "corrosion-of-conformity": {
+      "identities": {
+        "musicbrainz": "0f6e80ef-1972-4dee-8896-dc9955f1beeb",
+        "setlistFm": "0f6e80ef-1972-4dee-8896-dc9955f1beeb"
+      },
+      "origin": "United States",
+      "genres": [
+        "metal",
+        "stoner rock",
+        "stoner metal",
+        "alternative metal",
+        "crossover thrash"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/0f6e80ef-1972-4dee-8896-dc9955f1beeb",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/0f6e80ef-1972-4dee-8896-dc9955f1beeb",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/0f6e80ef-1972-4dee-8896-dc9955f1beeb",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "dark-funeral": {
+      "identities": {
+        "musicbrainz": "7561ff6c-2ab7-4776-9a9a-662f23b2effc",
+        "setlistFm": "7561ff6c-2ab7-4776-9a9a-662f23b2effc"
+      },
+      "origin": "Sweden",
+      "genres": [
+        "black metal",
+        "melodic black metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/7561ff6c-2ab7-4776-9a9a-662f23b2effc",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/7561ff6c-2ab7-4776-9a9a-662f23b2effc",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/7561ff6c-2ab7-4776-9a9a-662f23b2effc",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "decapitated": {
+      "identities": {
+        "musicbrainz": "bfef61c6-53c0-4a12-9a42-1411111e7402",
+        "setlistFm": "bfef61c6-53c0-4a12-9a42-1411111e7402"
+      },
+      "origin": "Poland",
+      "genres": [
+        "death metal",
+        "technical death metal",
+        "metal",
+        "brutal death metal",
+        "poland"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/bfef61c6-53c0-4a12-9a42-1411111e7402",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/bfef61c6-53c0-4a12-9a42-1411111e7402",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/bfef61c6-53c0-4a12-9a42-1411111e7402",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "defiance-hc": {
+      "identities": {
+        "musicbrainz": "229fcd57-ea41-4f3a-87c6-a72b317f8d18",
+        "setlistFm": "229fcd57-ea41-4f3a-87c6-a72b317f8d18"
+      },
+      "origin": "Stuttgart",
+      "genres": [
+        "hardcore",
+        "hardcore punk"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/229fcd57-ea41-4f3a-87c6-a72b317f8d18",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/229fcd57-ea41-4f3a-87c6-a72b317f8d18",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/229fcd57-ea41-4f3a-87c6-a72b317f8d18",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "dethklok": {
+      "identities": {
+        "musicbrainz": "1afcd689-9be4-4d1a-a9fa-49e086250f51",
+        "setlistFm": "1afcd689-9be4-4d1a-a9fa-49e086250f51"
+      },
+      "origin": "United States",
+      "genres": [
+        "melodic death metal",
+        "fictional",
+        "death metal",
+        "metal",
+        "fictitious artist"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/1afcd689-9be4-4d1a-a9fa-49e086250f51",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/1afcd689-9be4-4d1a-a9fa-49e086250f51",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/1afcd689-9be4-4d1a-a9fa-49e086250f51",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "devildriver": {
+      "identities": {
+        "musicbrainz": "1aded574-9e16-4648-861a-24fd6f1c309e",
+        "setlistFm": "1aded574-9e16-4648-861a-24fd6f1c309e"
+      },
+      "origin": "United States",
+      "genres": [
+        "groove metal",
+        "heavy metal",
+        "metal",
+        "thrash metal",
+        "metalcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/1aded574-9e16-4648-861a-24fd6f1c309e",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/1aded574-9e16-4648-861a-24fd6f1c309e",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/1aded574-9e16-4648-861a-24fd6f1c309e",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "die-rzte": {
+      "identities": {
+        "musicbrainz": "f2fb0ff0-5679-42ec-a55c-15109ce6e320",
+        "setlistFm": "f2fb0ff0-5679-42ec-a55c-15109ce6e320"
+      },
+      "origin": "Germany",
+      "genres": [
+        "german",
+        "punk",
+        "punk rock",
+        "berlin",
+        "pop punk"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f2fb0ff0-5679-42ec-a55c-15109ce6e320",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f2fb0ff0-5679-42ec-a55c-15109ce6e320",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f2fb0ff0-5679-42ec-a55c-15109ce6e320",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "dool": {
+      "identities": {
+        "musicbrainz": "24412926-c7bd-48e8-afad-8a285b42e131",
+        "setlistFm": "24412926-c7bd-48e8-afad-8a285b42e131"
+      },
+      "origin": "Netherlands",
+      "genres": [
+        "psychedelic rock",
+        "rock",
+        "metal",
+        "dark rock"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/24412926-c7bd-48e8-afad-8a285b42e131",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/24412926-c7bd-48e8-afad-8a285b42e131",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/24412926-c7bd-48e8-afad-8a285b42e131",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "dragonforce": {
+      "identities": {
+        "musicbrainz": "ef58d4c9-0d40-42ba-bfab-9186c1483edd",
+        "setlistFm": "ef58d4c9-0d40-42ba-bfab-9186c1483edd"
+      },
+      "origin": "United Kingdom",
+      "genres": [
+        "power metal",
+        "heavy metal",
+        "metal",
+        "speed metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ef58d4c9-0d40-42ba-bfab-9186c1483edd",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ef58d4c9-0d40-42ba-bfab-9186c1483edd",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ef58d4c9-0d40-42ba-bfab-9186c1483edd",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "edguy": {
+      "identities": {
+        "musicbrainz": "83998f9c-846b-4294-aede-d7735531c901",
+        "setlistFm": "83998f9c-846b-4294-aede-d7735531c901"
+      },
+      "origin": "Germany",
+      "genres": [
+        "power metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/83998f9c-846b-4294-aede-d7735531c901",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/83998f9c-846b-4294-aede-d7735531c901",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/83998f9c-846b-4294-aede-d7735531c901",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "electric-callboy": {
+      "identities": {
+        "musicbrainz": "cf075492-d880-4afc-b87b-d6b03e33dacc",
+        "setlistFm": "cf075492-d880-4afc-b87b-d6b03e33dacc"
+      },
+      "origin": "Germany",
+      "genres": [
+        "metalcore",
+        "electronicore",
+        "trancecore",
+        "post-hardcore",
+        "electronic"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/cf075492-d880-4afc-b87b-d6b03e33dacc",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/cf075492-d880-4afc-b87b-d6b03e33dacc",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/cf075492-d880-4afc-b87b-d6b03e33dacc",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "eluveitie": {
+      "identities": {
+        "musicbrainz": "8000598a-5edb-401c-8e6d-36b167feaf38",
+        "setlistFm": "8000598a-5edb-401c-8e6d-36b167feaf38"
+      },
+      "origin": "Switzerland",
+      "genres": [
+        "folk metal",
+        "melodic death metal",
+        "celtic metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/8000598a-5edb-401c-8e6d-36b167feaf38",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/8000598a-5edb-401c-8e6d-36b167feaf38",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/8000598a-5edb-401c-8e6d-36b167feaf38",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "emil-bulls": {
+      "identities": {
+        "musicbrainz": "f114b6c4-78f7-45d2-ae73-001e2a77ab9f",
+        "setlistFm": "f114b6c4-78f7-45d2-ae73-001e2a77ab9f"
+      },
+      "origin": "München",
+      "genres": [
+        "nu metal",
+        "alternative metal",
+        "alternative rock",
+        "metal",
+        "hard rock"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f114b6c4-78f7-45d2-ae73-001e2a77ab9f",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f114b6c4-78f7-45d2-ae73-001e2a77ab9f",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f114b6c4-78f7-45d2-ae73-001e2a77ab9f",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "end-of-green": {
+      "identities": {
+        "musicbrainz": "fe8c4eb3-9f83-47e5-8bef-3547e684b162",
+        "setlistFm": "fe8c4eb3-9f83-47e5-8bef-3547e684b162"
+      },
+      "origin": "Germany",
+      "genres": [
+        "depressed subcore",
+        "alternative rock",
+        "gothic rock"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/fe8c4eb3-9f83-47e5-8bef-3547e684b162",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/fe8c4eb3-9f83-47e5-8bef-3547e684b162",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/fe8c4eb3-9f83-47e5-8bef-3547e684b162",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "evil-invaders": {
+      "identities": {
+        "musicbrainz": "0c75169a-4e22-4b87-b1c3-e1da83de5329",
+        "setlistFm": "0c75169a-4e22-4b87-b1c3-e1da83de5329"
+      },
+      "origin": "Belgium",
+      "genres": [
+        "speed metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/0c75169a-4e22-4b87-b1c3-e1da83de5329",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/0c75169a-4e22-4b87-b1c3-e1da83de5329",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/0c75169a-4e22-4b87-b1c3-e1da83de5329",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "feuerschwanz": {
+      "identities": {
+        "musicbrainz": "107fe9d9-903d-4bdc-ba88-d1df3c2fa32c",
+        "setlistFm": "107fe9d9-903d-4bdc-ba88-d1df3c2fa32c"
+      },
+      "origin": "Germany",
+      "genres": [
+        "folk rock",
+        "medieval rock",
+        "folk metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/107fe9d9-903d-4bdc-ba88-d1df3c2fa32c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/107fe9d9-903d-4bdc-ba88-d1df3c2fa32c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/107fe9d9-903d-4bdc-ba88-d1df3c2fa32c",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "finntroll": {
+      "identities": {
+        "musicbrainz": "14962b84-c46a-490b-b6a0-ee69c78b2291",
+        "setlistFm": "14962b84-c46a-490b-b6a0-ee69c78b2291"
+      },
+      "origin": "Finland",
+      "genres": [
+        "folk metal",
+        "metal",
+        "black metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/14962b84-c46a-490b-b6a0-ee69c78b2291",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/14962b84-c46a-490b-b6a0-ee69c78b2291",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/14962b84-c46a-490b-b6a0-ee69c78b2291",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "five-finger-death-punch": {
+      "identities": {
+        "musicbrainz": "7e8571b1-7c5a-4739-bc51-73d422ee9d74",
+        "setlistFm": "7e8571b1-7c5a-4739-bc51-73d422ee9d74"
+      },
+      "origin": "United States",
+      "genres": [
+        "heavy metal",
+        "alternative metal",
+        "hard rock",
+        "groove metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/7e8571b1-7c5a-4739-bc51-73d422ee9d74",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/7e8571b1-7c5a-4739-bc51-73d422ee9d74",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/7e8571b1-7c5a-4739-bc51-73d422ee9d74",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "fleshgod-apocalypse": {
+      "identities": {
+        "musicbrainz": "48cb4248-889d-45ed-8462-acb29c002a8d",
+        "setlistFm": "48cb4248-889d-45ed-8462-acb29c002a8d"
+      },
+      "origin": "Italy",
+      "genres": [
+        "symphonic metal",
+        "death metal",
+        "symphonic death metal",
+        "technical death metal",
+        "brutal death metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/48cb4248-889d-45ed-8462-acb29c002a8d",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/48cb4248-889d-45ed-8462-acb29c002a8d",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/48cb4248-889d-45ed-8462-acb29c002a8d",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "gaerea": {
+      "identities": {
+        "musicbrainz": "cc220a20-9cd4-4dc2-9164-dadd2bb85467",
+        "setlistFm": "cc220a20-9cd4-4dc2-9164-dadd2bb85467"
+      },
+      "origin": "Portugal",
+      "genres": [
+        "black metal",
+        "post-black metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/cc220a20-9cd4-4dc2-9164-dadd2bb85467",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/cc220a20-9cd4-4dc2-9164-dadd2bb85467",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/cc220a20-9cd4-4dc2-9164-dadd2bb85467",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "gloryhammer": {
+      "identities": {
+        "musicbrainz": "85997032-ff48-4383-b86a-a920d4230a0b",
+        "setlistFm": "85997032-ff48-4383-b86a-a920d4230a0b"
+      },
+      "origin": "United Kingdom",
+      "genres": [
+        "power metal",
+        "symphonic metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/85997032-ff48-4383-b86a-a920d4230a0b",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/85997032-ff48-4383-b86a-a920d4230a0b",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/85997032-ff48-4383-b86a-a920d4230a0b",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "green-lung": {
+      "identities": {
+        "musicbrainz": "36274201-f583-4859-83b8-5b8778dcb9f7",
+        "setlistFm": "36274201-f583-4859-83b8-5b8778dcb9f7"
+      },
+      "origin": "United Kingdom",
+      "genres": [
+        "doom metal",
+        "psychedelic rock",
+        "occult rock",
+        "stoner doom",
+        "doom"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/36274201-f583-4859-83b8-5b8778dcb9f7",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/36274201-f583-4859-83b8-5b8778dcb9f7",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/36274201-f583-4859-83b8-5b8778dcb9f7",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "gutalax": {
+      "identities": {
+        "musicbrainz": "8f0762e1-5c72-4392-a022-9d77ffad3207",
+        "setlistFm": "8f0762e1-5c72-4392-a022-9d77ffad3207"
+      },
+      "origin": "Czechia",
+      "genres": [
+        "goregrind"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/8f0762e1-5c72-4392-a022-9d77ffad3207",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/8f0762e1-5c72-4392-a022-9d77ffad3207",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/8f0762e1-5c72-4392-a022-9d77ffad3207",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "h-blockx": {
+      "identities": {
+        "musicbrainz": "36b7da58-858c-44e2-b3bd-d2e88bf02f7c",
+        "setlistFm": "36b7da58-858c-44e2-b3bd-d2e88bf02f7c"
+      },
+      "origin": "Germany",
+      "genres": [
+        "crossover",
+        "german",
+        "alternative rock"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/36b7da58-858c-44e2-b3bd-d2e88bf02f7c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/36b7da58-858c-44e2-b3bd-d2e88bf02f7c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/36b7da58-858c-44e2-b3bd-d2e88bf02f7c",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "halestorm": {
+      "identities": {
+        "musicbrainz": "eaed2193-e026-493b-ac57-113360407b06",
+        "setlistFm": "eaed2193-e026-493b-ac57-113360407b06"
+      },
+      "origin": "United States",
+      "genres": [
+        "hard rock",
+        "female fronted",
+        "alternative rock",
+        "country rock",
+        "rock"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/eaed2193-e026-493b-ac57-113360407b06",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/eaed2193-e026-493b-ac57-113360407b06",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/eaed2193-e026-493b-ac57-113360407b06",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "hammerfall": {
+      "identities": {
+        "musicbrainz": "abf5f674-dbad-4219-b3ad-dbd6fb163c8e",
+        "setlistFm": "abf5f674-dbad-4219-b3ad-dbd6fb163c8e"
+      },
+      "origin": "Sweden",
+      "genres": [
+        "power metal",
+        "heavy metal",
+        "metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/abf5f674-dbad-4219-b3ad-dbd6fb163c8e",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/abf5f674-dbad-4219-b3ad-dbd6fb163c8e",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/abf5f674-dbad-4219-b3ad-dbd6fb163c8e",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "heaven-shall-burn": {
+      "identities": {
+        "musicbrainz": "d044577e-aa22-43b7-ab29-cabee5f6643c",
+        "setlistFm": "d044577e-aa22-43b7-ab29-cabee5f6643c"
+      },
+      "origin": "Germany",
+      "genres": [
+        "melodic death metal",
+        "deathcore",
+        "metalcore",
+        "death metal",
+        "hardcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/d044577e-aa22-43b7-ab29-cabee5f6643c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/d044577e-aa22-43b7-ab29-cabee5f6643c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/d044577e-aa22-43b7-ab29-cabee5f6643c",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "helloween": {
+      "identities": {
+        "musicbrainz": "765774a0-2060-469b-8b7d-612eea48579b",
+        "setlistFm": "765774a0-2060-469b-8b7d-612eea48579b"
+      },
+      "origin": "Germany",
+      "genres": [
+        "power metal",
+        "heavy metal",
+        "speed metal",
+        "german",
+        "metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/765774a0-2060-469b-8b7d-612eea48579b",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/765774a0-2060-469b-8b7d-612eea48579b",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/765774a0-2060-469b-8b7d-612eea48579b",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "hiraes": {
+      "identities": {
+        "musicbrainz": "80ccbf0d-66eb-4c70-b89e-c08dc601a0de",
+        "setlistFm": "80ccbf0d-66eb-4c70-b89e-c08dc601a0de"
+      },
+      "origin": "Germany",
+      "genres": [
+        "melodic death metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/80ccbf0d-66eb-4c70-b89e-c08dc601a0de",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/80ccbf0d-66eb-4c70-b89e-c08dc601a0de",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/80ccbf0d-66eb-4c70-b89e-c08dc601a0de",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "humanity-s-last-breath": {
+      "identities": {
+        "musicbrainz": "f2883c50-5a86-46f4-9f94-6567cc0a07f1",
+        "setlistFm": "f2883c50-5a86-46f4-9f94-6567cc0a07f1"
+      },
+      "origin": "Sweden",
+      "genres": [
+        "deathcore",
+        "progressive metal",
+        "djent",
+        "technical deathcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f2883c50-5a86-46f4-9f94-6567cc0a07f1",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f2883c50-5a86-46f4-9f94-6567cc0a07f1",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f2883c50-5a86-46f4-9f94-6567cc0a07f1",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "imminence": {
+      "identities": {
+        "musicbrainz": "431ed486-4606-485a-b11d-f05feb860257",
+        "setlistFm": "431ed486-4606-485a-b11d-f05feb860257"
+      },
+      "origin": "Sweden",
+      "genres": [
+        "metalcore",
+        "post-hardcore",
+        "progressive metalcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/431ed486-4606-485a-b11d-f05feb860257",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/431ed486-4606-485a-b11d-f05feb860257",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/431ed486-4606-485a-b11d-f05feb860257",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "knocked-loose": {
+      "identities": {
+        "musicbrainz": "9ca10859-49e2-44e3-b3d6-04c535207bc2",
+        "setlistFm": "9ca10859-49e2-44e3-b3d6-04c535207bc2"
+      },
+      "origin": "United States",
+      "genres": [
+        "metalcore",
+        "hardcore punk",
+        "hardcore",
+        "beatdown",
+        "beatdown hardcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9ca10859-49e2-44e3-b3d6-04c535207bc2",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9ca10859-49e2-44e3-b3d6-04c535207bc2",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9ca10859-49e2-44e3-b3d6-04c535207bc2",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "kupfergold": {
+      "identities": {
+        "musicbrainz": "f5bcadc7-1346-4e5d-9e4d-95387a708811",
+        "setlistFm": "f5bcadc7-1346-4e5d-9e4d-95387a708811"
+      },
+      "origin": "Köln",
+      "genres": [],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f5bcadc7-1346-4e5d-9e4d-95387a708811",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f5bcadc7-1346-4e5d-9e4d-95387a708811",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "left-to-suffer": {
+      "identities": {
+        "musicbrainz": "72956623-0271-4892-acca-1506e95c714d",
+        "setlistFm": "72956623-0271-4892-acca-1506e95c714d"
+      },
+      "origin": "Atlanta",
+      "genres": [
+        "metalcore",
+        "deathcore",
+        "nu metal",
+        "metal",
+        "hardcore punk"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/72956623-0271-4892-acca-1506e95c714d",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/72956623-0271-4892-acca-1506e95c714d",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/72956623-0271-4892-acca-1506e95c714d",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "legion-of-the-damned": {
+      "identities": {
+        "musicbrainz": "ee07606a-f44a-4050-bc9b-b89bc098c01a",
+        "setlistFm": "ee07606a-f44a-4050-bc9b-b89bc098c01a"
+      },
+      "origin": "Netherlands",
+      "genres": [
+        "thrash metal",
+        "death metal",
+        "metal",
+        "netherlands"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ee07606a-f44a-4050-bc9b-b89bc098c01a",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ee07606a-f44a-4050-bc9b-b89bc098c01a",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ee07606a-f44a-4050-bc9b-b89bc098c01a",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "long-distance-calling": {
+      "identities": {
+        "musicbrainz": "9df9b90e-53ec-458e-954a-69650cbe84eb",
+        "setlistFm": "9df9b90e-53ec-458e-954a-69650cbe84eb"
+      },
+      "origin": "Germany",
+      "genres": [
+        "post-rock",
+        "progressive rock",
+        "instrumental",
+        "rock",
+        "instrumental rock"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9df9b90e-53ec-458e-954a-69650cbe84eb",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9df9b90e-53ec-458e-954a-69650cbe84eb",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9df9b90e-53ec-458e-954a-69650cbe84eb",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "lord-of-the-lost": {
+      "identities": {
+        "musicbrainz": "8cf95123-5023-4257-933e-4d7ebbc5d8a2",
+        "setlistFm": "8cf95123-5023-4257-933e-4d7ebbc5d8a2"
+      },
+      "origin": "Germany",
+      "genres": [
+        "gothic metal",
+        "gothic rock",
+        "industrial metal",
+        "industrial rock",
+        "metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/8cf95123-5023-4257-933e-4d7ebbc5d8a2",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/8cf95123-5023-4257-933e-4d7ebbc5d8a2",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/8cf95123-5023-4257-933e-4d7ebbc5d8a2",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "lorna-shore": {
+      "identities": {
+        "musicbrainz": "e86fc1f5-d632-44b2-8aea-38f83aadffe8",
+        "setlistFm": "e86fc1f5-d632-44b2-8aea-38f83aadffe8"
+      },
+      "origin": "United States",
+      "genres": [
+        "deathcore",
+        "blackened deathcore",
+        "symphonic deathcore",
+        "death metal",
+        "progressive deathcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/e86fc1f5-d632-44b2-8aea-38f83aadffe8",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/e86fc1f5-d632-44b2-8aea-38f83aadffe8",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/e86fc1f5-d632-44b2-8aea-38f83aadffe8",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "madball": {
+      "identities": {
+        "musicbrainz": "c9e0a0f5-9f53-4247-a52d-a3f29d975e17",
+        "setlistFm": "c9e0a0f5-9f53-4247-a52d-a3f29d975e17"
+      },
+      "origin": "United States",
+      "genres": [
+        "hardcore punk",
+        "beatdown hardcore",
+        "hardcore",
+        "metalcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/c9e0a0f5-9f53-4247-a52d-a3f29d975e17",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/c9e0a0f5-9f53-4247-a52d-a3f29d975e17",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/c9e0a0f5-9f53-4247-a52d-a3f29d975e17",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "make-them-suffer": {
+      "identities": {
+        "musicbrainz": "b6f8cce8-cbac-48a0-b0fa-d6cc06447928",
+        "setlistFm": "b6f8cce8-cbac-48a0-b0fa-d6cc06447928"
+      },
+      "origin": "Australia",
+      "genres": [
+        "metalcore",
+        "deathcore",
+        "melodic metalcore",
+        "alternative metal",
+        "melodic deathcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/b6f8cce8-cbac-48a0-b0fa-d6cc06447928",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/b6f8cce8-cbac-48a0-b0fa-d6cc06447928",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/b6f8cce8-cbac-48a0-b0fa-d6cc06447928",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "mercyful-fate": {
+      "identities": {
+        "musicbrainz": "9b137ab6-5987-4606-989b-183cdb2d3e50",
+        "setlistFm": "9b137ab6-5987-4606-989b-183cdb2d3e50"
+      },
+      "origin": "Denmark",
+      "genres": [
+        "heavy metal",
+        "metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9b137ab6-5987-4606-989b-183cdb2d3e50",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9b137ab6-5987-4606-989b-183cdb2d3e50",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/9b137ab6-5987-4606-989b-183cdb2d3e50",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "metal-church": {
+      "identities": {
+        "musicbrainz": "09830e79-cc8d-422f-ae25-6efde4320b73",
+        "setlistFm": "09830e79-cc8d-422f-ae25-6efde4320b73"
+      },
+      "origin": "United States",
+      "genres": [
+        "heavy metal",
+        "thrash metal",
+        "metal",
+        "power metal",
+        "us power metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/09830e79-cc8d-422f-ae25-6efde4320b73",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/09830e79-cc8d-422f-ae25-6efde4320b73",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/09830e79-cc8d-422f-ae25-6efde4320b73",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "motionless-in-white": {
+      "identities": {
+        "musicbrainz": "1c5b9bd6-76e8-4fe7-a6df-3bc0b5a452cc",
+        "setlistFm": "1c5b9bd6-76e8-4fe7-a6df-3bc0b5a452cc"
+      },
+      "origin": "United States",
+      "genres": [
+        "metalcore",
+        "industrial metal",
+        "gothic metal",
+        "nu metal",
+        "alternative metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/1c5b9bd6-76e8-4fe7-a6df-3bc0b5a452cc",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/1c5b9bd6-76e8-4fe7-a6df-3bc0b5a452cc",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/1c5b9bd6-76e8-4fe7-a6df-3bc0b5a452cc",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "napalm-death": {
+      "identities": {
+        "musicbrainz": "ce7bba8b-026b-4aa6-bddb-f98ed6d595e4",
+        "setlistFm": "ce7bba8b-026b-4aa6-bddb-f98ed6d595e4"
+      },
+      "origin": "United Kingdom",
+      "genres": [
+        "grindcore",
+        "deathgrind",
+        "death metal",
+        "metal",
+        "industrial metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ce7bba8b-026b-4aa6-bddb-f98ed6d595e4",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ce7bba8b-026b-4aa6-bddb-f98ed6d595e4",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ce7bba8b-026b-4aa6-bddb-f98ed6d595e4",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "peelingflesh": {
+      "identities": {
+        "musicbrainz": "e02e390d-a9bb-457a-a22d-4c00f9131575",
+        "setlistFm": "e02e390d-a9bb-457a-a22d-4c00f9131575"
+      },
+      "origin": "Oklahoma",
+      "genres": [
+        "brutal death metal",
+        "slam death metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/e02e390d-a9bb-457a-a22d-4c00f9131575",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/e02e390d-a9bb-457a-a22d-4c00f9131575",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/e02e390d-a9bb-457a-a22d-4c00f9131575",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "pig-destroyer": {
+      "identities": {
+        "musicbrainz": "5c0d3974-33d5-4f7a-bebc-8f50c057927e",
+        "setlistFm": "5c0d3974-33d5-4f7a-bebc-8f50c057927e"
+      },
+      "origin": "United States",
+      "genres": [
+        "grindcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/5c0d3974-33d5-4f7a-bebc-8f50c057927e",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/5c0d3974-33d5-4f7a-bebc-8f50c057927e",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/5c0d3974-33d5-4f7a-bebc-8f50c057927e",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "primal-fear": {
+      "identities": {
+        "musicbrainz": "32567eb3-aeca-467f-8b89-a69b11fcb781",
+        "setlistFm": "32567eb3-aeca-467f-8b89-a69b11fcb781"
+      },
+      "origin": "Germany",
+      "genres": [
+        "heavy metal",
+        "power metal",
+        "speed metal",
+        "speed/power-metal",
+        "alemanha"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/32567eb3-aeca-467f-8b89-a69b11fcb781",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/32567eb3-aeca-467f-8b89-a69b11fcb781",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/32567eb3-aeca-467f-8b89-a69b11fcb781",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "regarde-les-hommes-tomber": {
+      "identities": {
+        "musicbrainz": "3eb0dd85-bbb5-43f5-9731-12c50a4865ba",
+        "setlistFm": "3eb0dd85-bbb5-43f5-9731-12c50a4865ba"
+      },
+      "origin": "France",
+      "genres": [
+        "black metal",
+        "sludge metal",
+        "post-metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/3eb0dd85-bbb5-43f5-9731-12c50a4865ba",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/3eb0dd85-bbb5-43f5-9731-12c50a4865ba",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/3eb0dd85-bbb5-43f5-9731-12c50a4865ba",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "seven-blood": {
+      "identities": {
+        "musicbrainz": "59bbc2af-8f2f-4cc9-84dc-4b7496c3e144",
+        "setlistFm": "59bbc2af-8f2f-4cc9-84dc-4b7496c3e144"
+      },
+      "origin": "Berlin",
+      "genres": [],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/59bbc2af-8f2f-4cc9-84dc-4b7496c3e144",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/59bbc2af-8f2f-4cc9-84dc-4b7496c3e144",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "shadow-of-intent": {
+      "identities": {
+        "musicbrainz": "e49da23b-5624-49a8-8351-5a43b2d3d4e8",
+        "setlistFm": "e49da23b-5624-49a8-8351-5a43b2d3d4e8"
+      },
+      "origin": "United States",
+      "genres": [
+        "deathcore",
+        "symphonic deathcore",
+        "technical deathcore"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/e49da23b-5624-49a8-8351-5a43b2d3d4e8",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/e49da23b-5624-49a8-8351-5a43b2d3d4e8",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/e49da23b-5624-49a8-8351-5a43b2d3d4e8",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "spitting-glass": {
+      "identities": {
+        "musicbrainz": "f5f6d795-5a3b-4315-a8c7-425bc90b3492",
+        "setlistFm": "f5f6d795-5a3b-4315-a8c7-425bc90b3492"
+      },
+      "origin": "United Kingdom",
+      "genres": [],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f5f6d795-5a3b-4315-a8c7-425bc90b3492",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f5f6d795-5a3b-4315-a8c7-425bc90b3492",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "tortured-demon": {
+      "identities": {
+        "musicbrainz": "ac15fd13-facd-4a39-9445-3ce41b7733eb",
+        "setlistFm": "ac15fd13-facd-4a39-9445-3ce41b7733eb"
+      },
+      "origin": "United Kingdom",
+      "genres": [
+        "thrashcore",
+        "metalcore",
+        "thrash metal",
+        "metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ac15fd13-facd-4a39-9445-3ce41b7733eb",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ac15fd13-facd-4a39-9445-3ce41b7733eb",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ac15fd13-facd-4a39-9445-3ce41b7733eb",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "towards-the-sinister": {
+      "identities": {
+        "musicbrainz": "ca0219b3-6ae8-4041-b702-d8bdbb5e254c",
+        "setlistFm": "ca0219b3-6ae8-4041-b702-d8bdbb5e254c"
+      },
+      "origin": "United Kingdom",
+      "genres": [],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ca0219b3-6ae8-4041-b702-d8bdbb5e254c",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/ca0219b3-6ae8-4041-b702-d8bdbb5e254c",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "tyketto": {
+      "identities": {
+        "musicbrainz": "98af45d8-fff7-48e4-afa9-48dc5fd18581",
+        "setlistFm": "98af45d8-fff7-48e4-afa9-48dc5fd18581"
+      },
+      "origin": "United States",
+      "genres": [
+        "hard rock",
+        "estados unidos",
+        "aor",
+        "classic pop and rock"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/98af45d8-fff7-48e4-afa9-48dc5fd18581",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/98af45d8-fff7-48e4-afa9-48dc5fd18581",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/98af45d8-fff7-48e4-afa9-48dc5fd18581",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "u-d-o": {
+      "identities": {
+        "musicbrainz": "3fef3bbc-53eb-46f8-8679-980d0c943c34",
+        "setlistFm": "3fef3bbc-53eb-46f8-8679-980d0c943c34"
+      },
+      "origin": "Germany",
+      "genres": [
+        "heavy metal",
+        "udo",
+        "alemanha",
+        "metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/3fef3bbc-53eb-46f8-8679-980d0c943c34",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/3fef3bbc-53eb-46f8-8679-980d0c943c34",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/3fef3bbc-53eb-46f8-8679-980d0c943c34",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    },
+    "warkings": {
+      "identities": {
+        "musicbrainz": "f33ef314-5096-437d-a577-9404168a3155",
+        "setlistFm": "f33ef314-5096-437d-a577-9404168a3155"
+      },
+      "origin": "Austria",
+      "genres": [
+        "heavy metal",
+        "metal",
+        "power metal",
+        "traditional metal"
+      ],
+      "links": [],
+      "provenance": [
+        {
+          "field": "identity",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f33ef314-5096-437d-a577-9404168a3155",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "origin",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f33ef314-5096-437d-a577-9404168a3155",
+          "checkedAt": "2026-08-30"
+        },
+        {
+          "field": "genres",
+          "source": "musicbrainz",
+          "url": "https://musicbrainz.org/artist/f33ef314-5096-437d-a577-9404168a3155",
+          "checkedAt": "2026-08-30"
+        }
+      ]
+    }
+  },
+  "manualReview": [
+    {
+      "name": "Acid Bath",
+      "slug": "acid-bath",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "8b8b33a3-0a11-48b4-8f5a-aaa79f4282a8",
+        "ee9de516-46f7-4c87-a97c-c0ecdf17a8b0",
+        "f9941902-4286-4194-8d18-e3099a16cd58"
+      ]
+    },
+    {
+      "name": "Ahab",
+      "slug": "ahab",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "9588e7ab-dcf1-4dab-b341-a4e0717423a3",
+        "b1f91f8b-a708-4e05-ace1-630816aa1566",
+        "77a7fda7-d18f-4c7e-84e2-53a010c07c01"
+      ]
+    },
+    {
+      "name": "Any Given Day",
+      "slug": "any-given-day",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "196c671b-b305-4504-8e9e-975f1c3e8a7e",
+        "c092f4f4-faba-468f-96a7-f410c87128c2",
+        "22aa73b2-ae8f-4d86-84b9-0f48375ac350"
+      ]
+    },
+    {
+      "name": "Avatar",
+      "slug": "avatar",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "a8d77515-f7b7-4d71-9646-8446a3b2a341",
+        "68f8d385-4b62-4f16-b065-3e8f9508c287",
+        "b271deda-e5f6-4019-aa5e-8d2db169bd93"
+      ]
+    },
+    {
+      "name": "Bruce Dickinson",
+      "slug": "bruce-dickinson",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "50698127-f6f4-4c0c-8010-db98c21100e1",
+        "70248960-cb53-4ea4-943a-edb18f7d336f",
+        "660caa0b-7fc6-4099-aa1f-76ed6a648ee3"
+      ]
+    },
+    {
+      "name": "Burning Witches",
+      "slug": "burning-witches",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "35aaf2e1-50fa-4bb6-9e12-1b8bbdeca266",
+        "f586a74f-55b4-48f6-93fa-220319c7d80f",
+        "af34ca0e-65d0-4d8e-ae97-e5b202a3f11a"
+      ]
+    },
+    {
+      "name": "Carnifex",
+      "slug": "carnifex",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "b463a831-8ea0-40c4-9a56-34cfe0896931",
+        "ac61238b-9c5e-4706-815e-2ab7e29d4270",
+        "aee6073b-a955-402c-b650-0b63e1b6ed04"
+      ]
+    },
+    {
+      "name": "Conan",
+      "slug": "conan",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "0568c60f-9852-4708-82ab-1afb8bb1342f",
+        "850a8b03-98a7-4fd3-afbd-5e5520b4ef5f",
+        "36bceadf-9a98-4f1c-b730-3edebb02e774"
+      ]
+    },
+    {
+      "name": "Creeper",
+      "slug": "creeper",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "31890398-c88d-44ef-b108-2419c996966b",
+        "e928939d-d188-49ff-b59c-4979bac3b502",
+        "07196030-e7d2-427b-99a8-0b5ae68bb3b7"
+      ]
+    },
+    {
+      "name": "Crypta",
+      "slug": "crypta",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "3b5bc4eb-d60e-406c-a5e4-f08197d4c9de",
+        "bd22a68b-332d-4929-a6ef-d20356a833fc",
+        "ce5d8404-fabb-4080-af61-0cc7ab20d04c"
+      ]
+    },
+    {
+      "name": "Dark Tranquillity",
+      "slug": "dark-tranquillity",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "9d30e408-1559-448b-b491-2f8de1583ccf",
+        "d1652690-341c-4b9c-8500-7215585022ac",
+        "585b2ab2-acd9-4943-84c2-d5182664805b"
+      ]
+    },
+    {
+      "name": "Ellende",
+      "slug": "ellende",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "bf94f1fb-7122-4131-b7df-f26210ad8ec3",
+        "35fe9be1-90a9-4fc5-bdb9-c332e4f8a124",
+        "f6410a33-ce8e-4150-9e6b-51e52bfea021"
+      ]
+    },
+    {
+      "name": "Equilibrium",
+      "slug": "equilibrium",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "43dc147b-a289-4e64-b115-6b86f9e47de9",
+        "e77a126e-7005-47c0-996d-6245372f1a51",
+        "7039f797-b7fe-472f-9eae-bb52e70d1a6e"
+      ]
+    },
+    {
+      "name": "Fox Lake",
+      "slug": "fox-lake",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "ad996aef-cc1c-42ac-af5c-619c370f4b8a",
+        "fca94d64-9ada-4264-9373-4158e2f7c7e7",
+        "9047f806-7a49-44f4-975d-fadca298cc18"
+      ]
+    },
+    {
+      "name": "Fulci",
+      "slug": "fulci",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "aa299c3e-ba6d-46fc-99df-313ce341bc20",
+        "f80aae99-207e-4852-ae4e-335df1a2abba",
+        "27801f1c-091f-4419-86dc-93541aace6a0"
+      ]
+    },
+    {
+      "name": "Heaven's Gate",
+      "slug": "heaven-s-gate",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "5f3b32e5-efb5-4096-9260-587c155e50b7",
+        "3ac646f6-2057-485c-bf7e-205887c81426",
+        "4f6e02eb-9ecf-437f-9b3c-9699aee8433f"
+      ]
+    },
+    {
+      "name": "Hypocrisy",
+      "slug": "hypocrisy",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "b1e23ada-a7eb-42d7-91ec-67a43bead43a",
+        "8520c28d-2149-4d24-b09c-7359fb006ddf",
+        "1ffcea94-b15c-4eab-8904-3d853ea7a14d"
+      ]
+    },
+    {
+      "name": "Insomnium",
+      "slug": "insomnium",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "c1f8e226-75ea-4fe6-83ce-59c122bcbca4",
+        "349eb68f-d7b7-484a-b512-b39ca6eabeda"
+      ]
+    },
+    {
+      "name": "Jinjer",
+      "slug": "jinjer",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "51b37017-859c-465e-8810-2d2dd41a401e",
+        "493e31a9-5f44-4b95-a12b-975b377dbd07",
+        "37625867-1e7b-466a-9fe9-0da145a1ca2c"
+      ]
+    },
+    {
+      "name": "John 5",
+      "slug": "john-5",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AJohn%205&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "John Bush",
+      "slug": "john-bush",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "93ccd76c-3790-4435-a8bf-02bc26294b93",
+        "4b585938-f271-45e2-b19a-91c634b5e396",
+        "cba8ee40-716d-43d4-9b2c-887f1532e25f"
+      ]
+    },
+    {
+      "name": "Kanonenfieber",
+      "slug": "kanonenfieber",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AKanonenfieber&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Kataklysm",
+      "slug": "kataklysm",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AKataklysm&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Lavina",
+      "slug": "lavina",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "6fa04ce4-b9f9-40d9-92b9-4fe34e668a74",
+        "d7be601d-4a3d-478c-a1c5-d982965203c4",
+        "221c5985-f055-487d-b3e3-dd1abb75f76a"
+      ]
+    },
+    {
+      "name": "Malevolence",
+      "slug": "malevolence",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "736680eb-da66-4859-bc3a-9e340c570625",
+        "fa15e0d0-660c-469a-a0e9-f621a2f538a1",
+        "098e5d7b-545b-4855-8880-327e3fa9990c"
+      ]
+    },
+    {
+      "name": "Mittel Alta",
+      "slug": "mittel-alta",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AMittel%20Alta&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Mono Inc.",
+      "slug": "mono-inc",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AMono%20Inc.&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Nasty",
+      "slug": "nasty",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "d20b21f2-8d83-4c50-9107-24b71788899b",
+        "4709dd69-1034-4634-9e88-d1099453b192",
+        "f7d8f1ce-6a72-422a-b746-22137b3a05d0"
+      ]
+    },
+    {
+      "name": "Necrotted",
+      "slug": "necrotted",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3ANecrotted&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Overkill",
+      "slug": "overkill",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AOverkill&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Saltatio Mortis",
+      "slug": "saltatio-mortis",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3ASaltatio%20Mortis&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Samurai Pizza Cats",
+      "slug": "samurai-pizza-cats",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3ASamurai%20Pizza%20Cats&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Sinizter",
+      "slug": "sinizter",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3ASinizter&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Sunborn",
+      "slug": "sunborn",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3ASunborn&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Sylosis",
+      "slug": "sylosis",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3ASylosis&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Tailgunner",
+      "slug": "tailgunner",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3ATailgunner&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "TBS",
+      "slug": "tbs",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3ATBS&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "The Browning",
+      "slug": "the-browning",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AThe%20Browning&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "The Halo Effect",
+      "slug": "the-halo-effect",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AThe%20Halo%20Effect&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "The New Roses",
+      "slug": "the-new-roses",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AThe%20New%20Roses&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "The Night Eternal",
+      "slug": "the-night-eternal",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AThe%20Night%20Eternal&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Victorious",
+      "slug": "victorious",
+      "reason": "multiple_exact_matches",
+      "candidateIds": [
+        "c43cb553-ce20-47af-ad64-02bbf160b8a8",
+        "83ffb903-2afb-458c-afcd-285ee8591756",
+        "136063dc-ae7f-4a36-bec7-29a7d29cecf9"
+      ]
+    },
+    {
+      "name": "Wind Rose",
+      "slug": "wind-rose",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AWind%20Rose&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Witch Club Satan",
+      "slug": "witch-club-satan",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AWitch%20Club%20Satan&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Wolfheart",
+      "slug": "wolfheart",
+      "reason": "source_unavailable",
+      "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AWolfheart&fmt=json&limit=10: HTTP 503"
+    }
+  ]
+}
