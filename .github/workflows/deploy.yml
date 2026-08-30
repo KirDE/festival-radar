@@ -93,7 +93,7 @@ jobs:
               && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/ | grep --quiet 'Festival Radar' \
               && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/planner/ >/dev/null \
               && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/festivals/wacken-open-air/ >/dev/null \
-              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/artists/iron-maiden/ >/dev/null; then
+              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/artists/architects/ >/dev/null; then
               exit 0
             fi
             sleep 5
