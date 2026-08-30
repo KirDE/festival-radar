@@ -40,6 +40,7 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   assert.equal((await anonymous.json("/api/admin")).status, 403);
   const admin = new Client();
   assert.equal((await admin.json("/api/auth/register", "POST", { email: "admin@example.test", password: "correct horse battery staple" })).status, 201);
+  await db.user.update({ where: { email: "admin@example.test" }, data: { role: "ADMIN" } });
   const draftResponse = await admin.json("/api/admin", "POST", { resourceKind: "festival", resourceKey: "wacken-open-air", baseRevision: 0, values: { city: "Wacken Preview", status: "confirmed" } });
   assert.equal(draftResponse.status, 201);
   const draft = await draftResponse.json();

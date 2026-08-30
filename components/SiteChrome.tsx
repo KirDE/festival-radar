@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLanguage, type Language } from "./LanguageProvider";
+import { AccountMenu } from "./AccountMenu";
 
 export function SiteHeader() {
   const { t } = useLanguage();
@@ -14,8 +15,10 @@ export function SiteHeader() {
       <nav>
         <Link href="/">{t("festivals")}</Link>
         <Link href="/planner/">My plan</Link>
+        <Link href="/notifications/">Notifications</Link>
         <a href="https://github.com/KirDE/festival-radar">{t("aboutData")}</a>
       </nav>
+      <AccountMenu />
     </header>
   );
 }
