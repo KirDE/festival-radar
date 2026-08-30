@@ -8,6 +8,22 @@
   --line: #ccc8bc;
   --soft: #e7e3d8;
 }
+.notificationPage { max-width: 1120px; margin: auto; padding: 55px 44px; }
+.notificationPage h1 { margin: 10px 0; font: clamp(42px, 7vw, 82px)/.95 "Archivo Black"; text-transform: uppercase; letter-spacing: -.05em; }
+.notificationPage h2 { margin-top: 35px; text-transform: uppercase; }
+.notificationMessage { padding: 13px; border-left: 5px solid var(--orange); background: var(--soft); }
+.notificationForm { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 12px; align-items: end; margin: 35px 0; padding: 22px; border: 1px solid var(--line); }
+.notificationPage label { display: grid; gap: 7px; font-size: 12px; font-weight: 800; }
+.notificationPage select, .notificationPage input, .notificationPage button { min-height: 42px; padding: 9px 11px; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); font: 700 12px "DM Sans"; }
+.notificationPage button { cursor: pointer; }
+.notificationPage button:disabled { cursor: not-allowed; opacity: .5; }
+.notificationGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+.notificationGrid > section { padding: 20px; border: 1px solid var(--line); }
+.channelRow, .preferenceRow { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-top: 1px solid var(--line); }
+.channelRow > span:first-child, .preferenceRow > span:first-child { display: grid; flex: 1; }
+.channelRow small, .preferenceRow small { display: block; color: #68665f; }
+@media (max-width: 850px) { .notificationForm { grid-template-columns: 1fr 1fr; } .notificationGrid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .notificationPage { padding: 32px 18px; } .notificationForm { grid-template-columns: 1fr; } .channelRow, .preferenceRow { align-items: stretch; flex-direction: column; } }
 
 .localActions {
   display: flex;
