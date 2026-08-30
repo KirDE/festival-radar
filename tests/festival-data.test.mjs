@@ -1,14 +1,31 @@
 import assert from "node:assert/strict";
+import { access } from "node:fs/promises";
 import { test } from "node:test";
 import { festivals } from "../data/festivals.ts";
 import { artistProfiles } from "../data/artists.ts";
 import { festivalSources } from "../data/festival-sources.ts";
 import { INGESTION_SCHEMA_VERSION } from "../lib/ingestion/types.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
+import { festivalLogoFallbacks, festivalLogoPath } from "../data/festival-logos.ts";
 
 test("the seed contains 50 unique festivals", () => {
   assert.equal(festivals.length, 50);
   assert.equal(new Set(festivals.map(({ slug }) => slug)).size, 50);
+});
+
+test("every emitted local festival logo URL exists", async () => {
+  const fallbackNames = [];
+  for (const festival of festivals) {
+    const logoPath = festivalLogoPath(festival.slug);
+    if (!logoPath) {
+      fallbackNames.push(festival.slug);
+      continue;
+    }
+    assert.match(logoPath, /^\/logos\/[a-z0-9-]+\.png$/);
+    await access(new URL(`../public${logoPath}`, import.meta.url));
+  }
+  assert.deepEqual(fallbackNames.sort(), [...festivalLogoFallbacks].sort());
+  assert.deepEqual(fallbackNames.sort(), ["bloodstock", "brutal-assault", "metaldays", "pistoia-blues", "polandrock"]);
 });
 
 test("dated editions have valid chronological dates", () => {
