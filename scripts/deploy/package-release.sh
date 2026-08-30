@@ -19,4 +19,6 @@ cp scripts/deploy/reconfigure-webserver.sh "$stage/app/scripts/deploy/"
 chmod 0755 "$stage/app/scripts/deploy/reconfigure-webserver.sh"
 printf '%s\n' "$commit" > "$stage/app/DEPLOYED_COMMIT"
 tar -C "$stage" -czf "$output" app
-tar -tzf "$output" | grep -Fxq 'app/scripts/deploy/reconfigure-webserver.sh'
+archive_contents="$stage/archive-contents.txt"
+tar -tzf "$output" > "$archive_contents"
+grep -Fxq 'app/scripts/deploy/reconfigure-webserver.sh' "$archive_contents"
