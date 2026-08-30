@@ -15,7 +15,9 @@
     "ingest": "node scripts/ingest-festivals.mjs",
     "test:data": "node --test tests/*.test.mjs",
     "playlists:status": "node scripts/build-playlist-status.mjs",
-    "test": "python3 -m unittest discover -s tests"
+    "test": "python3 -m unittest discover -s tests",
+    "test:admin-auth": "node --import tsx --test tests/admin-auth.test.ts",
+    "admin:assign-role": "node scripts/assign-admin-role.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
@@ -30,5 +32,6 @@
     "react-dom": "^19.0.0",
     "typescript": "^5.7.0",
     "zod": "^4.1.12"
-  }
+  },
+  "devDependencies": { "tsx": "^4.20.5" }
 }

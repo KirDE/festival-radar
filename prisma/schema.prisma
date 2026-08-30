@@ -43,12 +43,19 @@ enum NotificationStatus {
   SKIPPED
 }
 
+enum UserRole {
+  USER
+  EDITOR
+  ADMIN
+}
+
 model User {
   id                        String                     @id @default(cuid())
   email                     String                     @unique
   passwordHash              String
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
+  role                      UserRole                   @default(USER)
   sessions                  Session[]
   documents                 SyncDocument[]
   shareLinks                ShareLink[]
@@ -56,6 +63,20 @@ model User {
   notificationPreferences   NotificationPreference[]
   notificationSubscriptions NotificationSubscription[]
   notificationDeliveries    NotificationDelivery[]
+  adminAuditEntries         AdminAuditEntry[]
+}
+
+model AdminAuditEntry {
+  id        String   @id @default(cuid())
+  actorId   String
+  action    String
+  target    String
+  detail    Json?
+  createdAt DateTime @default(now())
+  actor     User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
 }
 
 model NotificationPreference {
