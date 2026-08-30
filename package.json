@@ -14,7 +14,7 @@
     "check:sources": "node scripts/check-festival-sources.mjs",
     "ingest": "node scripts/ingest-festivals.mjs",
     "resolve:artists": "node scripts/resolve-artist-identities.mjs",
-    "test:data": "node --test $(find tests -maxdepth 1 -name '*.test.mjs' ! -name '*.e2e.test.mjs' -print)",
+    "test:data": "node --test $(find tests -maxdepth 1 -name '*.test.mjs' ! -name '*.e2e.test.mjs' -print) && node --experimental-strip-types --test tests/selection-playlist.test.ts",
     "test:ingestion-db": "node --test tests/ingestion-repository.e2e.test.mjs",
     "playlists:status": "node scripts/build-playlist-status.mjs",
     "playlists:catalog": "node scripts/export-playlist-catalog.mjs",

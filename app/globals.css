@@ -110,6 +110,14 @@
   font-weight: 700;
   cursor: pointer;
 }
+.playlistActions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.25rem; }
+.playlistActions .primaryButton { border: 0; cursor: pointer; }
+.playlistActions .primaryButton:disabled { cursor: wait; opacity: .65; }
+.playlistStatus { margin: .8rem 0; }
+.playlistStatus.created { color: #8ee6ae; }
+.playlistStatus.error { color: #ff9e9e; }
+.plannerSection details { margin-top: 1rem; }
+.plannerSection details p { max-width: 54rem; }
 .artistChips {
   display: flex;
   flex-wrap: wrap;
