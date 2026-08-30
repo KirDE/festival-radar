@@ -15,6 +15,8 @@ export type Festival = {
   status: "confirmed" | "partial" | "tba";
   editionYear?: number;
   ticketStatus?: "available" | "unavailable" | "unknown";
+  genres: string[];
+  coordinates?: { latitude: number; longitude: number };
   timetable?: { date: string; stage: string; start: string; artist: string }[];
 };
 
@@ -44,6 +46,7 @@ const festival = (
   status: "tba",
   editionYear: 2027,
   dateLabel: "Dates TBA",
+  genres: ["rock", "metal"],
   ...options,
 });
 
@@ -100,9 +103,42 @@ const baseFestivals: Festival[] = [
   festival("metaldays", "Metaldays", "Slovenia", "SI", "https://www.metaldays.net/"),
 ];
 
+// Venue/city centres are used for planning distances, not turn-by-turn navigation.
+// Coordinates are decimal WGS84 and are maintained with the canonical festival record.
+const festivalLocationData: Record<string, [number, number]> = {
+  "rock-am-ring": [50.3356, 6.9475], "rock-im-park": [49.4268, 11.1257], "wacken-open-air": [54.0206, 9.3750],
+  "summer-breeze": [49.0690, 10.3190], rockharz: [51.7204, 11.2327], hurricane: [53.1667, 9.4833], southside: [47.9667, 8.9333],
+  "full-force": [51.7580, 12.4480], hellfest: [47.0879, -1.2827], "rock-en-seine": [48.8374, 2.2140], motocultor: [48.2759, -3.5733],
+  eurockeennes: [47.6847, 6.8074], download: [52.8298, -1.3747], bloodstock: [52.7585, -1.6866], reading: [51.4543, -0.9781],
+  leeds: [53.8008, -1.5491], "2000trees": [51.8994, -2.0783], graspop: [51.2382, 5.1146], "rock-werchter": [50.9716, 4.6947],
+  alcatraz: [50.8195, 3.2577], "nova-rock": [47.9404, 17.0690], frequency: [48.2047, 15.6256], "rock-for-people": [50.2092, 15.8328],
+  "brutal-assault": [50.3562, 15.9214], "masters-of-rock": [49.2229, 17.8546], polandrock: [53.5570, 16.2335], mystic: [54.3520, 18.6466],
+  "rock-imperium": [37.6257, -0.9966], "leyendas-del-rock": [38.6373, -0.8657], "resurrection-fest": [43.6614, -7.5945], "mad-cool": [40.4168, -3.7038],
+  "barcelona-rock-fest": [41.4515, 2.2081], "firenze-rocks": [43.7696, 11.2558], idays: [45.4642, 9.1900], "rock-in-roma": [41.9028, 12.4964],
+  "alpen-flair": [46.7684, 11.6656], "pistoia-blues": [43.9333, 10.9167], pinkpop: [50.9080, 6.0190], roadburn: [51.5555, 5.0913],
+  "dynamo-metal-fest": [51.4416, 5.4697], greenfield: [46.6863, 7.8632], paleo: [46.3833, 6.2396], "sweden-rock": [56.0521, 14.5754],
+  tuska: [60.1699, 24.9384], "tons-of-rock": [59.9139, 10.7522], inferno: [59.9139, 10.7522], copenhell: [55.6761, 12.5683],
+  roskilde: [55.6419, 12.0878], rockstadt: [45.5930, 25.4600], metaldays: [46.0569, 14.5058],
+};
+
+const festivalGenreData: Record<string, string[]> = {
+  hurricane: ["rock", "alternative"], southside: ["rock", "alternative"], "rock-en-seine": ["rock", "alternative"], eurockeennes: ["rock", "alternative"],
+  reading: ["rock", "alternative"], leeds: ["rock", "alternative"], "2000trees": ["rock", "alternative"], "rock-werchter": ["rock", "alternative"],
+  frequency: ["rock", "alternative"], polandrock: ["rock", "alternative"], "mad-cool": ["rock", "alternative"], idays: ["rock", "alternative"],
+  "rock-in-roma": ["rock", "alternative"], "pistoia-blues": ["rock", "blues"], pinkpop: ["rock", "alternative"], paleo: ["rock", "alternative"], roskilde: ["rock", "alternative"],
+  roadburn: ["metal", "doom metal", "experimental"], inferno: ["metal", "black metal"], "brutal-assault": ["metal", "extreme metal"],
+  motocultor: ["metal", "extreme metal"], hellfest: ["rock", "metal", "extreme metal"], metaldays: ["metal", "extreme metal"],
+};
+
 import publications from "./ingestion-publications.json" with { type: "json" };
 const publicationOverlays = publications.festivals as Record<string, Partial<Festival>>;
 export const festivals: Festival[] = baseFestivals.map((item) => ({ ...item, ...(publicationOverlays[item.slug] || {}) }));
+
+for (const item of festivals) {
+  const location = festivalLocationData[item.slug];
+  if (location) item.coordinates = { latitude: location[0], longitude: location[1] };
+  item.genres = [...new Set(festivalGenreData[item.slug] || item.genres.map((genre) => genre.toLocaleLowerCase()))];
+}
 
 export const allArtists = Array.from(
   new Set(festivals.flatMap((item) => [...item.headliners, ...item.lineup])),
