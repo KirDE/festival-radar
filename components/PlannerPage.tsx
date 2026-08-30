@@ -2,6 +2,7 @@
 import Link from "next/link";
 import type { Festival } from "@/data/festivals";
 import { useLocalPlanner, type Attendance } from "./LocalPlanner";
+import { FestivalViews } from "./FestivalViews";
 export function PlannerPage({ festivals }: { festivals: Festival[] }) {
   const p = useLocalPlanner();
   const planned = festivals.filter(
@@ -18,6 +19,7 @@ export function PlannerPage({ festivals }: { festivals: Festival[] }) {
     .sort((a, b) => a.startDate!.localeCompare(b.startDate!));
   return (
     <div className="plannerPage">
+      <FestivalViews festivals={festivals} />
       <div className="plannerHero">
         <div>
           <div className="eyebrow">LOCAL TRIP PLANNER</div>
