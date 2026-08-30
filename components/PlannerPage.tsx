@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { Festival } from "@/data/festivals";
 import { useLocalPlanner, type Attendance } from "./LocalPlanner";
+import { AccountSyncPanel } from "./AccountSyncPanel";
 import { FestivalViews } from "./FestivalViews";
 export function PlannerPage({ festivals }: { festivals: Festival[] }) {
   const p = useLocalPlanner();
@@ -38,8 +39,8 @@ export function PlannerPage({ festivals }: { festivals: Festival[] }) {
           <div className="eyebrow">LOCAL TRIP PLANNER</div>
           <h1>Your 2027 plan</h1>
           <p>
-            Saved only in this browser. No registration, tracking, or cloud
-            sync.
+            Saved in this browser by default. Sign in below only if you want
+            explicit cross-device sync.
           </p>
         </div>
         <button className="outlineButton" onClick={p.clear}>
@@ -48,6 +49,7 @@ export function PlannerPage({ festivals }: { festivals: Festival[] }) {
       </div>
       {p.ready && (
         <>
+          <AccountSyncPanel />
           <section className="plannerSection">
             <div className="sectionHeading">
               <div>
