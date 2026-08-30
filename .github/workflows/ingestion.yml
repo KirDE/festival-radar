@@ -29,6 +29,7 @@ jobs:
           FESTIVAL: ${{ inputs.festival }}
           APP_URL: ${{ secrets.APP_URL }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          NOTIFICATION_DELIVERY_REQUIRED: "true"
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           INGESTION_MAX_FETCH_ERRORS: "10"
         run: |
