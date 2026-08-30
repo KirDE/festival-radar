@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+commit="${1:?usage: activate-release COMMIT}"
+deploy_user="festival-radar-deploy"
+incoming="/var/lib/festival-radar-deploy/incoming"
+installer="/usr/local/libexec/festival-radar/install-release.sh"
+
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid commit" >&2; exit 2; }
+[[ "${SUDO_USER:-}" == "$deploy_user" ]] || { echo "unauthorized deploy caller" >&2; exit 3; }
+
+archive="$incoming/$commit.tar.gz"
+environment="$incoming/$commit.env"
+for file in "$archive" "$environment"; do
+  test -f "$file" && test ! -L "$file" || { echo "missing regular deployment input" >&2; exit 4; }
+  test "$(stat -c %U "$file")" = "$deploy_user" || { echo "invalid deployment input owner" >&2; exit 4; }
+done
+
+exec "$installer" "$archive" "$commit" "$environment"
