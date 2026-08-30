@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { parsePlannerState, serializePlannerState } from "@/lib/planner-storage";
 export type Attendance = "going" | "maybe" | "not-going";
 export type PlannerState = {
   favoriteFestivals: string[];
@@ -39,7 +40,7 @@ export function LocalPlannerProvider({
   useEffect(() => {
     try {
       const value = localStorage.getItem("festival-radar-planner-v1");
-      if (value) setState({ ...emptyPlannerState, ...JSON.parse(value) });
+      if (value) setState({ ...emptyPlannerState, ...parsePlannerState(value) });
     } catch {
       localStorage.removeItem("festival-radar-planner-v1");
     }
@@ -47,7 +48,7 @@ export function LocalPlannerProvider({
   }, []);
   useEffect(() => {
     if (ready)
-      localStorage.setItem("festival-radar-planner-v1", JSON.stringify(state));
+      localStorage.setItem("festival-radar-planner-v1", serializePlannerState(state));
   }, [ready, state]);
   const toggle = (a: string[], v: string) =>
     a.includes(v) ? a.filter((x) => x !== v) : [...a, v];

@@ -1,10 +1,13 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
 import type { Festival } from "@/data/festivals";
 import { useLocalPlanner, type Attendance } from "./LocalPlanner";
 import { AccountSyncPanel } from "./AccountSyncPanel";
+import { FestivalViews } from "./FestivalViews";
 export function PlannerPage({ festivals }: { festivals: Festival[] }) {
   const p = useLocalPlanner();
+  const [playlist, setPlaylist] = useState<{ status: "idle" | "creating" | "created" | "error"; message?: string; url?: string }>({ status: "idle" });
   const planned = festivals.filter(
     (f) => p.favoriteFestivals.includes(f.slug) || p.attendance[f.slug],
   );
@@ -17,15 +20,27 @@ export function PlannerPage({ festivals }: { festivals: Festival[] }) {
   const dated = planned
     .filter((f) => f.startDate)
     .sort((a, b) => a.startDate!.localeCompare(b.startDate!));
+  async function createPlaylist() {
+    setPlaylist({ status: "creating", message: "Creating your private Spotify playlist…" });
+    try {
+      const response = await fetch("/api/spotify/selection-playlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artists, festivals: selected.map((festival) => festival.name) }) });
+      const result = await response.json() as { error?: string; playlistUrl?: string; trackCount?: number; unresolved?: string[] };
+      if (!response.ok || !result.playlistUrl) throw new Error(result.error || "Playlist creation failed.");
+      setPlaylist({ status: "created", url: result.playlistUrl, message: `Created with ${result.trackCount} tracks${result.unresolved?.length ? `; ${result.unresolved.length} artists could not be matched` : ""}.` });
+    } catch (cause) {
+      setPlaylist({ status: "error", message: cause instanceof Error ? cause.message : "Playlist creation failed." });
+    }
+  }
   return (
     <div className="plannerPage">
+      <FestivalViews festivals={festivals} />
       <div className="plannerHero">
         <div>
           <div className="eyebrow">LOCAL TRIP PLANNER</div>
           <h1>Your 2027 plan</h1>
           <p>
-            Saved only in this browser. No registration, tracking, or cloud
-            sync.
+            Saved in this browser by default. Sign in below only if you want
+            explicit cross-device sync.
           </p>
         </div>
         <button className="outlineButton" onClick={p.clear}>
@@ -110,25 +125,27 @@ export function PlannerPage({ festivals }: { festivals: Festival[] }) {
             </div>
             {!!artists.length && (
               <div>
-                <div className="artistChips">
-                  {artists.map((a) => (
-                    <a
-                      key={a}
-                      href={`https://open.spotify.com/search/${encodeURIComponent(a)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {a} ↗
-                    </a>
-                  ))}
+                <div className="playlistActions">
+                  <button className="primaryButton" type="button" disabled={playlist.status === "creating"} onClick={createPlaylist}>
+                    {playlist.status === "creating" ? "Creating…" : "Create private Spotify playlist"}
+                  </button>
+                  <a className="outlineButton" href="/api/spotify/connect">Connect Spotify</a>
                 </div>
+                <p className={`playlistStatus ${playlist.status}`} role="status">
+                  {playlist.message || "Creates one private playlist with one representative track per deduplicated artist."}
+                  {playlist.url && <> <a href={playlist.url} target="_blank" rel="noreferrer">Open playlist ↗</a></>}
+                </p>
+                <details>
+                  <summary>Fallback: export deduplicated artist list</summary>
+                  <p>If sign-in, Spotify credentials, or matching is unavailable, download this saved selection and import it with a playlist transfer tool that supports newline-separated artists.</p>
                 <a
-                  className="primaryButton"
+                  className="outlineButton"
                   href={`data:text/plain;charset=utf-8,${encodeURIComponent(artists.join("\n"))}`}
                   download="festival-radar-playlist-artists.txt"
                 >
-                  Export artist list
+                  Download artist list
                 </a>
+                </details>
               </div>
             )}
           </section>

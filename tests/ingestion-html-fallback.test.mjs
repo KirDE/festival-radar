@@ -8,6 +8,7 @@ const source = {
   strategies: ["html_fallback"],
   refreshPolicy: "daily",
   enabled: true,
+  editionYear: 2027,
 };
 
 test("HTML fallback extracts only explicitly marked festival data", () => {

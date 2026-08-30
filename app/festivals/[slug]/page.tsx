@@ -24,7 +24,7 @@ export default async function FestivalPage({ params }: { params: Promise<{ slug:
     location: { "@type": "Place", name: item.city || item.country, address: { "@type": "PostalAddress", addressCountry: item.countryCode } },
     url: `https://festivals.kir-it.de/festivals/${item.slug}/`,
     sameAs: item.officialUrl,
-    ...(item.ticketsUrl ? { offers: { "@type": "Offer", url: item.ticketsUrl, availability: "https://schema.org/InStock" } } : {}),
+    ...(item.ticketStatus === "available" && item.ticketsUrl ? { offers: { "@type": "Offer", url: item.ticketsUrl, availability: "https://schema.org/InStock" } } : {}),
   };
   return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(event).replace(/</g, "\\u003c") }}/><FestivalDetail item={item}/></>;
 }

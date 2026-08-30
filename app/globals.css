@@ -110,6 +110,14 @@
   font-weight: 700;
   cursor: pointer;
 }
+.playlistActions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.25rem; }
+.playlistActions .primaryButton { border: 0; cursor: pointer; }
+.playlistActions .primaryButton:disabled { cursor: wait; opacity: .65; }
+.playlistStatus { margin: .8rem 0; }
+.playlistStatus.created { color: #8ee6ae; }
+.playlistStatus.error { color: #ff9e9e; }
+.plannerSection details { margin-top: 1rem; }
+.plannerSection details p { max-width: 54rem; }
 .artistChips {
   display: flex;
   flex-wrap: wrap;
@@ -131,6 +139,7 @@
   font-size: 12px;
   font-weight: 800;
 }
+.viewHeading{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:24px}.viewHeading h2{margin:8px 0 0;font:clamp(32px,5vw,58px)/1 "Archivo Black";text-transform:uppercase;letter-spacing:-.05em}.viewHeading p{max-width:390px;color:#67655f}.monthNav{display:flex;align-items:center;gap:14px}.monthNav button{width:42px;height:42px;border:1px solid var(--ink);background:transparent;cursor:pointer;font-size:20px}.calendarGrid{min-height:170px;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:22px}.calendarGrid>a{display:flex;gap:14px;padding:17px;background:var(--paper)}.calendarGrid time{display:grid;place-items:center;min-width:42px;height:42px;background:var(--acid);font:18px "Archivo Black"}.calendarGrid span{display:flex;flex-direction:column;gap:4px}.calendarGrid small{color:#67655f}.calendarGrid>p{padding:20px;background:var(--paper);grid-column:1/-1}.europeMap{position:relative;min-height:560px;overflow:visible;border:1px solid var(--line);background:linear-gradient(135deg,#cce5ed,#e8f3f5)}.mapLand{position:absolute;inset:9% 15% 8% 18%;display:grid;place-items:center;color:#9a9a85;font:clamp(60px,13vw,170px) "Archivo Black";letter-spacing:-.08em;background:#dbdcc4;clip-path:polygon(23% 8%,45% 14%,55% 2%,73% 22%,92% 34%,81% 56%,91% 82%,64% 91%,51% 73%,36% 94%,24% 65%,2% 55%,14% 36%)}.mapMarker{position:absolute;transform:translate(-50%,-50%);z-index:2}.mapMarker summary{list-style:none;display:grid;place-items:center;width:40px;height:40px;border:3px solid white;border-radius:50%;background:var(--orange);color:white;font-weight:900;cursor:pointer;box-shadow:0 3px 12px #0005}.mapMarker summary::-webkit-details-marker{display:none}.mapMarker summary span{position:absolute;top:42px;color:var(--ink);font-size:10px}.mapMarker>div{position:absolute;left:24px;top:24px;width:235px;max-height:240px;overflow:auto;background:var(--paper);border:2px solid var(--ink);box-shadow:7px 7px 0 #17171244}.mapMarker>div a{display:flex;flex-direction:column;padding:10px 12px;border-bottom:1px solid var(--line)}.mapMarker>div small{color:#67655f}@media(max-width:700px){.plannerPage{padding:24px 18px}.viewHeading{align-items:flex-start;flex-direction:column}.calendarGrid{grid-template-columns:1fr}.europeMap{min-height:440px}.mapMarker>div{position:fixed;left:18px;right:18px;top:auto;bottom:18px;width:auto;z-index:20}}
 * {
   box-sizing: border-box;
 }
@@ -311,13 +320,15 @@ footer {
   position: sticky;
   top: 12px;
   z-index: 5;
-  display: grid;
-  grid-template-columns: minmax(230px, 1fr) 170px 150px auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   padding: 12px;
   background: rgba(23, 23, 18, 0.96);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
 }
+.filterBar .search { flex: 1 1 230px; }
+.filterBar select { flex: 1 1 145px; width: auto; }
 .search {
   background: white;
   display: flex;
@@ -427,25 +438,26 @@ footer {
   cursor: not-allowed;
 }
 .compareTray {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  display: block;
   margin: 18px 0 0;
   padding: 12px;
   border: 1px solid var(--ink);
   background: white;
   font-size: 12px;
 }
+.compareHeading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.compareHint { margin: 12px 0 0; color: #5f5c54; }
+.comparisonScroll { overflow-x: auto; margin-top: 12px; }
+.comparisonTable { width: 100%; min-width: 680px; border-collapse: collapse; text-align: left; }
+.comparisonTable th, .comparisonTable td { border: 1px solid var(--line); padding: 10px; vertical-align: top; }
+.comparisonTable thead th { background: var(--ink); color: white; }
+.comparisonTable tbody th { width: 190px; background: var(--soft); }
+.comparisonTable a { font-weight: 800; text-decoration: underline; }
 .compareTray button {
   border: 0;
   background: var(--soft);
   padding: 7px 9px;
   cursor: pointer;
-}
-.compareTray span {
-  margin-left: auto;
-  color: #5f5c54;
 }
 .festivalCard:hover {
   background: white;
