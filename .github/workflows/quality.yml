@@ -36,6 +36,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: npm ci
+      - run: npm run prisma:generate
       - run: npx prisma migrate deploy
       - run: npm run test:integration
       - run: npm run typecheck
