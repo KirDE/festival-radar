@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { festivals } from "../data/festivals.ts";
 import { artistProfiles } from "../data/artists.ts";
@@ -23,15 +24,26 @@ test("official links are HTTPS", () => {
   for (const festival of festivals) assert.match(festival.officialUrl, /^https:\/\//, festival.name);
 });
 
-test("every lineup name has one unambiguous artist profile", () => {
+test("every lineup name has one explicit artist identity state", () => {
   assert.ok(artistProfiles.length > 0);
   assert.equal(new Set(artistProfiles.map(({ slug }) => slug)).size, artistProfiles.length);
   for (const artist of artistProfiles) {
     assert.ok(artist.name);
-    assert.ok(artist.links.some(({ source }) => source === "spotify"));
-    assert.ok(artist.links.some(({ source }) => source === "musicbrainz"));
-    assert.ok(artist.links.some(({ source }) => source === "setlist.fm"));
+    assert.match(artist.identityState, /^(linked|ambiguous|unresolved|retryable)$/);
+    if (artist.identityState === "linked") {
+      assert.ok(artist.links.some(({ source }) => source === "spotify"));
+      assert.ok(artist.links.some(({ source }) => source === "musicbrainz"));
+      assert.ok(artist.links.some(({ source }) => source === "setlist.fm"));
+    }
   }
+});
+
+test("the production deploy smoke uses an existing artist profile", async () => {
+  const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
+  const match = workflow.match(/festivals\.kir-it\.de\/artists\/([a-z0-9-]+)\//);
+
+  assert.ok(match, "deploy workflow must smoke-test an artist route");
+  assert.ok(artistProfiles.some(({ slug }) => slug === match[1]), match[1]);
 });
 
 test("curated identities include provenance and stable provider IDs", () => {
@@ -67,6 +79,7 @@ test("safe additions can publish while removals and empty replacements require r
     fetchedAt: "2026-08-28T20:00:00.000Z",
     evidence: [],
     warnings: [],
+    observedEditionYears: [2027],
   };
   const addition = evaluateCandidate(current, { ...base, lineup: [...current.lineup, "Test Artist"] });
   assert.equal(addition.publishable, true);
