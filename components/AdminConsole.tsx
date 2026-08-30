@@ -6,7 +6,7 @@ import type { AuditEntry, ParserRun, ReviewChange } from "@/lib/admin";
 
 type Section = "content" | "review" | "assets" | "diagnostics" | "audit";
 
-export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntries }: { festivals: Festival[]; initialChanges: ReviewChange[]; parserRuns: ParserRun[]; auditEntries: AuditEntry[] }) {
+export function AdminConsole({ actor, festivals, initialChanges, parserRuns, auditEntries }: { actor: { email: string; role: "EDITOR" | "ADMIN" }; festivals: Festival[]; initialChanges: ReviewChange[]; parserRuns: ParserRun[]; auditEntries: AuditEntry[] }) {
   const [section, setSection] = useState<Section>("review");
   const [selectedSlug, setSelectedSlug] = useState(festivals[0]?.slug ?? "");
   const selected = festivals.find((item) => item.slug === selectedSlug) ?? festivals[0];
@@ -16,14 +16,22 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
   const [artistQuery, setArtistQuery] = useState("");
   const artists = useMemo(() => Array.from(new Set(festivals.flatMap((item) => [...item.headliners, ...item.lineup]))).filter((artist) => artist.toLowerCase().includes(artistQuery.toLowerCase())).slice(0, 12), [festivals, artistQuery]);
 
-  const decide = (id: string, status: "approved" | "rejected") => {
+  const runAction = async (body: Record<string, string>) => {
+    const response = await fetch("/api/admin/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!response.ok) throw new Error((await response.json().catch(() => null))?.error ?? "Administrative action failed.");
+  };
+  const decide = async (id: string, status: "approved" | "rejected") => {
+    try { await runAction({ action: "review.decide", target: id, decision: status }); }
+    catch (cause) { setNotice(cause instanceof Error ? cause.message : "Administrative action failed."); return; }
     setChanges((items) => items.map((item) => item.id === id ? { ...item, status } : item));
     setNotice(`Change ${id} ${status}. The decision was added to the audit trail.`);
   };
-  const refresh = () => {
+  const refresh = async () => {
     setRefreshing(true);
     setNotice("");
-    window.setTimeout(() => { setRefreshing(false); setNotice(`${selected.name} refresh finished. One review item was queued; publication remains gated.`); }, 700);
+    try { await runAction({ action: "festival.refresh", target: selected.slug }); setNotice(`${selected.name} refresh was accepted and recorded in the audit trail.`); }
+    catch (cause) { setNotice(cause instanceof Error ? cause.message : "Refresh failed."); }
+    finally { setRefreshing(false); }
   };
 
   return <main className="adminShell">
@@ -33,7 +41,7 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
       <a href="/">← Public site</a>
     </aside>
     <section className="adminMain">
-      <header className="adminHeader"><div><div className="eyebrow">Operations / 2027 season</div><h2>{section === "review" ? "Detected changes" : section === "content" ? "Content editor" : section === "assets" ? "Links & assets" : section === "diagnostics" ? "Parser diagnostics" : "Audit history"}</h2></div><span className="adminRole">Editor · Review required</span></header>
+      <header className="adminHeader"><div><div className="eyebrow">Operations / 2027 season</div><h2>{section === "review" ? "Detected changes" : section === "content" ? "Content editor" : section === "assets" ? "Links & assets" : section === "diagnostics" ? "Parser diagnostics" : "Audit history"}</h2></div><span className="adminRole">{actor.role} · {actor.email}</span></header>
       {notice && <div className="adminNotice" role="status">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
 
       {section === "review" && <div className="reviewList">
@@ -47,7 +55,7 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
       </div>}
 
       {section === "content" && selected && <div className="editorGrid">
-        <div className="adminPanel"><label>Festival<select value={selectedSlug} onChange={(event) => setSelectedSlug(event.target.value)}>{festivals.map((item) => <option value={item.slug} key={item.slug}>{item.name}</option>)}</select></label><div className="fieldPair"><label>Name<input defaultValue={selected.name}/></label><label>Status<select defaultValue={selected.status}><option>confirmed</option><option>partial</option><option>tba</option></select></label></div><div className="fieldPair"><label>City<input defaultValue={selected.city}/></label><label>Country<input defaultValue={selected.country}/></label></div><div className="fieldPair"><label>Start date<input type="date" defaultValue={selected.startDate}/></label><label>End date<input type="date" defaultValue={selected.endDate}/></label></div><label>Headliners<textarea defaultValue={selected.headliners.join("\n")} rows={5}/></label><button onClick={() => setNotice("Draft saved. It will not be published until reviewed.")}>Save festival draft</button></div>
+        <div className="adminPanel"><label>Festival<select value={selectedSlug} onChange={(event) => setSelectedSlug(event.target.value)}>{festivals.map((item) => <option value={item.slug} key={item.slug}>{item.name}</option>)}</select></label><div className="fieldPair"><label>Name<input defaultValue={selected.name}/></label><label>Status<select defaultValue={selected.status}><option>confirmed</option><option>partial</option><option>tba</option></select></label></div><div className="fieldPair"><label>City<input defaultValue={selected.city}/></label><label>Country<input defaultValue={selected.country}/></label></div><div className="fieldPair"><label>Start date<input type="date" defaultValue={selected.startDate}/></label><label>End date<input type="date" defaultValue={selected.endDate}/></label></div><label>Headliners<textarea defaultValue={selected.headliners.join("\n")} rows={5}/></label><button onClick={async () => { try { await runAction({ action: "festival.save-draft", target: selected.slug }); setNotice("Draft saved and attributed in the audit trail. It will not be published until reviewed."); } catch (cause) { setNotice(cause instanceof Error ? cause.message : "Save failed."); } }}>Save festival draft</button></div>
         <div><div className="adminPanel"><h3>Manual refresh</h3><p>Run only this festival’s configured adapters. Any differences go to the review queue.</p><button onClick={refresh} disabled={refreshing}>{refreshing ? "Refreshing…" : `Refresh ${selected.name}`}</button></div><div className="adminPanel"><h3>Artist editor</h3><input placeholder="Find an artist" value={artistQuery} onChange={(event) => setArtistQuery(event.target.value)}/><ul className="artistAdminList">{artists.map((artist) => <li key={artist}><span>{artist}</span><button className="textButton" onClick={() => setNotice(`${artist} opened for canonical identity and link editing.`)}>Edit</button></li>)}</ul></div></div>
       </div>}
 

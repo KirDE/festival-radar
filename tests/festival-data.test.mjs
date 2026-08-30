@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { festivals } from "../data/festivals.ts";
 import { artistProfiles } from "../data/artists.ts";
@@ -37,6 +38,14 @@ test("every lineup name has one explicit artist identity state", () => {
   }
 });
 
+test("the production deploy smoke uses an existing artist profile", async () => {
+  const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
+  const match = workflow.match(/festivals\.kir-it\.de\/artists\/([a-z0-9-]+)\//);
+
+  assert.ok(match, "deploy workflow must smoke-test an artist route");
+  assert.ok(artistProfiles.some(({ slug }) => slug === match[1]), match[1]);
+});
+
 test("curated identities include provenance and stable provider IDs", () => {
   const curated = artistProfiles.filter(({ identities }) => Object.keys(identities).length > 0);
   assert.ok(curated.length >= 3);
@@ -70,6 +79,7 @@ test("safe additions can publish while removals and empty replacements require r
     fetchedAt: "2026-08-28T20:00:00.000Z",
     evidence: [],
     warnings: [],
+    observedEditionYears: [2027],
   };
   const addition = evaluateCandidate(current, { ...base, lineup: [...current.lineup, "Test Artist"] });
   assert.equal(addition.publishable, true);

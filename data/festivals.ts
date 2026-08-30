@@ -47,7 +47,7 @@ const festival = (
   ...options,
 });
 
-export const festivals: Festival[] = [
+const baseFestivals: Festival[] = [
   festival("rock-am-ring", "Rock am Ring", "Germany", "DE", "https://www.rock-am-ring.com/", { city: "Nürburg", startDate: "2027-06-04", endDate: "2027-06-06", headliners: ["blink-182"], status: "partial" }),
   festival("rock-im-park", "Rock im Park", "Germany", "DE", "https://www.rock-im-park.com/", { city: "Nürnberg", startDate: "2027-06-04", endDate: "2027-06-06", headliners: ["blink-182"], status: "partial" }),
   festival("wacken-open-air", "Wacken Open Air", "Germany", "DE", "https://www.wacken.com/", { city: "Wacken", startDate: "2027-07-28", endDate: "2027-07-31", headliners: ["Electric Callboy", "Five Finger Death Punch", "Helloween", "Heaven Shall Burn", "Jinjer", "Knocked Loose"], lineup: ["Avatar", "Beast in Black", "Belphegor", "Between Two Worlds", "Blue Medusa", "Carnifex", "Cavalera Conspiracy", "Children of Bodom", "Creeper", "Crypta", "Dark Tranquillity", "Dethklok", "DragonForce", "Edguy", "Feuerschwanz", "Gaerea", "Halestorm", "HammerFall", "Heaven's Gate", "Hiraes", "Imminence", "John 5", "John Bush", "Kanonenfieber", "Make Them Suffer", "Malevolence", "Metal Church", "Mittel Alta", "Napalm Death", "Overkill", "Seven Blood", "Shadow of Intent", "Sylosis", "Tailgunner", "The Browning", "The New Roses", "Towards the Sinister", "Tyketto", "U.D.O.", "Victorious", "Witch Club Satan"], status: "confirmed" }),
@@ -99,6 +99,10 @@ export const festivals: Festival[] = [
   festival("rockstadt", "Rockstadt Extreme Fest", "Romania", "RO", "https://rockstadtextremefest.ro/", { city: "Râșnov", startDate: "2027-07-26", endDate: "2027-07-30" }),
   festival("metaldays", "Metaldays", "Slovenia", "SI", "https://www.metaldays.net/"),
 ];
+
+import publications from "./ingestion-publications.json" with { type: "json" };
+const publicationOverlays = publications.festivals as Record<string, Partial<Festival>>;
+export const festivals: Festival[] = baseFestivals.map((item) => ({ ...item, ...(publicationOverlays[item.slug] || {}) }));
 
 export const allArtists = Array.from(
   new Set(festivals.flatMap((item) => [...item.headliners, ...item.lineup])),
