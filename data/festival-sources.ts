@@ -2,10 +2,11 @@ import { festivals } from "./festivals.ts";
 import type { FestivalSource, ParserStrategy, RefreshPolicy } from "../lib/ingestion/types.ts";
 
 const bySlug = new Map(festivals.map((festival) => [festival.slug, festival]));
+const catalogueEditionYear = 2027;
 function source(festivalSlug: string, refreshPolicy: RefreshPolicy, strategies: ParserStrategy[] = ["json_ld_event", "html_fallback"]): FestivalSource {
   const festival = bySlug.get(festivalSlug);
   if (!festival) throw new Error(`Unknown festival source: ${festivalSlug}`);
-  return { festivalSlug, url: festival.officialUrl, strategies, refreshPolicy, enabled: true };
+  return { festivalSlug, url: festival.officialUrl, strategies, refreshPolicy, enabled: true, editionYear: festival.startDate ? Number(festival.startDate.slice(0, 4)) : catalogueEditionYear };
 }
 
 // Explicit inventory: adding a festival to the catalogue requires adding its source here.
