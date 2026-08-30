@@ -53,6 +53,8 @@ jobs:
             StrictHostKeyChecking yes
           EOF
           chmod 600 ~/.ssh/config
+      - name: Preflight SSH access
+        run: bash scripts/deploy/preflight-ssh.sh production
       - name: Create protected runtime environment
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
