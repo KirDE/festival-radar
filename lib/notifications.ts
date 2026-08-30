@@ -10,22 +10,28 @@ export type DetectedChange = { dedupeKey: string; festivalId: string; type: Noti
 export async function recordChange(change: DetectedChange) {
   const event = await db.notificationEvent.upsert({ where: { dedupeKey: change.dedupeKey }, update: {}, create: change });
   const preferences = await db.notificationPreference.findMany({ where: { enabled: true, eventType: change.type, OR: [{ festivalId: change.festivalId }, { festivalId: null }] } });
-  await db.notificationDelivery.createMany({ data: preferences.map((p) => ({ eventId: event.id, userId: p.userId, channel: p.channel, frequency: p.frequency, nextAttemptAt: p.frequency === NotificationFrequency.IMMEDIATE ? new Date() : nextDigest(p.frequency) })), skipDuplicates: true });
+  const effectivePreferences = new Map<string, (typeof preferences)[number]>();
+  for (const preference of preferences) {
+    const key = `${preference.userId}:${preference.channel}`;
+    const current = effectivePreferences.get(key);
+    if (!current || (current.festivalId === null && preference.festivalId !== null)) effectivePreferences.set(key, preference);
+  }
+  await db.notificationDelivery.createMany({ data: [...effectivePreferences.values()].map((p) => ({ eventId: event.id, userId: p.userId, channel: p.channel, frequency: p.frequency, nextAttemptAt: p.frequency === NotificationFrequency.IMMEDIATE ? new Date() : nextDigest(p.frequency) })), skipDuplicates: true });
   return event;
 }
 
 async function send(deliveryId: string, channel: NotificationChannel, endpoint: string, title: string, message: string, url?: string) {
-  const commonHeaders = { "content-type": "application/json", "idempotency-key": deliveryId };
+  const headers = { "content-type": "application/json", "idempotency-key": deliveryId };
   if (channel === NotificationChannel.EMAIL) {
     if (!process.env.EMAIL_WEBHOOK_URL) throw new Error("Email provider is not configured");
-    return fetch(process.env.EMAIL_WEBHOOK_URL, { method: "POST", headers: commonHeaders, body: JSON.stringify({ deliveryId, to: endpoint, subject: title, text: `${message}${url ? `\n${url}` : ""}` }) });
+    return fetch(process.env.EMAIL_WEBHOOK_URL, { method: "POST", headers, body: JSON.stringify({ deliveryId, to: endpoint, subject: title, text: `${message}${url ? `\n${url}` : ""}` }) });
   }
   if (channel === NotificationChannel.TELEGRAM) {
     if (!process.env.TELEGRAM_BOT_TOKEN) throw new Error("Telegram provider is not configured");
-    return fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers: commonHeaders, body: JSON.stringify({ chat_id: endpoint, text: `${title}\n${message}${url ? `\n${url}` : ""}` }) });
+    return fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, { method: "POST", headers, body: JSON.stringify({ chat_id: endpoint, text: `${title}\n${message}${url ? `\n${url}` : ""}` }) });
   }
   if (!process.env.WEB_PUSH_WEBHOOK_URL) throw new Error("Web push provider is not configured");
-  return fetch(process.env.WEB_PUSH_WEBHOOK_URL, { method: "POST", headers: commonHeaders, body: JSON.stringify({ deliveryId, endpoint, title, body: message, url }) });
+  return fetch(process.env.WEB_PUSH_WEBHOOK_URL, { method: "POST", headers, body: JSON.stringify({ deliveryId, endpoint, title, body: message, url }) });
 }
 
 export async function dispatchDue(frequency?: NotificationFrequency, limit = 100) {
@@ -36,9 +42,7 @@ export async function dispatchDue(frequency?: NotificationFrequency, limit = 100
       SELECT id FROM "NotificationDelivery"
       WHERE ((status = 'PENDING' AND "nextAttemptAt" <= NOW()) OR (status = 'CLAIMED' AND "claimedAt" < NOW() - INTERVAL '15 minutes'))
       ${frequency ? Prisma.sql`AND frequency = ${frequency}::"NotificationFrequency"` : Prisma.empty}
-      ORDER BY "createdAt" ASC
-      FOR UPDATE SKIP LOCKED
-      LIMIT ${boundedLimit}
+      ORDER BY "createdAt" ASC FOR UPDATE SKIP LOCKED LIMIT ${boundedLimit}
     )
     UPDATE "NotificationDelivery" AS delivery
     SET status = 'CLAIMED', "claimedAt" = NOW(), "claimToken" = ${claimToken}, "updatedAt" = NOW()
