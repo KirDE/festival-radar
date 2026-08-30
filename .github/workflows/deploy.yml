@@ -47,7 +47,7 @@ jobs:
           Host production
             HostName $DEPLOY_HOST
             Port $DEPLOY_PORT
-            User root
+            User festival-radar-deploy
             IdentityFile ~/.ssh/deploy_key
             IdentitiesOnly yes
             StrictHostKeyChecking yes
@@ -75,10 +75,10 @@ jobs:
           } > production.env
       - name: Upload and activate release
         run: |
-          scp release.tar.gz production.env scripts/deploy/install-release.sh production:/tmp/
-          ssh production bash /tmp/install-release.sh \
-            /tmp/release.tar.gz "$GITHUB_SHA" /tmp/production.env
-          ssh production rm -f /tmp/release.tar.gz /tmp/production.env /tmp/install-release.sh
+          ssh production 'test "$(id -un)" = festival-radar-deploy && sudo -n /usr/local/libexec/festival-radar/activate-release 0000000000000000000000000000000000000000 2>&1 | grep -Fq "missing regular deployment input"'
+          scp release.tar.gz "production:/var/lib/festival-radar-deploy/incoming/$GITHUB_SHA.tar.gz"
+          scp production.env "production:/var/lib/festival-radar-deploy/incoming/$GITHUB_SHA.env"
+          ssh production sudo -n /usr/local/libexec/festival-radar/activate-release "$GITHUB_SHA"
       - name: Verify production
         run: |
           for attempt in {1..12}; do
