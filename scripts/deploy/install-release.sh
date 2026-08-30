@@ -74,7 +74,8 @@ APACHE
 ln -sfn "$release" "$app_root/current"
 chown -R www-data:www-data "$release" "$shared"
 systemctl daemon-reload
-systemctl enable --now "$service"
+systemctl enable "$service"
+systemctl restart "$service"
 bash "$release/scripts/deploy/reconfigure-webserver.sh" "$domain"
 
 healthy=false
