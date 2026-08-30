@@ -22,6 +22,10 @@ if (!address || typeof address === "string") throw new Error("Provider did not b
 process.env.EMAIL_WEBHOOK_URL = `http://127.0.0.1:${address.port}/email`;
 
 try {
+  await db.notificationDelivery.deleteMany();
+  await db.notificationEvent.deleteMany();
+  await db.notificationSubscription.deleteMany();
+  await db.notificationPreference.deleteMany();
   const user = await db.user.create({ data: { email: "staging-notifications@example.test", passwordHash: "not-used" } });
   await db.notificationPreference.create({ data: { userId: user.id, festivalId: "test-fest:2027", eventType: NotificationEventType.ARTIST_ADDED, channel: NotificationChannel.EMAIL, frequency: NotificationFrequency.IMMEDIATE } });
   const [eventInput] = notificationEventsForChanges(
@@ -32,11 +36,11 @@ try {
   await recordChange({ ...eventInput, occurredAt: new Date(eventInput.occurredAt) });
   await recordChange({ ...eventInput, occurredAt: new Date(eventInput.occurredAt) });
 
-  assert.equal(await db.notificationEvent.count(), 1, "detected change must persist once");
-  assert.equal(await db.notificationDelivery.count(), 1, "deduplicated event must create one delivery");
+  assert.equal(await db.notificationEvent.count({ where: { dedupeKey: eventInput.dedupeKey } }), 1, "detected change must persist once");
+  assert.equal(await db.notificationDelivery.count({ where: { event: { dedupeKey: eventInput.dedupeKey } } }), 1, "deduplicated event must create one delivery");
   await Promise.all([dispatchDue(undefined, 100), dispatchDue(undefined, 100)]);
   assert.equal(requests.length, 1, "overlapping dispatchers must issue one provider request");
-  const delivery = await db.notificationDelivery.findFirstOrThrow();
+  const delivery = await db.notificationDelivery.findFirstOrThrow({ where: { event: { dedupeKey: eventInput.dedupeKey } } });
   assert.equal(delivery.status, NotificationStatus.SENT);
   assert.equal(requests[0].idempotencyKey, delivery.id);
   assert.equal(requests[0].body.deliveryId, delivery.id);
