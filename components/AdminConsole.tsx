@@ -6,7 +6,7 @@ import type { AuditEntry, ParserRun, ReviewChange } from "@/lib/admin";
 
 type Section = "content" | "review" | "assets" | "diagnostics" | "audit";
 
-export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntries }: { festivals: Festival[]; initialChanges: ReviewChange[]; parserRuns: ParserRun[]; auditEntries: AuditEntry[] }) {
+export function AdminConsole({ actor: _actor, festivals, initialChanges, parserRuns, auditEntries }: { actor: { email: string; role: "EDITOR" | "ADMIN" }; festivals: Festival[]; initialChanges: ReviewChange[]; parserRuns: ParserRun[]; auditEntries: AuditEntry[] }) {
   const [section, setSection] = useState<Section>("review");
   const [selectedSlug, setSelectedSlug] = useState(festivals[0]?.slug ?? "");
   const selected = festivals.find((item) => item.slug === selectedSlug) ?? festivals[0];

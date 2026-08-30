@@ -5,9 +5,10 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
-test("builds public status only for valid known Spotify reports", async () => {
+test("builds public status for any normalized festival report", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "festival-playlist-status-"));
-  await writeFile(path.join(dir, "wacken_2026.json"), JSON.stringify({
+  await writeFile(path.join(dir, "wacken-open-air.json"), JSON.stringify({
+    slug: "wacken-open-air",
     playlist_url: "https://open.spotify.com/playlist/example",
     artists_count: 80,
     track_count: 240,

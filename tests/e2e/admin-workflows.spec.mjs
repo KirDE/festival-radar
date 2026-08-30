@@ -13,6 +13,7 @@ test.afterAll(async () => db.$disconnect());
 test("admin edits, reviews, diagnostics and audit survive reload", async ({ page }) => {
   await expect((await page.request.get("/api/admin")).status()).toBe(403);
   expect((await page.request.post("/api/auth/register", { data: { email: "browser-admin@example.test", password: "correct horse battery staple" } })).status()).toBe(201);
+  await db.user.update({ where: { email: "browser-admin@example.test" }, data: { role: "ADMIN" } });
 
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Detected changes" })).toBeVisible();
