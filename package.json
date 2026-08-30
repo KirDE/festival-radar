@@ -4,7 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "prisma:generate": "prisma generate",
+    "postinstall": "npm run prisma:generate",
+    "pretypecheck": "npm run prisma:generate",
     "build": "next build",
+    "prebuild": "npm run prisma:generate",
     "typecheck": "tsc --noEmit",
     "fetch:logos": "node scripts/fetch-festival-logos.mjs",
     "check:sources": "node scripts/check-festival-sources.mjs",
