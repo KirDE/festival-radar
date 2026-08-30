@@ -11,6 +11,8 @@ export type FestivalSource = {
   refreshPolicy: RefreshPolicy;
   enabled: boolean;
   lastSuccessfulCheck?: string;
+  fetchUrl?: string;
+  headers?: Record<string, string>;
 };
 
 export type FieldEvidence = {

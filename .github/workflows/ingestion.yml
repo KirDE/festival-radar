@@ -23,11 +23,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Restore per-source ingestion health
+        uses: actions/cache@v4
+        with:
+          path: outputs/ingestion-state
+          key: festival-ingestion-health-${{ github.run_id }}
+          restore-keys: festival-ingestion-health-
       - name: Refresh due festival sources
         env:
           FESTIVAL: ${{ inputs.festival }}
         run: |
-          args=(--due --output=outputs/ingestion)
+          args=(--due --output=outputs/ingestion --state=outputs/ingestion-state/source-state.json)
           if [[ -n "$FESTIVAL" ]]; then args+=("--slug=$FESTIVAL"); fi
           npm run ingest -- "${args[@]}"
       - name: Retain review and diagnostic artifacts
