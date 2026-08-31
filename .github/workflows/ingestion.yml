@@ -25,35 +25,25 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Refresh due festival sources
+      - name: Run durable ingestion inside production
         env:
           FESTIVAL: ${{ inputs.festival }}
           APP_URL: ${{ secrets.APP_URL }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
-          NOTIFICATION_DELIVERY_REQUIRED: "true"
-          INGESTION_MAX_FETCH_ERRORS: "10"
         run: |
-          args=(--due --publish --output=outputs/ingestion)
-          if [[ -n "$FESTIVAL" ]]; then args+=("--slug=$FESTIVAL"); fi
-          npm run ingest -- "${args[@]}"
-      - name: Open auditable publication pull request
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if git diff --quiet -- data/ingestion-publications.json data/ingestion-history.jsonl; then exit 0; fi
-          branch="automation/ingestion-${GITHUB_RUN_ID}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
-          git add data/ingestion-publications.json data/ingestion-history.jsonl
-          git commit -m "chore(data): publish approved festival ingestion"
-          git push origin "$branch"
-          gh pr create --base main --head "$branch" --title "chore(data): publish approved festival ingestion" --body "Automated policy-approved additive ingestion. Review-required changes remain in durable history and diagnostics."
+          test -n "$APP_URL" && test -n "$INTERNAL_API_SECRET"
+          jq -n --arg festival "$FESTIVAL" '{festival: (if $festival == "" then null else $festival end)}' > request.json
+          curl --fail-with-body --silent --show-error --max-time 1200 \
+            -H "authorization: Bearer $INTERNAL_API_SECRET" \
+            -H "content-type: application/json" \
+            --data-binary @request.json \
+            "${APP_URL%/}/api/ingestion/run/" | tee outputs/ingestion-response.json
+          jq -e '.runId and (.summary.attempted > 0) and (.readBack.attempts == .summary.attempted) and (.readBack.candidates > 0) and (.readBack.evidence > 0) and .readBack.lastSuccessfulCheck and (.summary.status == "COMPLETED" or .summary.status == "PARTIAL")' outputs/ingestion-response.json
       - name: Retain review and diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: festival-ingestion-${{ github.run_id }}
-          path: outputs/ingestion/
+          path: outputs/ingestion-response.json
           if-no-files-found: error
           retention-days: 30

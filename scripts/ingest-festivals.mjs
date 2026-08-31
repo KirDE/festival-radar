@@ -36,7 +36,7 @@ if (!Number.isInteger(maxFetchErrors) || maxFetchErrors < 0) throw new Error(`In
 await mkdir(outputDirectory, { recursive: true });
 const trigger = process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL";
 const run = persistenceEnabled ? await createIngestionRun(db, { trigger, sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length }) : null;
-const summary = { schemaVersion: 1, generatedAt: new Date().toISOString(), dryRun: !publish, totalSources: selected.length, attempted: 0, processed: 0, changed: 0, publishable: 0, published: 0, reviewRequired: 0, fetchErrors: 0, notificationEvents: 0, maxFetchErrors, status: "RUNNING", results: [] };
+const summary = { schemaVersion: 1, ingestionRunId: run?.id ?? null, generatedAt: new Date().toISOString(), dryRun: !publish, totalSources: selected.length, attempted: 0, processed: 0, changed: 0, publishable: 0, published: 0, reviewRequired: 0, fetchErrors: 0, notificationEvents: 0, maxFetchErrors, status: "RUNNING", results: [] };
 let publicationStore = JSON.parse(await readFile(publicationsPath, "utf8"));
 const history = [];
 
