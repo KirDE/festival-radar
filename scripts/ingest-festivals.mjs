@@ -68,7 +68,8 @@ for (const source of selected) {
     const escalated = consecutiveFailures >= failureThreshold;
     summary.fetchErrors += 1;
     if (escalated) summary.escalatedFailures += 1;
-    summary.results.push({ festivalSlug: source.festivalSlug, status: escalated ? "escalated_failure" : "fetch_error", error: error instanceof Error ? error.message : String(error), attempts, consecutiveFailures });
+    const lastExtraction = persistenceEnabled ? await ingestionQueries.lastSuccessfulExtraction(db, source.festivalSlug) : null;
+    summary.results.push({ festivalSlug: source.festivalSlug, status: escalated ? "escalated_failure" : "fetch_error", extractionPath: source.strategies, manualReviewReason: source.manualReviewReason ?? null, evidenceFields: [], lastSuccessfulExtraction: lastExtraction?.observedAt.toISOString() ?? null, error: error instanceof Error ? error.message : String(error), attempts, consecutiveFailures });
     continue;
   }
 
@@ -101,7 +102,8 @@ for (const source of selected) {
     else outcome = "unchanged";
   }
   history.push(historyRecord(result, outcome));
-  summary.results.push({ festivalSlug: source.festivalSlug, status, outcome, changes: result.changes.length, reviewReasons: result.reviewReasons });
+  const lastExtraction = persistenceEnabled ? await ingestionQueries.lastSuccessfulExtraction(db, source.festivalSlug) : null;
+  summary.results.push({ festivalSlug: source.festivalSlug, status, outcome, extractionPath: source.strategies, manualReviewReason: source.manualReviewReason ?? null, evidenceFields: candidate.evidence.map(({ field }) => field), lastSuccessfulExtraction: lastExtraction?.observedAt.toISOString() ?? (candidate.evidence.length ? fetchedAt : null), changes: result.changes.length, reviewReasons: result.reviewReasons });
 }
 
 if (run) await finishIngestionRun(db, run.id);
