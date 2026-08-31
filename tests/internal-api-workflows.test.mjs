@@ -42,6 +42,17 @@ test("deployment requires and installs the internal API secret", async () => {
   assert.match(workflow, /printf 'INTERNAL_API_SECRET=%q\\n' "\$INTERNAL_API_SECRET"/);
 });
 
+test("deployment builds and installs the privacy analytics contract", async () => {
+  const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
+  const pruneWorkflow = await readFile(".github/workflows/prune-analytics.yml", "utf8");
+  assert.match(workflow, /NEXT_PUBLIC_ANALYTICS_ENDPOINT: \/api\/analytics\/page-view\//);
+  assert.match(workflow, /ANALYTICS_OPERATOR_TOKEN: \$\{\{ secrets\.ANALYTICS_OPERATOR_TOKEN \}\}/);
+  assert.match(workflow, /printf 'ANALYTICS_OPERATOR_TOKEN=%q\\n'/);
+  assert.match(workflow, /printf 'ANALYTICS_RETENTION_DAYS=%q\\n'/);
+  assert.match(pruneWorkflow, /environment: production/);
+  assert.match(pruneWorkflow, /DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}/);
+});
+
 for (const routeName of ["events", "dispatch"]) {
   test(`${routeName} internal API route fails closed for unauthorized requests`, async () => {
     const route = await readFile(`app/api/notifications/${routeName}/route.ts`, "utf8");

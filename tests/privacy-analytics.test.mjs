@@ -23,7 +23,7 @@ test("initial load and distinct SPA paths each send one minimized beacon", async
   for (const pathname of ["/", "/festivals", "/festivals"]) {
     if (pathname === previous) continue;
     previous = pathname;
-    sendPrivacyPageView({ endpoint: "/api/analytics/page-view", pathname, navigator, document: documentLike() });
+    sendPrivacyPageView({ endpoint: "/api/analytics/page-view/", pathname, navigator, document: documentLike() });
   }
   assert.equal(payloads.length, 2);
   const bodies = await Promise.all(payloads.map((blob) => blob.text()));

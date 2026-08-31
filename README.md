@@ -104,7 +104,7 @@ cancellations, timezone rules and the atomic import procedure.
 
 ## Privacy analytics
 
-Set `NEXT_PUBLIC_ANALYTICS_ENDPOINT=/api/analytics/page-view` in the production
+Set `NEXT_PUBLIC_ANALYTICS_ENDPOINT=/api/analytics/page-view/` in the production
 build and provide a random `ANALYTICS_OPERATOR_TOKEN` only to operators. The
 browser sends exactly `{ "path": "/path-without-query", "locale": "en" }`
 on the initial page and each distinct client-side route. It sends no cookies,
@@ -121,7 +121,7 @@ verify accepted counts without visitor data:
 
 ```bash
 curl -fsS -H "Authorization: Bearer $ANALYTICS_OPERATOR_TOKEN" \
-  "https://festivals.kir-it.de/api/analytics/page-view?days=7"
+  "https://festivals.kir-it.de/api/analytics/page-view/?days=7"
 ```
 
 The response contains only the time window, total views and aggregate rows.
