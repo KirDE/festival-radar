@@ -8,6 +8,7 @@ import { useLanguage } from "./LanguageProvider";
 import { PlanningTools } from "./PlanningTools";
 import playlistStatus from "@/data/playlist-status.json";
 import type { PlaylistStatus } from "@/data/festivals";
+import { ticketPresentation } from "@/lib/tickets";
 import {
   FavoriteButton,
   useLocalPlanner,
@@ -26,7 +27,7 @@ export function FestivalDetail({ item }: { item: Festival }) {
       timeZone: "UTC",
     }).format(new Date(`${value}T12:00:00Z`));
   const setlistUrl = `https://www.setlist.fm/search?query=${encodeURIComponent(`festival:${item.name} date:2027`)}`;
-  const tickets = item.ticketsUrl || item.officialUrl;
+  const tickets = ticketPresentation(item);
   const status =
     item.status === "tba"
       ? t("datesLineupTba")
@@ -80,12 +81,17 @@ export function FestivalDetail({ item }: { item: Festival }) {
           <small>{t("official")}</small>
           <strong>{t("festivalWebsite")}</strong>
         </a>
-        <a href={tickets} target="_blank" rel="noreferrer">
-          <small>{t("passes")}</small>
-          <strong>
-            {t(item.ticketsUrl ? "officialTickets" : "ticketsInfo")}
-          </strong>
-        </a>
+        {tickets.status === "available" ? (
+          <a href={tickets.href} target="_blank" rel="noreferrer">
+            <small>{t("passes")}</small>
+            <strong>{t(tickets.label)}</strong>
+          </a>
+        ) : (
+          <div className="disabled" data-ticket-status={tickets.status}>
+            <small>{t("passes")}</small>
+            <strong>{t(tickets.label)}</strong>
+          </div>
+        )}
         {playlistUrl ? (
           <a href={playlistUrl} target="_blank" rel="noreferrer">
             <small>
@@ -102,6 +108,12 @@ export function FestivalDetail({ item }: { item: Festival }) {
             <strong>{t("playlistSoon")}</strong>
           </div>
         )}
+        {playlist?.youtubeMusicUrl ? (
+          <a href={playlist.youtubeMusicUrl} target="_blank" rel="noreferrer">
+            <small>{t("listen")} · {playlist.artists} {t("artists")} · {playlist.tracks} {t("tracks")}</small>
+            <strong>{t("youtubeMusicPlaylist")}</strong>
+          </a>
+        ) : null}
         <a href={setlistUrl} target="_blank" rel="noreferrer">
           <small>{t("liveHistory")}</small>
           <strong>setlist.fm ↗</strong>

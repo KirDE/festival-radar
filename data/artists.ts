@@ -18,6 +18,7 @@ export type ArtistProfile = {
   biography?: string;
   image?: { url: string; alt: string; width: number; height: number };
   identities: { spotify?: string; musicbrainz?: string; setlistFm?: string };
+  identityState: "linked" | "ambiguous" | "unresolved" | "retryable";
   links: { label: string; url: string; source: ArtistSource; verified: boolean }[];
   topTracks: string[];
   recentSetlists: { date: string; venue: string; url: string }[];
@@ -108,15 +109,6 @@ function generatedProfile(slug: string): Partial<ArtistProfile> {
   };
 }
 
-function searchLinks(name: string): ArtistProfile["links"] {
-  const query = encodeURIComponent(name);
-  return [
-    { label: "Search Spotify", url: `https://open.spotify.com/search/${query}`, source: "spotify", verified: false },
-    { label: "Search MusicBrainz", url: `https://musicbrainz.org/search?query=${query}&type=artist`, source: "musicbrainz", verified: false },
-    { label: "Search setlist.fm", url: `https://www.setlist.fm/search?artistName=${query}`, source: "setlist.fm", verified: false },
-  ];
-}
-
 export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
   const slug = artistSlug(name);
   const generated = generatedProfile(slug);
@@ -136,7 +128,8 @@ export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
     ...(entry.identities?.spotify ? [{ label: "Spotify", url: `https://open.spotify.com/artist/${entry.identities.spotify}`, source: "spotify" as const, verified: true }] : []),
     ...(entry.identities?.musicbrainz ? [{ label: "MusicBrainz", url: `https://musicbrainz.org/artist/${entry.identities.musicbrainz}`, source: "musicbrainz" as const, verified: true }] : []),
   ];
-  const links = [...(entry.links || []), ...identityLinks, ...searchLinks(name)];
+  const links = [...(entry.links || []), ...identityLinks];
+  const identities = entry.identities || {};
   const identitySources = (["spotify", "musicbrainz", "setlist.fm"] as ArtistSource[])
     .filter((source) => links.some((link) => link.source === source && link.verified))
     .map((source) => ({ field: "identity", source, url: links.find((link) => link.source === source && link.verified)!.url, checkedAt }));
@@ -151,7 +144,8 @@ export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
     slug,
     aliases: entry.aliases || [],
     genres: entry.genres || [],
-    identities: entry.identities || {},
+    identities,
+    identityState: Object.keys(identities).length === 3 ? "linked" : "unresolved",
     links,
     topTracks: entry.topTracks || [],
     recentSetlists: entry.recentSetlists || [],

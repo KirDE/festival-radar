@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
+import type { Language } from "@/components/LanguageProvider";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { LocalPlannerProvider } from "@/components/LocalPlanner";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
@@ -23,14 +25,17 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#171712" };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const requested = (await headers()).get("x-festival-locale");
+  const language: Language = requested === "de" || requested === "ru" ? requested : "en";
+  const skip = { en: "Skip to content", de: "Zum Inhalt springen", ru: "Перейти к содержимому" }[language];
   return (
-    <html lang="en">
+    <html lang={language}>
       <body>
-        <a className="skipLink" href="#main-content">Skip to content</a>
-        <LanguageProvider>
+        <a className="skipLink" href="#main-content">{skip}</a>
+        <LanguageProvider initialLanguage={language}>
           <LocalPlannerProvider>
             <SiteHeader />
             <main id="main-content">{children}</main>
