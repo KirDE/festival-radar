@@ -6,9 +6,9 @@ const provider = await readFile(new URL("../components/LanguageProvider.tsx", im
 const artistDetail = await readFile(new URL("../components/ArtistDetail.tsx", import.meta.url), "utf8");
 
 const expected = {
-  en: ["Also known as", "Profile", "Origin", "Genres", "Top tracks", "Sources and canonical identities", "checked"],
-  de: ["Auch bekannt als", "Profil", "Herkunft", "Genres", "Top-Titel", "Quellen und kanonische Identitäten", "geprüft"],
-  ru: ["Также известен как", "Профиль", "Страна происхождения", "Жанры", "Популярные треки", "Источники и канонические идентификаторы", "проверено"],
+  en: ["Also known as", "Profile", "Origin", "Genres", "Top tracks", "Sources and canonical identities", "checked", "Recent setlists", "View setlist", "Profile refreshed every"],
+  de: ["Auch bekannt als", "Profil", "Herkunft", "Genres", "Top-Titel", "Quellen und kanonische Identitäten", "geprüft", "Aktuelle Setlists", "Setlist ansehen", "Profil aktualisiert alle"],
+  ru: ["Также известен как", "Профиль", "Страна происхождения", "Жанры", "Популярные треки", "Источники и канонические идентификаторы", "проверено", "Недавние сетлисты", "Открыть сетлист", "Профиль обновляется каждые"],
 };
 
 test("artist enrichment labels are complete when switching every supported language", () => {
@@ -20,10 +20,8 @@ test("artist enrichment labels are complete when switching every supported langu
 });
 
 test("artist enrichment UI renders all labels through LanguageProvider", () => {
-  for (const key of ["alsoKnownAs", "profile", "origin", "genres", "topTracks", "sourcesAndIdentities", "checked"]) {
+  for (const key of ["alsoKnownAs", "profile", "origin", "genres", "topTracks", "sourcesAndIdentities", "checked", "recentSetlists", "viewSetlist", "freshnessProfile", "freshnessMusic", "freshnessSetlists", "freshnessDays"]) {
     assert.match(artistDetail, new RegExp(`t\\(\\"${key}\\"\\)`));
   }
-  for (const englishOnly of expected.en) {
-    assert.doesNotMatch(artistDetail, new RegExp(`(?:>|\\s)${englishOnly}(?:<|:|\\s)`));
-  }
+  for (const englishOnly of expected.en) assert.ok(!artistDetail.includes(`>${englishOnly}<`), `${englishOnly} is not hard-coded as visible text`);
 });

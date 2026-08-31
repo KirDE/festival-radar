@@ -83,13 +83,13 @@ export function ArtistDetail({
       )}
       {artist.recentSetlists.length > 0 && (
         <section className="artistSetlists" aria-labelledby="recent-setlists-heading">
-          <div className="eyebrow" id="recent-setlists-heading">Recent setlists</div>
+          <div className="eyebrow" id="recent-setlists-heading">{t("recentSetlists")}</div>
           <ul>
             {artist.recentSetlists.map((setlist) => (
               <li key={`${setlist.date}-${setlist.url}`}>
                 <time dateTime={setlist.date}>{setlist.date}</time>
                 <span>{setlist.venue}</span>
-                <a href={setlist.url} target="_blank" rel="noreferrer" aria-label={`View ${artist.name} setlist from ${setlist.date}`}>View setlist ↗</a>
+                <a href={setlist.url} target="_blank" rel="noreferrer" aria-label={`${t("viewSetlist")} ${artist.name} ${setlist.date}`}>{t("viewSetlist")} ↗</a>
               </li>
             ))}
           </ul>
@@ -127,7 +127,7 @@ export function ArtistDetail({
           </a>
         ))}
         <p className="freshnessNote">
-          Profile refreshed every {artist.freshness.profile.cadenceDays} days; music every {artist.freshness.music.cadenceDays} days; setlists every {artist.freshness.setlists.cadenceDays} days.
+          {t("freshnessProfile")} {artist.freshness.profile.cadenceDays} {t("freshnessDays")}; {t("freshnessMusic")} {artist.freshness.music.cadenceDays} {t("freshnessDays")}; {t("freshnessSetlists")} {artist.freshness.setlists.cadenceDays} {t("freshnessDays")}.
         </p>
       </details>
     </div>
