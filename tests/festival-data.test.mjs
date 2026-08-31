@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { festivals } from "../data/festivals.ts";
 import { artistProfiles } from "../data/artists.ts";
 import { festivalSources } from "../data/festival-sources.ts";
 import { INGESTION_SCHEMA_VERSION } from "../lib/ingestion/types.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
+import { hasAvailableTickets, ticketPresentation } from "../lib/tickets.ts";
 
 test("the seed contains 50 unique festivals", () => {
   assert.equal(festivals.length, 50);
@@ -23,26 +25,86 @@ test("official links are HTTPS", () => {
   for (const festival of festivals) assert.match(festival.officialUrl, /^https:\/\//, festival.name);
 });
 
-test("every lineup name has one unambiguous artist profile", () => {
+test("ticket availability is normalized and available tickets have verified HTTPS URLs", () => {
+  for (const festival of festivals) {
+    assert.ok(["available", "unavailable", "unknown"].includes(festival.ticketStatus), festival.name);
+    if (festival.ticketStatus === "available") {
+      assert.match(festival.ticketsUrl, /^https:\/\//, festival.name);
+    } else {
+      assert.equal(festival.ticketsUrl, undefined, `${festival.name} must not expose an unverified ticket URL`);
+    }
+  }
+});
+
+test("ticket UI distinguishes available, unavailable and unknown without homepage fallback", () => {
+  const available = festivals.find(({ slug }) => slug === "rock-am-ring");
+  const unavailable = festivals.find(({ slug }) => slug === "pinkpop");
+  const unknown = festivals.find(({ slug }) => slug === "rock-im-park");
+  assert.ok(available && unavailable && unknown);
+
+  assert.deepEqual(ticketPresentation(available), {
+    status: "available",
+    href: "https://www.rock-am-ring.com/en/tickets",
+    label: "officialTickets",
+  });
+  assert.deepEqual(ticketPresentation(unavailable), { status: "unavailable", label: "ticketsUnavailable" });
+  assert.deepEqual(ticketPresentation(unknown), { status: "unknown", label: "ticketsUnknown" });
+  assert.equal(hasAvailableTickets(available), true);
+  assert.equal(hasAvailableTickets(unavailable), false);
+  assert.equal(hasAvailableTickets(unknown), false);
+  assert.notEqual(unavailable.officialUrl, ticketPresentation(unavailable).href);
+  assert.notEqual(unknown.officialUrl, ticketPresentation(unknown).href);
+});
+
+test("every lineup name has one explicit artist identity state", () => {
   assert.ok(artistProfiles.length > 0);
   assert.equal(new Set(artistProfiles.map(({ slug }) => slug)).size, artistProfiles.length);
   for (const artist of artistProfiles) {
     assert.ok(artist.name);
-    assert.ok(artist.links.some(({ source }) => source === "spotify"));
-    assert.ok(artist.links.some(({ source }) => source === "musicbrainz"));
-    assert.ok(artist.links.some(({ source }) => source === "setlist.fm"));
+    assert.match(artist.identityState, /^(linked|ambiguous|unresolved|retryable)$/);
+    assert.ok(artist.freshness.profile.refreshAfter > artist.freshness.profile.checkedAt);
+    assert.ok(artist.freshness.music.cadenceDays <= 14);
+    assert.ok(artist.freshness.setlists.cadenceDays <= 7);
   }
 });
 
-test("curated identities include provenance and stable provider IDs", () => {
-  const curated = artistProfiles.filter(({ identities }) => Object.keys(identities).length > 0);
-  assert.ok(curated.length >= 3);
-  for (const artist of curated) {
-    assert.match(artist.identities.spotify, /^[A-Za-z0-9]{22}$/);
+test("only verified artist links are identity evidence and enriched records are accessible", () => {
+  const enriched = artistProfiles.filter((artist) => artist.biography || artist.image || artist.recentSetlists.length);
+  const partial = artistProfiles.filter((artist) => !artist.biography && !artist.image && artist.recentSetlists.length === 0);
+  assert.ok(enriched.length >= 3);
+  assert.ok(partial.length > 0);
+  for (const artist of artistProfiles) {
+    for (const item of artist.provenance.filter(({ field }) => field === "identity")) {
+      assert.ok(artist.links.some((link) => link.source === item.source && link.url === item.url && link.verified));
+    }
+    if (artist.image) {
+      assert.ok(artist.image.alt.includes(artist.name));
+      assert.ok(artist.image.width > 0 && artist.image.height > 0);
+    }
+    for (const setlist of artist.recentSetlists) {
+      assert.match(setlist.date, /^\d{4}-\d{2}-\d{2}$/);
+      assert.match(setlist.url, /^https:\/\/www\.setlist\.fm\//);
+    }
+  }
+});
+
+test("resolved identities include provenance and stable provider IDs", () => {
+  const resolved = artistProfiles.filter(({ identities }) => identities.musicbrainz);
+  assert.ok(resolved.length > 3);
+  for (const artist of resolved) {
+    if (artist.identities.spotify) assert.match(artist.identities.spotify, /^[A-Za-z0-9]{22}$/);
     assert.match(artist.identities.musicbrainz, /^[0-9a-f-]{36}$/);
     assert.equal(artist.identities.setlistFm, artist.identities.musicbrainz);
-    assert.ok(artist.provenance.length >= 3);
+    assert.ok(artist.provenance.some(({ field, source }) => field === "identity" && source === "musicbrainz"));
   }
+});
+
+test("the production deploy smoke uses an existing artist profile", async () => {
+  const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
+  const match = workflow.match(/festivals\.kir-it\.de\/artists\/([a-z0-9-]+)\//);
+
+  assert.ok(match, "deploy workflow must smoke-test an artist route");
+  assert.ok(artistProfiles.some(({ slug }) => slug === match[1]), match[1]);
 });
 
 test("every festival has exactly one enabled ingestion source", () => {
@@ -67,6 +129,7 @@ test("safe additions can publish while removals and empty replacements require r
     fetchedAt: "2026-08-28T20:00:00.000Z",
     evidence: [],
     warnings: [],
+    observedEditionYears: [2027],
   };
   const addition = evaluateCandidate(current, { ...base, lineup: [...current.lineup, "Test Artist"] });
   assert.equal(addition.publishable, true);

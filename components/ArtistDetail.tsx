@@ -27,7 +27,11 @@ export function ArtistDetail({
       </Link>
       <FavoriteButton kind="artist" value={artist.name} />
       <div className="artistHero">
-        <div className="artistMonogram">{artist.name[0]}</div>
+        {artist.image ? (
+          <img className="artistPortrait" src={artist.image.url} alt={artist.image.alt} width={artist.image.width} height={artist.image.height} />
+        ) : (
+          <div className="artistMonogram" aria-hidden="true">{artist.name[0]}</div>
+        )}
         <div>
           <div className="eyebrow">{t("artist")}</div>
           <h1>{artist.name}</h1>
@@ -38,7 +42,7 @@ export function ArtistDetail({
         </div>
       </div>
       <div className="artistActions">
-        {artist.links.map((link) => (
+        {artist.links.filter((link) => link.verified).map((link) => (
           <a
             href={link.url}
             key={`${link.source}-${link.label}`}
@@ -77,6 +81,20 @@ export function ArtistDetail({
           )}
         </section>
       )}
+      {artist.recentSetlists.length > 0 && (
+        <section className="artistSetlists" aria-labelledby="recent-setlists-heading">
+          <div className="eyebrow" id="recent-setlists-heading">Recent setlists</div>
+          <ul>
+            {artist.recentSetlists.map((setlist) => (
+              <li key={`${setlist.date}-${setlist.url}`}>
+                <time dateTime={setlist.date}>{setlist.date}</time>
+                <span>{setlist.venue}</span>
+                <a href={setlist.url} target="_blank" rel="noreferrer" aria-label={`View ${artist.name} setlist from ${setlist.date}`}>View setlist ↗</a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="appearances">
         <div className="eyebrow">{t("appearances")}</div>
         {appearances.map((festival) => (
@@ -108,6 +126,9 @@ export function ArtistDetail({
             {item.field}: {item.source} · {t("checked")} {item.checkedAt}
           </a>
         ))}
+        <p className="freshnessNote">
+          Profile refreshed every {artist.freshness.profile.cadenceDays} days; music every {artist.freshness.music.cadenceDays} days; setlists every {artist.freshness.setlists.cadenceDays} days.
+        </p>
       </details>
     </div>
   );

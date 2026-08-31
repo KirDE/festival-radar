@@ -1,0 +1,32 @@
+name: Dispatch notifications
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: production-notification-dispatch
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch due deliveries
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+        run: |
+          test -n "$APP_URL" && test -n "$INTERNAL_API_SECRET"
+          response="$(curl --fail-with-body --silent --show-error --max-time 240 \
+            -H "authorization: Bearer $INTERNAL_API_SECRET" \
+            -H "content-type: application/json" \
+            --data '{"limit":500}' \
+            "${APP_URL%/}/api/notifications/dispatch/")"
+          node -e 'const result=JSON.parse(process.argv[1]); const statuses=result.results.reduce((counts,item)=>({...counts,[item.status]:(counts[item.status]||0)+1}),{}); console.log(JSON.stringify({processed:result.processed,statuses}))' "$response"
