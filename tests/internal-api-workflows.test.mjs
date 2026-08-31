@@ -23,7 +23,9 @@ test("ingestion keeps database access inside production and uses the canonical i
   assert.doesNotMatch(workflow, /DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}/);
   assert.match(workflow, /"\$\{APP_URL%\/\}\/api\/ingestion\/run\/"/);
   assert.match(workflow, /mkdir -p outputs/);
+  assert.match(workflow, /--argjson force "\$FORCE"/);
   assert.match(workflow, /jq -e '\.runId and \(\.summary\.attempted > 0\)[\s\S]*\.readBack\.attempts == \.summary\.attempted/);
+  assert.match(workflow, /\.summary\.totalSources == 50[\s\S]*\.readBack\.diffs > 0[\s\S]*\.readBack\.hasPersistedFailure[\s\S]*\.readBack\.lastSuccessfulCheck/);
 });
 
 test("deployment requires and installs the internal API secret", async () => {
@@ -49,6 +51,8 @@ test("production ingestion route fails closed and invokes the persistent runner"
   assert.match(route, /Durable ingestion is unavailable\./);
   assert.match(route, /scripts\/ingest-festivals\.mjs/);
   assert.match(route, /--max-fetch-errors=10/);
+  assert.match(route, /if \(parsed\.data\.force\) args\.push\("--force"\)/);
+  assert.match(route, /cause\.code === 2/);
   assert.match(route, /persisted\.attempts\.length !== summary\.attempted/);
   assert.match(route, /lastSuccessfulCheck/);
 });
