@@ -20,7 +20,7 @@ function operationalChanges(changes: FestivalChange[], current: Festival, candid
     changes.push({ kind: "ticket_status_changed", field: "ticketStatus", before: current.ticketStatus, after: candidate.ticketStatus, reviewRequired: false });
   }
   if (candidate.timetable?.length && !current.timetable?.length) {
-    changes.push({ kind: "timetable_published", field: "timetable", after: `${candidate.timetable.length}`, reviewRequired: false });
+    changes.push({ kind: "timetable_published", field: "timetable", after: `${candidate.timetable.length}`, reviewRequired: true, reason: "Timetables require provenance-aware reviewed import" });
   }
 }
 

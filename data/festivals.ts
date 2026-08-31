@@ -1,3 +1,16 @@
+import timetableData from "./timetables.json" with { type: "json" };
+
+export type TimetableEntry = {
+  date: string;
+  stage: string;
+  start: string;
+  artist: string;
+  timeZone: string;
+  status: "scheduled" | "cancelled";
+  sourceUrl: string;
+  observedAt: string;
+};
+
 export type Festival = {
   slug: string;
   name: string;
@@ -18,7 +31,7 @@ export type Festival = {
   updatedAt: string;
   genres: string[];
   coordinates?: { latitude: number; longitude: number };
-  timetable?: { date: string; stage: string; start: string; artist: string }[];
+  timetable?: TimetableEntry[];
 };
 
 export type PlaylistStatus = {
@@ -50,6 +63,7 @@ const festival = (
   dateLabel: "Dates TBA",
   updatedAt: "2026-08-29T10:59:59.000Z",
   genres: ["rock", "metal"],
+  timetable: (timetableData.festivals as Record<string, TimetableEntry[]>)[slug],
   ...options,
 });
 

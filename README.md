@@ -97,6 +97,11 @@ date changes are recorded as `review_required` and never auto-published. Dry
 runs record evidence without changing the overlay. Roll back by reverting the
 generated PR (or its overlay/history entries) in a new PR.
 
+Stage schedules use a separate provenance-aware reviewed import because official
+running orders are often published later and change rapidly. See
+[`docs/timetables.md`](docs/timetables.md) for validation, conflict handling,
+cancellations, timezone rules and the atomic import procedure.
+
 ## Main scripts
 
 - `scripts/export-playlist-catalog.mjs` exports all normalized festivals for the single current edition.
