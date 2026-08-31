@@ -37,7 +37,7 @@ class Client {
 test.before(async () => {
   await db.$executeRawUnsafe('TRUNCATE TABLE "AdminChange", "AdminDraft", "AdminParserRun", "AdminResourceState", "AdminAuditEntry", "Session", "User" CASCADE');
   sourceServer.listen(3250, "127.0.0.1"); await once(sourceServer, "listening");
-  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(port)], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "admin-integration-secret-at-least-32", ADMIN_TEST_SOURCE_URL: "http://127.0.0.1:3250/source" }, stdio: "ignore" });
+  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(port)], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "admin-integration-secret-at-least-32", SUBMISSION_HASH_SALT: "integration-submission-salt", ADMIN_EMAILS: "admin@example.test", ADMIN_TEST_SOURCE_URL: "http://127.0.0.1:3250/source" }, stdio: "ignore" });
   for (let attempt = 0; attempt < 120; attempt += 1) { try { if ((await fetch(origin)).status < 500) return; } catch {} await new Promise((resolve) => setTimeout(resolve, 250)); }
   throw new Error("Integration server did not start");
 });
@@ -51,12 +51,17 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   assert.equal((await anonymous.json("/api/admin/drafts/missing", "PATCH", { values: { city: "x" } })).status, 403);
   assert.equal((await anonymous.json("/api/admin/drafts/missing", "DELETE")).status, 403);
   assert.equal((await anonymous.json("/api/admin/refresh/wacken-open-air", "POST")).status, 403);
+  assert.equal((await anonymous.json("/api/submissions", "POST", { name: "  New   Metal Fest ", year: 2028, officialUrl: "https://WWW.Example.test/festival#tickets", notes: "Official source", website: "" })).status, 201);
+  const persistedSubmission = await db.festivalSubmission.findFirstOrThrow({ include: { audit: true } });
+  assert.equal(persistedSubmission.name, "New Metal Fest"); assert.equal(persistedSubmission.officialUrl, "https://www.example.test/festival"); assert.equal(persistedSubmission.notes, "Official source"); assert.ok(persistedSubmission.publicReference.length >= 20); assert.equal(persistedSubmission.audit[0].action, "SUBMITTED");
+  const duplicate = await anonymous.json("/api/submissions", "POST", { name: "new metal fest", year: 2028, officialUrl: "https://example.test/other", notes: "duplicate", website: "" });
+  assert.equal(duplicate.status, 200); assert.equal((await duplicate.json()).reference, persistedSubmission.publicReference); assert.equal(await db.festivalSubmission.count(), 1);
+  assert.equal((await anonymous.json("/api/submissions", "POST", { name: "Bot", year: 2028, officialUrl: "https://bot.test", website: "filled" })).status, 400);
   const nonAdmin = new Client();
   assert.equal((await nonAdmin.json("/api/auth/register", "POST", { email: "viewer@example.test", password: "correct horse battery staple" })).status, 201);
   assert.equal((await nonAdmin.json("/api/admin")).status, 403);
   const admin = new Client();
   assert.equal((await admin.json("/api/auth/register", "POST", { email: "admin@example.test", password: "correct horse battery staple" })).status, 201);
-  await db.user.update({ where: { email: "admin@example.test" }, data: { role: "ADMIN" } });
   const draftResponse = await admin.json("/api/admin", "POST", { resourceKind: "festival", resourceKey: "wacken-open-air", baseRevision: 0, values: { city: "Wacken Preview", status: "confirmed" } });
   assert.equal(draftResponse.status, 201);
   const draft = await draftResponse.json();
@@ -99,4 +104,9 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   await assert.rejects(db.adminAuditEntry.update({ where: { id: approvedAudit.id }, data: { action: "TAMPERED" } }), /append-only/);
   await assert.rejects(db.adminAuditEntry.delete({ where: { id: approvedAudit.id } }), /append-only/);
   assert.equal((await admin.json("/api/admin")).status, 200);
+  const reviewed = await admin.json(`/api/admin/submissions/${persistedSubmission.publicReference}`, "POST", { decision: "approve", reviewNote: "Official source verified" });
+  assert.equal(reviewed.status, 200); assert.equal((await reviewed.json()).status, "APPROVED");
+  const submissionAudit = await db.festivalSubmissionAudit.findMany({ where: { submissionId: persistedSubmission.id }, orderBy: { createdAt: "asc" } });
+  assert.deepEqual(submissionAudit.map((entry) => entry.action), ["SUBMITTED", "APPROVED"]);
+  await assert.rejects(db.festivalSubmissionAudit.update({ where: { id: submissionAudit[1].id }, data: { action: "TAMPERED" } }), /append-only/);
 });

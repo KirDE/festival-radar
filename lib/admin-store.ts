@@ -8,14 +8,27 @@ const json = (value: unknown) => value as Prisma.InputJsonValue;
 const kind = (value: string) => AdminResourceKind[value.toUpperCase() as keyof typeof AdminResourceKind];
 
 export async function adminSnapshot() {
-  const [drafts, resources, changes, runs, audit] = await Promise.all([
+  const [drafts, resources, changes, runs, audit, submissions] = await Promise.all([
     db.adminDraft.findMany({ orderBy: { updatedAt: "desc" }, take: 100 }),
     db.adminResourceState.findMany({ orderBy: { updatedAt: "desc" }, take: 100 }),
     db.adminChange.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
     db.adminParserRun.findMany({ orderBy: { startedAt: "desc" }, take: 100 }),
     db.adminAuditEntry.findMany({ orderBy: { createdAt: "desc" }, take: 200 }),
+    db.festivalSubmission.findMany({ include: { audit: { orderBy: { createdAt: "asc" } } }, orderBy: { submittedAt: "desc" }, take: 100 }),
   ]);
-  return { drafts, resources, changes, runs, audit };
+  return { drafts, resources, changes, runs, audit, submissions };
+}
+
+export async function decideSubmission(reference: string, decision: "approve" | "reject", reviewNote: string, actor: { id: string; email: string }) {
+  return db.$transaction(async (tx) => {
+    const submission = await tx.festivalSubmission.findUnique({ where: { publicReference: reference } });
+    if (!submission || submission.status !== "PENDING") throw new Error("Submission is not pending");
+    const status = decision === "approve" ? "APPROVED" : "REJECTED";
+    const changed = await tx.festivalSubmission.updateMany({ where: { id: submission.id, status: "PENDING" }, data: { status, reviewedAt: new Date(), reviewedById: actor.id, reviewNote: reviewNote || null } });
+    if (changed.count !== 1) throw new Error("Submission was reviewed concurrently");
+    await tx.festivalSubmissionAudit.create({ data: { submissionId: submission.id, actorId: actor.id, action: status, detail: { actor: actor.email, reviewNote: reviewNote || null } } });
+    return tx.festivalSubmission.findUniqueOrThrow({ where: { id: submission.id }, include: { audit: { orderBy: { createdAt: "asc" } } } });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function saveDraft(input: { resourceKind: string; resourceKey: string; baseRevision: number; values: unknown }, actor: { id: string; email: string }) {

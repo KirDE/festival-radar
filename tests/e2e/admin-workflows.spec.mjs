@@ -12,11 +12,25 @@ test.afterAll(async () => db.$disconnect());
 
 test("admin edits, reviews, diagnostics and audit survive reload", async ({ page }) => {
   await expect((await page.request.get("/api/admin")).status()).toBe(403);
+  await page.goto("/submit");
+  await page.getByLabel("Festival name").fill("Browser Metal Festival");
+  await page.getByLabel("Official source URL").fill("https://browser-festival.example.test/official");
+  await page.getByLabel("Edition year").fill("2029");
+  await page.getByLabel("Notes").fill("Browser-created durable submission");
+  await page.getByRole("button", { name: "Send for editorial review" }).click();
+  await expect(page.getByRole("status")).toContainText("Received for review");
   expect((await page.request.post("/api/auth/register", { data: { email: "browser-admin@example.test", password: "correct horse battery staple" } })).status()).toBe(201);
-  await db.user.update({ where: { email: "browser-admin@example.test" }, data: { role: "ADMIN" } });
 
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Detected changes" })).toBeVisible();
+  await page.getByRole("button", { name: /Festival submissions/ }).click();
+  const submission = page.locator("article.reviewCard").filter({ hasText: "Browser Metal Festival" });
+  await expect(submission).toContainText("Browser-created durable submission");
+  await submission.getByRole("button", { name: "Approve submission" }).click();
+  await expect(submission).toContainText("approved");
+  await page.reload();
+  await page.getByRole("button", { name: /Festival submissions/ }).click();
+  await expect(page.locator("article.reviewCard").filter({ hasText: "Browser Metal Festival" })).toContainText("APPROVED");
   await page.getByRole("button", { name: "Festivals & artists" }).click();
   await page.getByLabel("City").fill("Wacken E2E City");
   await page.getByRole("button", { name: "Save festival draft" }).click();
