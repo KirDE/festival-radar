@@ -23,6 +23,7 @@
     "test:admin:e2e": "playwright test",
     "playlists:status": "node scripts/build-playlist-status.mjs",
     "playlists:catalog": "node scripts/export-playlist-catalog.mjs",
+    "playlists:youtube": "python3 scripts/refresh-youtube-music-playlists.py",
     "test": "python3 -m unittest discover -s tests",
     "test:admin-auth": "node --import tsx --test tests/admin-auth.test.ts",
     "admin:assign-role": "node scripts/assign-admin-role.mjs"

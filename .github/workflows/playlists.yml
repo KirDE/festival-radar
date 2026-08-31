@@ -28,13 +28,37 @@ jobs:
       - name: Export normalized current-season catalog
         run: node scripts/export-playlist-catalog.mjs
       - name: Refresh Spotify playlists and reports
+        id: spotify
+        continue-on-error: true
         env:
           SETLIST_API_KEY: ${{ secrets.SETLIST_API_KEY }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
           SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
         run: python3 scripts/spotify_gmm_2026/festival_playlists.py
+      - name: Refresh YouTube Music playlists and reports
+        id: youtube
+        if: always()
+        continue-on-error: true
+        env:
+          YOUTUBE_MUSIC_CREDENTIALS_JSON: ${{ secrets.YOUTUBE_MUSIC_CREDENTIALS_JSON }}
+          YOUTUBE_MUSIC_OAUTH_JSON: ${{ secrets.YOUTUBE_MUSIC_OAUTH_JSON }}
+          YOUTUBE_MUSIC_PLAYLIST_IDS: ${{ secrets.YOUTUBE_MUSIC_PLAYLIST_IDS }}
+        run: |
+          install -m 600 /dev/null "$RUNNER_TEMP/youtube-music.json"
+          install -m 600 /dev/null "$RUNNER_TEMP/youtube-music-oauth.json"
+          printf '%s' "$YOUTUBE_MUSIC_CREDENTIALS_JSON" > "$RUNNER_TEMP/youtube-music.json"
+          printf '%s' "$YOUTUBE_MUSIC_OAUTH_JSON" > "$RUNNER_TEMP/youtube-music-oauth.json"
+          python3 scripts/refresh-youtube-music-playlists.py --publish --credentials "$RUNNER_TEMP/youtube-music.json" --oauth "$RUNNER_TEMP/youtube-music-oauth.json"
+        shell: bash
       - run: node scripts/build-playlist-status.mjs
+        if: always()
+      - name: Enforce provider results after isolated attempts
+        if: always()
+        env:
+          SPOTIFY_OUTCOME: ${{ steps.spotify.outcome }}
+          YOUTUBE_OUTCOME: ${{ steps.youtube.outcome }}
+        run: test "$SPOTIFY_OUTCOME" = success && test "$YOUTUBE_OUTCOME" = success
       - name: Propose status update
         uses: peter-evans/create-pull-request@v7
         with:

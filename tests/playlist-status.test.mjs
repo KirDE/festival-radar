@@ -15,15 +15,26 @@ test("builds public status for any normalized festival report", async () => {
     generated_at: "2026-08-28T20:00:00Z",
   }));
   await writeFile(path.join(dir, "unknown.json"), JSON.stringify({ playlist_url: "https://example.test" }));
+  const youtubeDir = path.join(dir, "youtube");
+  await import("node:fs/promises").then(({ mkdir }) => mkdir(youtubeDir));
+  await writeFile(path.join(youtubeDir, "wacken-open-air.json"), JSON.stringify({
+    slug: "wacken-open-air",
+    playlist_url: "https://music.youtube.com/playlist?list=PLverified_123",
+    artists_count: 79,
+    track_count: 220,
+    updated_at: "2026-08-29T20:00:00Z",
+  }));
+  await writeFile(path.join(youtubeDir, "invalid.json"), JSON.stringify({ playlist_url: "https://evil.test/playlist?list=PLbad" }));
   const output = path.join(dir, "status.json");
-  const result = spawnSync(process.execPath, ["scripts/build-playlist-status.mjs", dir, output], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, ["scripts/build-playlist-status.mjs", dir, output, youtubeDir], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(await readFile(output, "utf8")), {
     "wacken-open-air": {
       spotifyUrl: "https://open.spotify.com/playlist/example",
-      artists: 80,
-      tracks: 240,
-      updatedAt: "2026-08-28T20:00:00Z",
+      youtubeMusicUrl: "https://music.youtube.com/playlist?list=PLverified_123",
+      artists: 79,
+      tracks: 220,
+      updatedAt: "2026-08-29T20:00:00Z",
     },
   });
 });

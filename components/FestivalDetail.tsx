@@ -108,6 +108,12 @@ export function FestivalDetail({ item }: { item: Festival }) {
             <strong>{t("playlistSoon")}</strong>
           </div>
         )}
+        {playlist?.youtubeMusicUrl ? (
+          <a href={playlist.youtubeMusicUrl} target="_blank" rel="noreferrer">
+            <small>{t("listen")} · {playlist.artists} {t("artists")} · {playlist.tracks} {t("tracks")}</small>
+            <strong>{t("youtubeMusicPlaylist")}</strong>
+          </a>
+        ) : null}
         <a href={setlistUrl} target="_blank" rel="noreferrer">
           <small>{t("liveHistory")}</small>
           <strong>setlist.fm ↗</strong>
