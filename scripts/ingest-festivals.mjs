@@ -19,12 +19,14 @@ const publicationsPath = path.resolve(process.argv.find((value) => value.startsW
 const historyPath = path.resolve(process.argv.find((value) => value.startsWith("--history="))?.slice(10) || "data/ingestion-history.jsonl");
 const fixturePath = process.argv.find((value) => value.startsWith("--fixture="))?.slice(10);
 const publish = args.has("--publish");
+const force = args.has("--force");
 const maxFetchErrorsArg = process.argv.find((value) => value.startsWith("--max-fetch-errors="))?.slice(19) ?? process.env.INGESTION_MAX_FETCH_ERRORS;
 const persistenceEnabled = Boolean(process.env.DATABASE_URL);
-const persistedStates = args.has("--due") && persistenceEnabled ? await ingestionQueries.sourceStates(db) : [];
+const dueOnly = args.has("--due") && !force;
+const persistedStates = dueOnly && persistenceEnabled ? await ingestionQueries.sourceStates(db) : [];
 const lastSuccessfulChecks = new Map(persistedStates.map((state) => [state.festivalSlug, state.lastSuccessfulCheck?.toISOString()]));
 const hydratedSources = festivalSources.map((source) => ({ ...source, lastSuccessfulCheck: lastSuccessfulChecks.get(source.festivalSlug) ?? source.lastSuccessfulCheck }));
-const eligible = args.has("--due") ? dueFestivalSources(hydratedSources) : hydratedSources.filter((source) => source.enabled);
+const eligible = dueOnly ? dueFestivalSources(hydratedSources) : hydratedSources.filter((source) => source.enabled);
 const selected = eligible.filter((source) => !slugArg || source.festivalSlug === slugArg);
 const notificationEndpoint = process.env.NOTIFICATION_EVENTS_URL || (process.env.APP_URL ? new URL("/api/notifications/events/", process.env.APP_URL).toString() : undefined);
 const notificationDeliveryEnabled = Boolean(notificationEndpoint || process.env.INTERNAL_API_SECRET || process.env.NOTIFICATION_DELIVERY_REQUIRED === "true");
