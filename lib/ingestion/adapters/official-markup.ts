@@ -27,12 +27,13 @@ function leyendas(html: string): AdapterResult | undefined {
 const adapters: Record<string, (html: string) => AdapterResult | undefined> = { "pinkpop": pinkpop, "tuska": tuska, "leyendas-del-rock": leyendas };
 
 export function extractOfficialMarkupCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
-  const candidate: FestivalCandidate = { schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [] };
+  const candidate: FestivalCandidate = { schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] };
   const result = adapters[source.festivalSlug]?.(html);
   if (!result) {
     candidate.warnings.push(`Official markup adapter found no trustworthy fields for ${source.festivalSlug}`);
     return candidate;
   }
+  if (result.startDate) candidate.observedEditionYears.push(Number(result.startDate.slice(0, 4)));
   for (const field of ["startDate", "endDate", "city"] as const) {
     const value = result[field];
     if (!value) continue;

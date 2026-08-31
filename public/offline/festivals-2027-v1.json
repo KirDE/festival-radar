@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "dataVersion": "festivals-2027-v1",
+  "editionYear": 2027,
+  "generatedAt": "2026-08-30T01:20:00Z",
+  "timetableStatus": "not-published",
+  "festivals": [
+    {"slug":"rock-am-ring","name":"Rock am Ring","startDate":"2027-06-04","endDate":"2027-06-06","timetable":[]},
+    {"slug":"wacken-open-air","name":"Wacken Open Air","startDate":"2027-07-28","endDate":"2027-07-31","timetable":[]}
+  ]
+}
