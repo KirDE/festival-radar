@@ -1,26 +1,68 @@
 {
-  "graspop": {
-    "spotifyUrl": "https://open.spotify.com/playlist/3jyENqyk94CZYS71X2S7GY",
-    "artists": 133,
-    "tracks": 665,
-    "updatedAt": "2026-08-29T13:20:18.804Z"
+  "bloodstock": {
+    "spotifyUrl": "https://open.spotify.com/playlist/7mzlW3STDcOrZdK6Ev6jcM",
+    "artists": 27,
+    "tracks": 130,
+    "updatedAt": "2026-08-31T12:43:13.122Z"
+  },
+  "idays": {
+    "spotifyUrl": "https://open.spotify.com/playlist/4TYjKTSgckmFh7OQDblJIb",
+    "artists": 1,
+    "tracks": 5,
+    "updatedAt": "2026-08-31T12:43:13.123Z"
+  },
+  "leyendas-del-rock": {
+    "spotifyUrl": "https://open.spotify.com/playlist/6EmRg5npsj2Cr7bO51PUjA",
+    "artists": 3,
+    "tracks": 15,
+    "updatedAt": "2026-08-31T12:43:13.123Z"
+  },
+  "nova-rock": {
+    "spotifyUrl": "https://open.spotify.com/playlist/6dhOjvREuA8dLziIvHH3Dp",
+    "artists": 3,
+    "tracks": 12,
+    "updatedAt": "2026-08-31T12:43:13.123Z"
+  },
+  "rock-am-ring": {
+    "spotifyUrl": "https://open.spotify.com/playlist/14s4Qt8iz87Val7Bf7l6vh",
+    "artists": 1,
+    "tracks": 5,
+    "updatedAt": "2026-08-31T12:43:13.123Z"
+  },
+  "rock-for-people": {
+    "spotifyUrl": "https://open.spotify.com/playlist/10g9IxULFH3WwrICF150Ey",
+    "artists": 1,
+    "tracks": 5,
+    "updatedAt": "2026-08-31T12:43:13.123Z"
   },
   "rock-im-park": {
     "spotifyUrl": "https://open.spotify.com/playlist/5FlpRlZJqzOndB3E2s2eB8",
-    "artists": 73,
-    "tracks": 365,
-    "updatedAt": "2026-08-29T13:20:18.806Z"
+    "artists": 1,
+    "tracks": 5,
+    "updatedAt": "2026-08-31T12:43:13.124Z"
+  },
+  "rock-imperium": {
+    "spotifyUrl": "https://open.spotify.com/playlist/0pga5hp1278dN4Ag6i23WH",
+    "artists": 3,
+    "tracks": 15,
+    "updatedAt": "2026-08-31T12:43:13.124Z"
   },
   "summer-breeze": {
     "spotifyUrl": "https://open.spotify.com/playlist/6rWAXV1sR2E6ZDbHcWBVfD",
-    "artists": 63,
-    "tracks": 289,
-    "updatedAt": "2026-08-29T13:20:18.808Z"
+    "artists": 62,
+    "tracks": 304,
+    "updatedAt": "2026-08-31T12:43:13.125Z"
+  },
+  "tuska": {
+    "spotifyUrl": "https://open.spotify.com/playlist/2KUwAqVMYKkYGNEfeYfdwy",
+    "artists": 8,
+    "tracks": 38,
+    "updatedAt": "2026-08-31T12:43:13.125Z"
   },
   "wacken-open-air": {
     "spotifyUrl": "https://open.spotify.com/playlist/5TWytVVqnSFQw6eVdhBIK6",
-    "artists": 50,
-    "tracks": 228,
-    "updatedAt": "2026-08-29T13:20:18.809Z"
+    "artists": 47,
+    "tracks": 218,
+    "updatedAt": "2026-08-31T12:43:13.126Z"
   }
 }
