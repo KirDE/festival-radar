@@ -1,4 +1,11 @@
 import Link from "next/link";
-import { archiveYears, plannedEditionYears } from "@/data/festivals";
-export const metadata = { title: "Festival archives and future editions", description: "Browse past Festival Radar seasons and follow future European festival editions.", alternates: { canonical: "/archive/" } };
-export default function ArchivePage() { return <div className="directoryPage"><p className="eyebrow">FESTIVAL ARCHIVE</p><h1>Seasons past and future</h1><p>Published seasons remain available as a permanent research record. Future editions appear only after dates are confirmed by an official source.</p><section><h2>Archived seasons</h2>{archiveYears.map((year) => <article className="directoryRow" key={year}><strong>{year}</strong><span>Dataset snapshot retained for provenance; detailed records are being normalized.</span></article>)}</section><section><h2>Upcoming editions</h2>{plannedEditionYears.map((year) => <article className="directoryRow" key={year}><strong>{year}</strong><span>Tracking started — no unverified dates are published.</span></article>)}</section><Link className="textLink" href="/submit/">Submit an official festival source →</Link></div>; }
+import { archivedEditions, trackedFutureEditions } from "@/data/editions";
+
+export const metadata = { title: "Festival archives and future editions", description: "Browse provenance-aware Festival Radar editions.", alternates: { canonical: "/archive/" } };
+
+function EditionRow({ item }: { item: (typeof archivedEditions)[number] | (typeof trackedFutureEditions)[number] }) {
+  const artists = item.headliners.length + item.lineup.length;
+  return <article className="directoryRow"><div><strong>{item.name} {item.editionYear}</strong><span>{item.startDate ? `${item.startDate} — ${item.endDate ?? item.startDate}` : "Dates TBA"} · {artists ? `${artists} archived artists (partial snapshot)` : "Lineup TBA"}</span></div><Link className="textLink" href={`/festivals/${item.slug}/${item.editionYear}/`}>Open edition →</Link></article>;
+}
+
+export default function ArchivePage() { return <div className="directoryPage"><p className="eyebrow">FESTIVAL EDITIONS</p><h1>Archived and future records</h1><p>Every row is an edition record with explicit source evidence. Archived snapshots are immutable; tracking records remain visibly TBA until an official announcement exists.</p><section><h2>Archived editions</h2>{archivedEditions.map((item) => <EditionRow item={item} key={`${item.slug}-${item.editionYear}`} />)}</section><section><h2>Future tracking</h2>{trackedFutureEditions.map((item) => <EditionRow item={item} key={`${item.slug}-${item.editionYear}`} />)}</section><Link className="textLink" href="/editions/2027/">Browse the current 2027 season →</Link></div>; }

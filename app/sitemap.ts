@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { allArtists, artistSlug, festivalMonth, festivals, supportedLanguages } from "@/data/festivals";
+import { editionYears, festivalEditions } from "@/data/editions";
 import { CATALOG_UPDATED_AT, SITE_ORIGIN } from "@/lib/seo";
 
 export const dynamic = "force-static";
@@ -14,6 +15,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...countries.map((code) => ({ url: `${SITE_ORIGIN}/countries/${code}/`, lastModified: CATALOG_UPDATED_AT, changeFrequency: "weekly" as const, priority: .7 })),
     ...months.map((month) => ({ url: `${SITE_ORIGIN}/months/${month}/`, lastModified: CATALOG_UPDATED_AT, changeFrequency: "weekly" as const, priority: .7 })),
     ...supportedLanguages.map((lang) => ({ url: `${SITE_ORIGIN}/${lang}/`, lastModified: CATALOG_UPDATED_AT, changeFrequency: "weekly" as const, priority: .8 })),
+    ...editionYears.map((year) => ({ url: `${SITE_ORIGIN}/editions/${year}/`, lastModified: CATALOG_UPDATED_AT, changeFrequency: "monthly" as const, priority: .6 })),
+    ...festivalEditions.map(({ slug, editionYear, snapshotAt }) => ({ url: `${SITE_ORIGIN}/festivals/${slug}/${editionYear}/`, lastModified: snapshotAt ?? CATALOG_UPDATED_AT, changeFrequency: editionYear < 2027 ? "yearly" as const : "weekly" as const, priority: .6 })),
     { url: `${SITE_ORIGIN}/archive/`, lastModified: CATALOG_UPDATED_AT, changeFrequency: "monthly", priority: .5 },
     { url: `${SITE_ORIGIN}/submit/`, lastModified: CATALOG_UPDATED_AT, changeFrequency: "monthly", priority: .4 },
   ];
