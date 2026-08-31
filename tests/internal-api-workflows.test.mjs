@@ -20,9 +20,9 @@ test("notification scheduler posts to the canonical non-redirecting endpoint", a
 
 test("ingestion keeps database access inside production and uses the canonical internal endpoint", async () => {
   const workflow = await readFile(".github/workflows/ingestion.yml", "utf8");
-  const script = await readFile("scripts/ingest-festivals.mjs", "utf8");
   assert.doesNotMatch(workflow, /DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}/);
-  assert.match(script, /new URL\("\/api\/notifications\/events\/", process\.env\.APP_URL\)/);
+  assert.match(workflow, /"\$\{APP_URL%\/\}\/api\/ingestion\/run\/"/);
+  assert.match(workflow, /jq -e '\.runId and \(\.summary\.attempted > 0\)[\s\S]*\.readBack\.attempts == \.summary\.attempted/);
 });
 
 test("deployment requires and installs the internal API secret", async () => {
@@ -40,3 +40,20 @@ for (const routeName of ["events", "dispatch"]) {
     assert.match(route, /return error\("Unauthorized\.", 401\)/);
   });
 }
+
+test("production ingestion route fails closed and invokes the persistent runner", async () => {
+  const route = await readFile("app/api/ingestion/run/route.ts", "utf8");
+  assert.match(route, /!process\.env\.INTERNAL_API_SECRET/);
+  assert.match(route, /!process\.env\.DATABASE_URL/);
+  assert.match(route, /Durable ingestion is unavailable\./);
+  assert.match(route, /scripts\/ingest-festivals\.mjs/);
+  assert.match(route, /--max-fetch-errors=10/);
+  assert.match(route, /persisted\.attempts\.length !== summary\.attempted/);
+  assert.match(route, /lastSuccessfulCheck/);
+});
+
+test("standalone release contains the production-local ingestion runner", async () => {
+  const packager = await readFile("scripts/deploy/package-release.sh", "utf8");
+  assert.match(packager, /cp -a data lib/);
+  assert.match(packager, /scripts\/ingest-festivals\.mjs/);
+});

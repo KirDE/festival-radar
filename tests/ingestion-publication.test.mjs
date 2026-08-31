@@ -79,7 +79,7 @@ test("source failures above the explicit policy threshold remain fatal", async (
 
 test("workflow keeps auditable publication and artifact handling after accepted partial runs", async () => {
   const workflow = await readFile(".github/workflows/ingestion.yml", "utf8");
-  assert.match(workflow, /INGESTION_MAX_FETCH_ERRORS: "10"/);
-  assert.match(workflow, /name: Open auditable publication pull request/);
+  assert.match(workflow, /api\/ingestion\/run\//);
+  assert.match(workflow, /summary\.status == "COMPLETED" or \.summary\.status == "PARTIAL"/);
   assert.match(workflow, /name: Retain review and diagnostic artifacts[\s\S]*if: always\(\)/);
 });
