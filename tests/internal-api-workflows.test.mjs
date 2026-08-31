@@ -28,6 +28,13 @@ test("ingestion keeps database access inside production and uses the canonical i
   assert.match(workflow, /\.summary\.totalSources == 50[\s\S]*\.readBack\.diffs > 0[\s\S]*\.readBack\.hasPersistedFailure[\s\S]*\.readBack\.lastSuccessfulCheck/);
 });
 
+test("forced ingestion bypasses adaptive due filtering for full acceptance runs", async () => {
+  const runner = await readFile("scripts/ingest-festivals.mjs", "utf8");
+  assert.match(runner, /const force = args\.has\("--force"\)/);
+  assert.match(runner, /const dueOnly = args\.has\("--due"\) && !force/);
+  assert.match(runner, /const eligible = dueOnly \? dueFestivalSources/);
+});
+
 test("deployment requires and installs the internal API secret", async () => {
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
   assert.match(workflow, /INTERNAL_API_SECRET: \$\{\{ secrets\.INTERNAL_API_SECRET \}\}/);
