@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { archivedEditions, trackedFutureEditions } from "@/data/editions";
 
-export const metadata = { title: "Festival archives and future editions", description: "Browse provenance-aware Festival Radar editions." };
+export const metadata = { title: "Festival archives and future editions", description: "Browse provenance-aware Festival Radar editions.", alternates: { canonical: "/archive/" } };
 
 function EditionRow({ item }: { item: (typeof archivedEditions)[number] | (typeof trackedFutureEditions)[number] }) {
   const artists = item.headliners.length + item.lineup.length;
