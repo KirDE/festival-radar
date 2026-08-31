@@ -1,5 +1,6 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
+import { validateGenericLineup } from "../lineup-quality.ts";
 
 type JsonLd = Record<string, unknown>;
 
@@ -73,9 +74,31 @@ function ticketUrl(offers: unknown): string | undefined {
   return undefined;
 }
 
+function ticketStatus(offers: unknown): FestivalCandidate["ticketStatus"] {
+  const values = Array.isArray(offers) ? offers : [offers];
+  const availability = values.flatMap((offer) => offer && typeof offer === "object" ? [text((offer as JsonLd).availability)?.toLowerCase()] : []).filter(Boolean);
+  if (availability.some((value) => value?.includes("soldout") || value?.includes("outofstock"))) return "unavailable";
+  if (availability.some((value) => value?.includes("limitedavailability") || value?.includes("limited"))) return "low";
+  if (availability.some((value) => value?.includes("instock") || value?.includes("preorder") || value?.includes("presale"))) return "available";
+  return undefined;
+}
+
+function timetable(value: unknown): FestivalCandidate["timetable"] {
+  const result = records(value).flatMap((entry) => {
+    const artist = text(entry.performer) || text(entry.name);
+    const startDate = text(entry.startDate);
+    if (!artist || !startDate) return [];
+    const parsed = new Date(startDate);
+    if (Number.isNaN(parsed.valueOf())) return [];
+    return [{ date: parsed.toISOString().slice(0, 10), start: parsed.toISOString().slice(11, 16), stage: text(entry.location) || "TBA", artist }];
+  });
+  return result.length ? result : undefined;
+}
+
 export function extractJsonLdCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const matches = eventRecords(html);
-  const selected = matches[0];
+  const matching = matches.filter(({ event }) => date(event.startDate)?.startsWith(`${source.editionYear}-`));
+  const selected = matching[0] ?? matches[0];
   const candidate: FestivalCandidate = {
     schemaVersion: INGESTION_SCHEMA_VERSION,
     festivalSlug: source.festivalSlug,
@@ -83,6 +106,7 @@ export function extractJsonLdCandidate(html: string, source: FestivalSource, fet
     fetchedAt,
     evidence: [],
     warnings: [],
+    observedEditionYears: [],
   };
 
   if (!selected) {
@@ -96,7 +120,17 @@ export function extractJsonLdCandidate(html: string, source: FestivalSource, fet
     city: city(selected.event.location),
     lineup: names(selected.event.performer),
     ticketsUrl: ticketUrl(selected.event.offers),
+    ticketStatus: ticketStatus(selected.event.offers),
+    timetable: timetable(selected.event.subEvent),
   };
+  const lineupQuality = validateGenericLineup(fields.lineup ?? []);
+  fields.lineup = lineupQuality.names.length ? lineupQuality.names : fields.lineup === undefined ? undefined : [];
+  candidate.warnings.push(...lineupQuality.warnings);
+  const observedYear = Number(date(selected.event.startDate)?.slice(0, 4));
+  if (Number.isFinite(observedYear)) candidate.observedEditionYears.push(observedYear);
+  if (matches.length && matching.length === 0 && candidate.observedEditionYears.length) {
+    candidate.warnings.push(`JSON-LD event edition ${candidate.observedEditionYears[0]} does not match catalogue edition ${source.editionYear}`);
+  }
 
   for (const [field, value] of Object.entries(fields)) {
     if (value === undefined) continue;
@@ -108,7 +142,7 @@ export function extractJsonLdCandidate(html: string, source: FestivalSource, fet
   if (eventStatus?.includes("cancelled") || eventStatus?.includes("postponed")) {
     candidate.warnings.push(`Official event status requires review: ${text(selected.event.eventStatus)}`);
   }
-  if (matches.length > 1) candidate.warnings.push(`Multiple JSON-LD Events found (${matches.length}); the first event was selected`);
+  if (matching.length > 1) candidate.warnings.push(`Multiple JSON-LD Events match catalogue edition ${source.editionYear} (${matching.length}); the first matching event was selected`);
   if (candidate.evidence.length === 0) candidate.warnings.push("JSON-LD Event did not contain supported festival fields");
   return candidate;
 }

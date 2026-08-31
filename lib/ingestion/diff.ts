@@ -15,6 +15,15 @@ function listChanges(changes: FestivalChange[], field: "lineup" | "headliners", 
   for (const [key, name] of oldNames) if (!newNames.has(key)) changes.push({ kind: field === "headliners" ? "headliner_removed" : "artist_removed", field, before: name, reviewRequired: true, reason: "Removals require confirmation" });
 }
 
+function operationalChanges(changes: FestivalChange[], current: Festival, candidate: FestivalCandidate) {
+  if (candidate.ticketStatus && candidate.ticketStatus !== current.ticketStatus) {
+    changes.push({ kind: "ticket_status_changed", field: "ticketStatus", before: current.ticketStatus, after: candidate.ticketStatus, reviewRequired: false });
+  }
+  if (candidate.timetable?.length && !current.timetable?.length) {
+    changes.push({ kind: "timetable_published", field: "timetable", after: `${candidate.timetable.length}`, reviewRequired: false });
+  }
+}
+
 export function diffFestival(current: Festival, candidate: FestivalCandidate): FestivalChange[] {
   const changes: FestivalChange[] = [];
   scalarChange(changes, "startDate", current.startDate, candidate.startDate);
@@ -24,5 +33,6 @@ export function diffFestival(current: Festival, candidate: FestivalCandidate): F
   scalarChange(changes, "status", current.status, candidate.status);
   listChanges(changes, "headliners", current.headliners, candidate.headliners);
   listChanges(changes, "lineup", current.lineup, candidate.lineup);
+  operationalChanges(changes, current, candidate);
   return changes;
 }
