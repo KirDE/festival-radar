@@ -5,6 +5,10 @@ with dates, lineups, official ticket links, artist pages, playlists and setlists
 It also contains the playlist-generation engine that seeds listening links from
 recent setlist.fm songs and streaming-platform catalogue matches.
 
+See [the product status and gap inventory](docs/product-status.md) for the
+deployed function set and the production-verified gaps against the original
+concept.
+
 The static MVP for [festivals.kir-it.de](https://festivals.kir-it.de) includes 50 European festivals,
 filterable cards, festival details, artist pages and links to official ticket,
 Spotify and setlist.fm resources.
