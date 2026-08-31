@@ -63,20 +63,22 @@ CREATE TABLE "AdminChange" (
   CONSTRAINT "AdminChange_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "AdminAuditEntry" (
-  "id" TEXT NOT NULL,
-  "actorId" TEXT,
-  "actorLabel" TEXT NOT NULL,
-  "action" TEXT NOT NULL,
-  "resourceKind" "AdminResourceKind",
-  "resourceKey" TEXT,
-  "beforeValue" JSONB,
-  "afterValue" JSONB,
-  "evidence" JSONB,
-  "metadata" JSONB,
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "AdminAuditEntry_pkey" PRIMARY KEY ("id")
-);
+ALTER TABLE "AdminAuditEntry"
+  ALTER COLUMN "actorId" DROP NOT NULL,
+  ALTER COLUMN "target" DROP NOT NULL,
+  ADD COLUMN "actorLabel" TEXT,
+  ADD COLUMN "resourceKind" "AdminResourceKind",
+  ADD COLUMN "resourceKey" TEXT,
+  ADD COLUMN "beforeValue" JSONB,
+  ADD COLUMN "afterValue" JSONB,
+  ADD COLUMN "evidence" JSONB,
+  ADD COLUMN "metadata" JSONB;
+
+UPDATE "AdminAuditEntry" audit
+SET "actorLabel" = COALESCE((SELECT "email" FROM "User" WHERE "id" = audit."actorId"), 'system')
+WHERE "actorLabel" IS NULL;
+
+ALTER TABLE "AdminAuditEntry" ALTER COLUMN "actorLabel" SET NOT NULL;
 
 CREATE UNIQUE INDEX "AdminDraft_resourceKind_resourceKey_revision_key" ON "AdminDraft"("resourceKind", "resourceKey", "revision");
 CREATE INDEX "AdminDraft_resourceKind_resourceKey_status_idx" ON "AdminDraft"("resourceKind", "resourceKey", "status");
@@ -86,8 +88,10 @@ CREATE INDEX "AdminChange_resourceKind_resourceKey_status_idx" ON "AdminChange"(
 CREATE INDEX "AdminChange_parserRunId_idx" ON "AdminChange"("parserRunId");
 CREATE INDEX "AdminParserRun_festivalSlug_startedAt_idx" ON "AdminParserRun"("festivalSlug", "startedAt");
 CREATE INDEX "AdminParserRun_status_startedAt_idx" ON "AdminParserRun"("status", "startedAt");
+DROP INDEX IF EXISTS "AdminAuditEntry_createdAt_idx";
 CREATE INDEX "AdminAuditEntry_createdAt_idx" ON "AdminAuditEntry"("createdAt");
 CREATE INDEX "AdminAuditEntry_resourceKind_resourceKey_createdAt_idx" ON "AdminAuditEntry"("resourceKind", "resourceKey", "createdAt");
+DROP INDEX IF EXISTS "AdminAuditEntry_actorId_createdAt_idx";
 CREATE INDEX "AdminAuditEntry_actorId_createdAt_idx" ON "AdminAuditEntry"("actorId", "createdAt");
 
 ALTER TABLE "AdminDraft" ADD CONSTRAINT "AdminDraft_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -95,7 +99,6 @@ ALTER TABLE "AdminParserRun" ADD CONSTRAINT "AdminParserRun_requestedById_fkey" 
 ALTER TABLE "AdminChange" ADD CONSTRAINT "AdminChange_draftId_fkey" FOREIGN KEY ("draftId") REFERENCES "AdminDraft"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "AdminChange" ADD CONSTRAINT "AdminChange_parserRunId_fkey" FOREIGN KEY ("parserRunId") REFERENCES "AdminParserRun"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "AdminChange" ADD CONSTRAINT "AdminChange_decidedById_fkey" FOREIGN KEY ("decidedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "AdminAuditEntry" ADD CONSTRAINT "AdminAuditEntry_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 CREATE OR REPLACE FUNCTION reject_admin_audit_mutation() RETURNS trigger AS $$
 BEGIN

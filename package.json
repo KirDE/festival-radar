@@ -4,16 +4,27 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "prisma:generate": "prisma generate",
+    "postinstall": "npm run prisma:generate",
+    "pretypecheck": "npm run prisma:generate",
     "build": "next build",
+    "prebuild": "npm run prisma:generate",
     "typecheck": "tsc --noEmit",
     "fetch:logos": "node scripts/fetch-festival-logos.mjs",
     "check:sources": "node scripts/check-festival-sources.mjs",
     "ingest": "node scripts/ingest-festivals.mjs",
-    "test:data": "node --test tests/*.test.mjs",
+    "resolve:artists": "node scripts/resolve-artist-identities.mjs",
+    "test:data": "node --test $(find tests -maxdepth 1 -name '*.test.mjs' ! -name '*.e2e.test.mjs' -print) && node --experimental-strip-types --test tests/selection-playlist.test.ts",
+    "test:ingestion-db": "node --test tests/ingestion-repository.e2e.test.mjs",
+    "test:integration": "node --test --test-concurrency=1 tests/integration/account-routes.test.mjs tests/integration/notification-routes.test.mjs tests/integration/admin-workflows.test.mjs",
+    "test:notifications:e2e": "node tests/notification-e2e.mjs",
     "test:admin:integration": "node --test --test-concurrency=1 tests/integration/admin-workflows.test.mjs",
     "test:admin:e2e": "playwright test",
     "playlists:status": "node scripts/build-playlist-status.mjs",
-    "test": "python3 -m unittest discover -s tests"
+    "playlists:catalog": "node scripts/export-playlist-catalog.mjs",
+    "test": "python3 -m unittest discover -s tests",
+    "test:admin-auth": "node --import tsx --test tests/admin-auth.test.ts",
+    "admin:assign-role": "node scripts/assign-admin-role.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
@@ -30,6 +41,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1"
+    "@playwright/test": "^1.62.1",
+    "tsx": "^4.20.5"
   }
 }
