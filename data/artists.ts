@@ -11,6 +11,7 @@ export type ArtistProfile = {
   biography?: string;
   imageUrl?: string;
   identities: { spotify?: string; musicbrainz?: string; setlistFm?: string };
+  identityState: "linked" | "ambiguous" | "unresolved" | "retryable";
   links: { label: string; url: string; source: ArtistSource }[];
   topTracks: string[];
   recentSetlists: { date: string; venue: string; url: string }[];
@@ -59,19 +60,15 @@ const curated: Record<string, Partial<ArtistProfile>> = {
   },
 };
 
-function searchLinks(name: string): ArtistProfile["links"] {
-  const query = encodeURIComponent(name);
-  return [
-    { label: "Spotify", url: `https://open.spotify.com/search/${query}`, source: "spotify" },
-    { label: "MusicBrainz", url: `https://musicbrainz.org/search?query=${query}&type=artist`, source: "musicbrainz" },
-    { label: "setlist.fm", url: `https://www.setlist.fm/search?artistName=${query}`, source: "setlist.fm" },
-  ];
-}
-
 export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
   const slug = artistSlug(name);
   const entry = curated[slug] || {};
-  const links = [...(entry.links || []), ...searchLinks(name)];
+  const identities = entry.identities || {};
+  const providerLinks: ArtistProfile["links"] = [];
+  if (identities.spotify) providerLinks.push({ label: "Spotify", url: `https://open.spotify.com/artist/${identities.spotify}`, source: "spotify" });
+  if (identities.musicbrainz) providerLinks.push({ label: "MusicBrainz", url: `https://musicbrainz.org/artist/${identities.musicbrainz}`, source: "musicbrainz" });
+  if (identities.setlistFm) providerLinks.push({ label: "setlist.fm", url: `https://www.setlist.fm/setlists/artist-${identities.setlistFm}.html`, source: "setlist.fm" });
+  const links = [...(entry.links || []), ...providerLinks];
   const identitySources = (["spotify", "musicbrainz", "setlist.fm"] as ArtistSource[])
     .filter((source) => links.some((link) => link.source === source))
     .map((source) => ({ field: "identity", source, url: links.find((link) => link.source === source)!.url, checkedAt }));
@@ -81,7 +78,8 @@ export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
     slug,
     aliases: entry.aliases || [],
     genres: entry.genres || [],
-    identities: entry.identities || {},
+    identities,
+    identityState: Object.keys(identities).length === 3 ? "linked" : "unresolved",
     links,
     topTracks: entry.topTracks || [],
     recentSetlists: entry.recentSetlists || [],

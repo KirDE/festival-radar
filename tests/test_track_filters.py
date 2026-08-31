@@ -23,6 +23,47 @@ def make_track(name='Song', artists=None, duration_ms=180_000):
 
 
 class TrackFilterTest(unittest.TestCase):
+    def write_catalog(self, directory, festivals, season=2027):
+        path = Path(directory) / 'catalog.json'
+        path.write_text(json.dumps({'season': season, 'festivals': festivals}), encoding='utf-8')
+        return path
+
+    def test_canonical_catalog_covers_every_festival_and_skips_empty_lineups(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self.write_catalog(tmpdir, [
+                {'slug': 'ready', 'name': 'Ready', 'editionYear': 2027, 'headliners': ['A'], 'artists': ['A', 'B']},
+                {'slug': 'empty', 'name': 'Empty', 'editionYear': 2027, 'headliners': [], 'artists': []},
+            ])
+            season, eligible, skipped = playlists.load_canonical_festivals(path)
+        self.assertEqual(season, 2027)
+        self.assertEqual([festival.key for festival in eligible], ['ready'])
+        self.assertEqual(skipped, [{'slug': 'empty', 'edition_year': 2027, 'reason': 'empty_lineup'}])
+
+    def test_canonical_catalog_deduplicates_artists_and_rejects_tributes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self.write_catalog(tmpdir, [{
+                'slug': 'ready', 'name': 'Ready', 'editionYear': 2027,
+                'headliners': ['A'], 'artists': ['A', 'A', 'Example Tribute Band'],
+            }])
+            _, eligible, _ = playlists.load_canonical_festivals(path)
+        artists, headliners = eligible[0].lineup_fn()
+        self.assertEqual(artists, ['A'])
+        self.assertEqual(headliners, ['A'])
+
+    def test_canonical_catalog_rejects_wrong_edition_before_mutation(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self.write_catalog(tmpdir, [
+                {'slug': 'wrong', 'name': 'Wrong', 'editionYear': 2026, 'artists': ['A']},
+            ])
+            with self.assertRaisesRegex(RuntimeError, 'edition mismatch'):
+                playlists.load_canonical_festivals(path)
+
+    def test_requested_season_mismatch_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = self.write_catalog(tmpdir, [])
+            with patch.dict(os.environ, {'FESTIVAL_SEASON': '2026'}):
+                with self.assertRaisesRegex(RuntimeError, 'no playlists mutated'):
+                    playlists.load_canonical_festivals(path)
     def test_import_without_setlist_key_for_offline_analysis(self):
         module_path = Path(__file__).resolve().parents[1] / 'scripts' / 'spotify_gmm_2026' / 'festival_playlists.py'
 

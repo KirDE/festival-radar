@@ -1,1 +1,26 @@
-{}
+{
+  "graspop": {
+    "spotifyUrl": "https://open.spotify.com/playlist/3jyENqyk94CZYS71X2S7GY",
+    "artists": 133,
+    "tracks": 665,
+    "updatedAt": "2026-08-29T13:20:18.804Z"
+  },
+  "rock-im-park": {
+    "spotifyUrl": "https://open.spotify.com/playlist/5FlpRlZJqzOndB3E2s2eB8",
+    "artists": 73,
+    "tracks": 365,
+    "updatedAt": "2026-08-29T13:20:18.806Z"
+  },
+  "summer-breeze": {
+    "spotifyUrl": "https://open.spotify.com/playlist/6rWAXV1sR2E6ZDbHcWBVfD",
+    "artists": 63,
+    "tracks": 289,
+    "updatedAt": "2026-08-29T13:20:18.808Z"
+  },
+  "wacken-open-air": {
+    "spotifyUrl": "https://open.spotify.com/playlist/5TWytVVqnSFQw6eVdhBIK6",
+    "artists": 50,
+    "tracks": 228,
+    "updatedAt": "2026-08-29T13:20:18.809Z"
+  }
+}
