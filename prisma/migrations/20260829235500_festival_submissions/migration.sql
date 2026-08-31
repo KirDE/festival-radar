@@ -1,0 +1,15 @@
+CREATE TYPE "FestivalSubmissionStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+CREATE TABLE "FestivalSubmission" ("id" TEXT NOT NULL, "publicReference" TEXT NOT NULL, "fingerprint" TEXT NOT NULL, "name" TEXT NOT NULL, "editionYear" INTEGER NOT NULL, "officialUrl" TEXT NOT NULL, "notes" TEXT, "status" "FestivalSubmissionStatus" NOT NULL DEFAULT 'PENDING', "submitterHash" TEXT NOT NULL, "submittedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, "reviewedAt" TIMESTAMP(3), "reviewedById" TEXT, "reviewNote" TEXT, CONSTRAINT "FestivalSubmission_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "FestivalSubmission_publicReference_key" ON "FestivalSubmission"("publicReference");
+CREATE UNIQUE INDEX "FestivalSubmission_fingerprint_key" ON "FestivalSubmission"("fingerprint");
+CREATE INDEX "FestivalSubmission_status_submittedAt_idx" ON "FestivalSubmission"("status", "submittedAt");
+CREATE INDEX "FestivalSubmission_submitterHash_submittedAt_idx" ON "FestivalSubmission"("submitterHash", "submittedAt");
+ALTER TABLE "FestivalSubmission" ADD CONSTRAINT "FestivalSubmission_reviewedById_fkey" FOREIGN KEY ("reviewedById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+CREATE TABLE "FestivalSubmissionAudit" ("id" TEXT NOT NULL, "submissionId" TEXT NOT NULL, "actorId" TEXT, "action" TEXT NOT NULL, "detail" JSONB, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "FestivalSubmissionAudit_pkey" PRIMARY KEY ("id"));
+CREATE INDEX "FestivalSubmissionAudit_submissionId_createdAt_idx" ON "FestivalSubmissionAudit"("submissionId", "createdAt");
+CREATE INDEX "FestivalSubmissionAudit_actorId_createdAt_idx" ON "FestivalSubmissionAudit"("actorId", "createdAt");
+ALTER TABLE "FestivalSubmissionAudit" ADD CONSTRAINT "FestivalSubmissionAudit_submissionId_fkey" FOREIGN KEY ("submissionId") REFERENCES "FestivalSubmission"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "FestivalSubmissionAudit" ADD CONSTRAINT "FestivalSubmissionAudit_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+CREATE FUNCTION reject_submission_audit_mutation() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'Festival submission audit entries are append-only'; END; $$ LANGUAGE plpgsql;
+CREATE TRIGGER "FestivalSubmissionAudit_no_update" BEFORE UPDATE ON "FestivalSubmissionAudit" FOR EACH ROW EXECUTE FUNCTION reject_submission_audit_mutation();
+CREATE TRIGGER "FestivalSubmissionAudit_no_delete" BEFORE DELETE ON "FestivalSubmissionAudit" FOR EACH ROW EXECUTE FUNCTION reject_submission_audit_mutation();

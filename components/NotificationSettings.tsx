@@ -1,0 +1,53 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useLanguage } from "./LanguageProvider";
+
+const events = ["ARTIST_ADDED", "ARTIST_CANCELLED", "FESTIVAL_DATE_MOVED", "TICKETS_ON_SALE", "TICKETS_LOW", "TICKETS_SOLD_OUT", "TIMETABLE_PUBLISHED"] as const;
+const channels = ["EMAIL", "TELEGRAM", "WEB_PUSH"] as const;
+const frequencies = ["IMMEDIATE", "DAILY", "WEEKLY"] as const;
+type Channel = typeof channels[number];
+type Preference = { id: string; festivalId: string | null; eventType: string; channel: Channel; frequency: string; enabled: boolean };
+type Subscription = { id: string; channel: Channel; endpoint: string; enabled: boolean; updatedAt: string };
+type Delivery = { channel: Channel; status: string; attempts: number; sentAt: string | null; updatedAt: string; lastError: string | null };
+type Copy = { title: string; intro: string; signIn: string; scope: string; global: string; event: string; channel: string; frequency: string; save: string; channels: string; telegram: string; telegramHelp: string; enroll: string; webpush: string; email: string; test: string; remove: string; enabled: string; disabled: string; health: string; noItems: string };
+const copy: Record<string, Copy> = {
+  en: { title: "Notification settings", intro: "Choose what Festival Radar sends, where, and how often.", signIn: "Sign in to manage notifications.", scope: "Festival scope", global: "All festivals", event: "Event type", channel: "Channel", frequency: "Frequency", save: "Save preference", channels: "Channel enrollment", telegram: "Telegram chat ID", telegramHelp: "Start the Festival Radar bot, then enter the numeric chat ID it provides.", enroll: "Enroll / update", webpush: "Enable browser push", email: "Email uses your verified account address.", test: "Send test", remove: "Delete", enabled: "Enabled", disabled: "Disabled", health: "Delivery health", noItems: "Nothing configured yet." },
+  de: { title: "Benachrichtigungen", intro: "Lege fest, was Festival Radar wohin und wie oft sendet.", signIn: "Melde dich an, um Benachrichtigungen zu verwalten.", scope: "Festival-Auswahl", global: "Alle Festivals", event: "Ereignis", channel: "Kanal", frequency: "Häufigkeit", save: "Einstellung speichern", channels: "Kanäle verbinden", telegram: "Telegram-Chat-ID", telegramHelp: "Starte den Festival-Radar-Bot und trage dann die dort angezeigte numerische Chat-ID ein.", enroll: "Verbinden / aktualisieren", webpush: "Browser-Push aktivieren", email: "E-Mail nutzt die bestätigte Konto-Adresse.", test: "Test senden", remove: "Löschen", enabled: "Aktiv", disabled: "Inaktiv", health: "Zustellstatus", noItems: "Noch nichts eingerichtet." },
+  ru: { title: "Настройки уведомлений", intro: "Выберите, что, куда и как часто будет отправлять Festival Radar.", signIn: "Войдите, чтобы управлять уведомлениями.", scope: "Фестивали", global: "Все фестивали", event: "Событие", channel: "Канал", frequency: "Частота", save: "Сохранить", channels: "Подключение каналов", telegram: "ID чата Telegram", telegramHelp: "Запустите бота Festival Radar и введите выданный им числовой ID чата.", enroll: "Подключить / обновить", webpush: "Включить push в браузере", email: "Для email используется подтверждённый адрес аккаунта.", test: "Отправить тест", remove: "Удалить", enabled: "Включено", disabled: "Отключено", health: "Состояние доставки", noItems: "Пока ничего не настроено." },
+};
+
+function publicKey(value: string) { const padding = "=".repeat((4 - value.length % 4) % 4); const raw = atob((value + padding).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...raw].map((c) => c.charCodeAt(0))); }
+
+export function NotificationSettings({ festivals }: { festivals: { id: string; name: string }[] }) {
+  const { language } = useLanguage(); const t = copy[language];
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null); const [preferences, setPreferences] = useState<Preference[]>([]); const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [recent, setRecent] = useState<Delivery[]>([]);
+  const [providers, setProviders] = useState<Record<Channel, boolean>>({ EMAIL: false, TELEGRAM: false, WEB_PUSH: false }); const [vapid, setVapid] = useState<string | null>(null);
+  const [scope, setScope] = useState(""); const [eventType, setEventType] = useState(events[0]); const [channel, setChannel] = useState<Channel>("EMAIL"); const [frequency, setFrequency] = useState("IMMEDIATE"); const [telegram, setTelegram] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false);
+  async function load() { const me = await fetch("/api/auth/me"); if (!me.ok) { setAuthenticated(false); return; } setAuthenticated(true); const [p, s] = await Promise.all([fetch("/api/notifications/preferences"), fetch("/api/notifications/status")]); const pd = await p.json(); const sd = await s.json(); setPreferences(pd.preferences || []); setSubscriptions(sd.subscriptions || []); setRecent(sd.recent || []); setProviders(sd.providers || {}); setVapid(sd.webPushPublicKey); }
+  useEffect(() => { void load(); }, []);
+  async function call(url: string, method: string, body: unknown) { setBusy(true); setMessage(""); try { const response = await fetch(url, { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Request failed"); setMessage(response.status === 202 ? "Test queued." : "Saved."); await load(); } catch (error) { setMessage(error instanceof Error ? error.message : "Request failed"); } finally { setBusy(false); } }
+  async function enrollPush() { if (!("serviceWorker" in navigator) || !("PushManager" in window)) { setMessage("Web push is not supported by this browser."); return; } if (!vapid) { setMessage("Web push is not configured on the server."); return; } const permission = await Notification.requestPermission(); if (permission !== "granted") { setMessage(`Browser permission: ${permission}. Enable notifications in site settings.`); return; } const registration = await navigator.serviceWorker.ready; const push = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: publicKey(vapid) }); await call("/api/notifications/subscriptions", "PUT", { channel: "WEB_PUSH", endpoint: push.endpoint, metadata: push.toJSON(), enabled: true }); }
+  if (authenticated === null) return <section className="notificationPage" aria-busy="true">Loading…</section>;
+  if (!authenticated) return <section className="notificationPage"><h1>{t.title}</h1><p role="alert">{t.signIn}</p></section>;
+  return <section className="notificationPage">
+    <header><span className="eyebrow">ACCOUNT</span><h1>{t.title}</h1><p>{t.intro}</p></header>
+    {message && <p className="notificationMessage" role="status">{message}</p>}
+    <form className="notificationForm" onSubmit={(e) => { e.preventDefault(); void call("/api/notifications/preferences", "PUT", { festivalId: scope || null, eventType, channel, frequency, enabled: true }); }}>
+      <label>{t.scope}<select value={scope} onChange={(e) => setScope(e.target.value)}><option value="">{t.global}</option>{festivals.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>
+      <label>{t.event}<select value={eventType} onChange={(e) => setEventType(e.target.value as typeof eventType)}>{events.map((v) => <option key={v}>{v.replaceAll("_", " ")}</option>)}</select></label>
+      <label>{t.channel}<select value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>{channels.map((v) => <option key={v}>{v.replace("_", " ")}</option>)}</select></label>
+      <label>{t.frequency}<select value={frequency} onChange={(e) => setFrequency(e.target.value)}>{frequencies.map((v) => <option key={v}>{v}</option>)}</select></label>
+      <button className="primaryButton" disabled={busy}>{t.save}</button>
+    </form>
+    <div className="notificationGrid">
+      <section><h2>{t.channels}</h2><p>{t.email}</p><div className="channelRow"><strong>Email</strong><span>{providers.EMAIL ? t.enabled : t.disabled}</span><button onClick={() => void call("/api/notifications/status", "POST", { channel: "EMAIL" })}>{t.test}</button></div>
+        <label>{t.telegram}<input inputMode="numeric" pattern="-?[0-9]+" value={telegram} onChange={(e) => setTelegram(e.target.value)} aria-describedby="telegram-help" /></label><small id="telegram-help">{t.telegramHelp}</small><button disabled={busy || !/^-?\d+$/.test(telegram)} onClick={() => void call("/api/notifications/subscriptions", "PUT", { channel: "TELEGRAM", endpoint: telegram, metadata: { enrolledBy: "settings" }, enabled: true })}>{t.enroll}</button>
+        <button disabled={busy} onClick={() => void enrollPush()}>{t.webpush}</button>
+      </section>
+      <section><h2>{t.health}</h2>{channels.map((value) => <div className="channelRow" key={`provider-${value}`}><strong>{value.replace("_", " ")}</strong><span>{providers[value] ? "Provider ready" : "Provider unavailable"}</span></div>)}{subscriptions.length ? subscriptions.map((s) => <div className="channelRow" key={s.id}><span><strong>{s.channel.replace("_", " ")}</strong><small>{s.endpoint} · {s.enabled ? t.enabled : t.disabled}</small></span><button onClick={() => void call("/api/notifications/status", "POST", { channel: s.channel })}>{t.test}</button><button onClick={() => void call("/api/notifications/subscriptions", "DELETE", { id: s.id })}>{t.remove}</button></div>) : <p>{t.noItems}</p>}{recent.map((delivery, index) => <div className="channelRow" key={`${delivery.channel}-${delivery.updatedAt}-${index}`}><span><strong>{delivery.channel.replace("_", " ")} · {delivery.status}</strong><small>{delivery.sentAt || delivery.updatedAt}{delivery.lastError ? ` · ${delivery.lastError}` : ""}</small></span><span>{delivery.attempts} attempt(s)</span></div>)}</section>
+    </div>
+    <section><h2>{t.title}</h2>{preferences.length ? preferences.map((p) => <div className="preferenceRow" key={p.id}><span><strong>{p.eventType.replaceAll("_", " ")}</strong><small>{p.festivalId ? festivals.find((f) => f.id === p.festivalId)?.name || p.festivalId : t.global} · {p.channel.replace("_", " ")} · {p.frequency}</small></span><button onClick={() => void call("/api/notifications/preferences", "PUT", { festivalId: p.festivalId, eventType: p.eventType, channel: p.channel, frequency: p.frequency, enabled: !p.enabled })}>{p.enabled ? t.disabled : t.enabled}</button><button onClick={() => void call("/api/notifications/preferences", "DELETE", { id: p.id })}>{t.remove}</button></div>) : <p>{t.noItems}</p>}</section>
+  </section>;
+}
