@@ -6,6 +6,7 @@ import { LocalPlannerProvider } from "@/components/LocalPlanner";
 import { SiteFooter, SiteHeader } from "@/components/SiteChrome";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 import { PrivacyAnalytics } from "@/components/PrivacyAnalytics";
+import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,12 +35,9 @@ export default async function RootLayout({
   return (
     <html lang={language}>
       <body>
-        <a className="skipLink" href="#main-content">{skip}</a>
         <LanguageProvider initialLanguage={language}>
           <LocalPlannerProvider>
-            <SiteHeader />
-            <main id="main-content">{children}</main>
-            <SiteFooter />
+            <AppShell>{children}</AppShell>
             <ServiceWorkerRegistration />
             <PrivacyAnalytics />
           </LocalPlannerProvider>
