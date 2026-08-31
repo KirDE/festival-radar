@@ -30,6 +30,7 @@ jobs:
           DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
           AUTH_SECRET: build-only-secret-that-is-never-used-at-runtime
           APP_URL: https://festivals.kir-it.de
+          NEXT_PUBLIC_ANALYTICS_ENDPOINT: /api/analytics/page-view/
       - name: Package standalone release
         run: bash scripts/deploy/package-release.sh "$GITHUB_SHA" release.tar.gz
       - name: Configure SSH
@@ -61,10 +62,12 @@ jobs:
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           APP_URL: ${{ secrets.APP_URL }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          ANALYTICS_OPERATOR_TOKEN: ${{ secrets.ANALYTICS_OPERATOR_TOKEN }}
+          ANALYTICS_RETENTION_DAYS: ${{ vars.ANALYTICS_RETENTION_DAYS || '90' }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         run: |
-          for name in DATABASE_URL AUTH_SECRET APP_URL INTERNAL_API_SECRET SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
+          for name in DATABASE_URL AUTH_SECRET APP_URL INTERNAL_API_SECRET ANALYTICS_OPERATOR_TOKEN SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
             test -n "${!name}" || { echo "Missing required production secret: $name" >&2; exit 1; }
           done
           umask 077
@@ -73,6 +76,8 @@ jobs:
             printf 'AUTH_SECRET=%q\n' "$AUTH_SECRET"
             printf 'APP_URL=%q\n' "$APP_URL"
             printf 'INTERNAL_API_SECRET=%q\n' "$INTERNAL_API_SECRET"
+            printf 'ANALYTICS_OPERATOR_TOKEN=%q\n' "$ANALYTICS_OPERATOR_TOKEN"
+            printf 'ANALYTICS_RETENTION_DAYS=%q\n' "$ANALYTICS_RETENTION_DAYS"
             printf 'SPOTIFY_CLIENT_ID=%q\n' "$SPOTIFY_CLIENT_ID"
             printf 'SPOTIFY_CLIENT_SECRET=%q\n' "$SPOTIFY_CLIENT_SECRET"
             printf 'DEPLOYED_COMMIT=%q\n' "$GITHUB_SHA"

@@ -23,6 +23,7 @@
     "test:notifications:e2e": "node tests/notification-e2e.mjs",
     "test:admin:integration": "node --test --test-concurrency=1 tests/integration/admin-workflows.test.mjs",
     "test:admin:e2e": "playwright test",
+    "analytics:prune": "node scripts/prune-analytics.mjs",
     "playlists:status": "node scripts/build-playlist-status.mjs",
     "playlists:catalog": "node scripts/export-playlist-catalog.mjs",
     "playlists:youtube": "python3 scripts/refresh-youtube-music-playlists.py",

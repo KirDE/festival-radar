@@ -102,6 +102,33 @@ running orders are often published later and change rapidly. See
 [`docs/timetables.md`](docs/timetables.md) for validation, conflict handling,
 cancellations, timezone rules and the atomic import procedure.
 
+## Privacy analytics
+
+Set `NEXT_PUBLIC_ANALYTICS_ENDPOINT=/api/analytics/page-view/` in the production
+build and provide a random `ANALYTICS_OPERATOR_TOKEN` only to operators. The
+browser sends exactly `{ "path": "/path-without-query", "locale": "en" }`
+on the initial page and each distinct client-side route. It sends no cookies,
+identifier, referrer, query string or URL fragment, uses credential-free
+requests, and is disabled when DNT or Global Privacy Control is enabled. This
+aggregate, non-identifying measurement is the documented consent policy; the
+site does not set analytics cookies or build visitor profiles.
+
+The receiver stores only daily `path`/`locale` counters in PostgreSQL. Set
+`ANALYTICS_RETENTION_DAYS` (90 by default) and run `npm run analytics:prune`
+daily. Reverse-proxy access logging for `/api/analytics/page-view` must be
+disabled so IP addresses are not retained outside this schema. Operators can
+verify accepted counts without visitor data:
+
+```bash
+curl -fsS -H "Authorization: Bearer $ANALYTICS_OPERATOR_TOKEN" \
+  "https://festivals.kir-it.de/api/analytics/page-view/?days=7"
+```
+
+The response contains only the time window, total views and aggregate rows.
+Production verification is complete when a test page view returns HTTP 204,
+the total increments once after one route transition, and the database has no
+analytics rows older than the configured retention window.
+
 ## Main scripts
 
 - `scripts/export-playlist-catalog.mjs` exports all normalized festivals for the single current edition.

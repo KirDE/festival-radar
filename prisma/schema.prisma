@@ -499,3 +499,16 @@ model IngestionDiff {
 
   @@index([candidateId, createdAt])
 }
+
+model AnalyticsDaily {
+  id        String   @id @default(cuid())
+  day       DateTime @db.Date
+  path      String   @db.VarChar(512)
+  locale    String   @db.VarChar(2)
+  views     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([day, path, locale])
+  @@index([day])
+}

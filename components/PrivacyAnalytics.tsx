@@ -1,11 +1,19 @@
 "use client";
-import { useEffect } from "react";
+
+import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
+import { sendPrivacyPageView } from "@/lib/privacy-analytics.mjs";
+
 export function PrivacyAnalytics() {
+  const pathname = usePathname();
+  const lastPath = useRef<string | null>(null);
+
   useEffect(() => {
     const endpoint = process.env.NEXT_PUBLIC_ANALYTICS_ENDPOINT;
-    if (!endpoint || navigator.doNotTrack === "1") return;
-    const payload = JSON.stringify({ path: location.pathname, referrer: document.referrer ? new URL(document.referrer).hostname : null });
-    navigator.sendBeacon?.(endpoint, new Blob([payload], { type: "application/json" }));
-  }, []);
+    if (!endpoint || lastPath.current === pathname) return;
+    lastPath.current = pathname;
+    sendPrivacyPageView({ endpoint, pathname, navigator, document });
+  }, [pathname]);
+
   return null;
 }
