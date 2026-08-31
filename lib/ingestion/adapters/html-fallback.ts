@@ -1,5 +1,6 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
+import { validateGenericLineup } from "../lineup-quality.ts";
 
 type SupportedField = FieldEvidence["field"];
 
@@ -68,25 +69,29 @@ function ticketLink(html: string, sourceUrl: string): { value: string; excerpt: 
   return undefined;
 }
 
-function markedNames(html: string): { values: string[]; excerpt: string } | undefined {
+function markedNames(html: string): { values: string[]; excerpt: string; warnings: string[] } | undefined {
   const values: string[] = [];
+  const combinedFlags: boolean[] = [];
   let excerpt = "";
   const pattern = /<([a-z][\w:-]*)\b([^>]*(?:data-artist|itemprop\s*=\s*["']performer["']|class\s*=\s*["'][^"']*(?:artist|lineup)[^"']*["'])[^>]*)>([\s\S]*?)<\/\1>/gi;
   for (const match of html.matchAll(pattern)) {
     const attrs = attributes(`<${match[1]} ${match[2]}>`);
-    const value = decode(attrs.get("data-artist") ?? match[3].replace(/<[^>]+>/g, " "));
-    if (value && value.length <= 120 && !/^(line-?up|artists?|performers?)$/i.test(value)) {
+    const inner = match[3];
+    const value = decode(attrs.get("data-artist") ?? inner.replace(/<[^>]+>/g, " "));
+    if (value) {
       values.push(value);
+      combinedFlags.push(!attrs.has("data-artist") && /<br\b|<li\b|data-artist|itemprop\s*=\s*["']performer/iu.test(inner));
       if (!excerpt) excerpt = match[0].slice(0, 500);
     }
   }
+  const quality = validateGenericLineup(values, combinedFlags);
   const byNormalizedName = new Map<string, string>();
-  for (const value of values) {
+  for (const value of quality.names) {
     const normalized = value.toLocaleLowerCase();
     if (!byNormalizedName.has(normalized)) byNormalizedName.set(normalized, value);
   }
   const unique = [...byNormalizedName.values()];
-  return unique.length ? { values: unique, excerpt } : undefined;
+  return unique.length || quality.warnings.length ? { values: unique, excerpt, warnings: quality.warnings } : undefined;
 }
 
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
@@ -97,6 +102,7 @@ export function extractHtmlFallbackCandidate(html: string, source: FestivalSourc
     fetchedAt,
     evidence: [],
     warnings: [],
+    observedEditionYears: [],
   };
   const start = metaContent(html, ["event:start_time", "event:start_date", "festival:start_date"]) ?? timeValue(html, "start");
   const end = metaContent(html, ["event:end_time", "event:end_date", "festival:end_date"]) ?? timeValue(html, "end");
@@ -114,6 +120,10 @@ export function extractHtmlFallbackCandidate(html: string, source: FestivalSourc
   add("city", city?.value, city?.excerpt);
   add("ticketsUrl", tickets?.value, tickets?.excerpt);
   add("lineup", lineup?.values, lineup?.excerpt);
+  if (start?.value) candidate.observedEditionYears.push(Number(plainDate(start.value)?.slice(0, 4)));
+  if (end?.value) candidate.observedEditionYears.push(Number(plainDate(end.value)?.slice(0, 4)));
+  candidate.observedEditionYears = [...new Set(candidate.observedEditionYears.filter(Number.isFinite))];
+  candidate.warnings.push(...(lineup?.warnings ?? []));
 
   if (candidate.evidence.length === 0) candidate.warnings.push("HTML fallback did not find explicitly marked festival fields");
   return candidate;

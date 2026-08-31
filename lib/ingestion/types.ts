@@ -2,7 +2,7 @@ import type { Festival } from "../../data/festivals.ts";
 
 export const INGESTION_SCHEMA_VERSION = 1 as const;
 export type RefreshPolicy = "daily" | "every_3_days" | "weekly" | "archived";
-export type ParserStrategy = "json_ld_event" | "html_fallback" | "manual_review";
+export type ParserStrategy = "json_ld_event" | "html_fallback" | "official_markup" | "manual_review";
 
 export type FestivalSource = {
   festivalSlug: string;
@@ -10,26 +10,32 @@ export type FestivalSource = {
   strategies: ParserStrategy[];
   refreshPolicy: RefreshPolicy;
   enabled: boolean;
+  editionYear: number;
   lastSuccessfulCheck?: string;
+  fetchUrl?: string;
+  headers?: Record<string, string>;
+  manualReviewReason?: string;
 };
 
 export type FieldEvidence = {
-  field: keyof Pick<Festival, "startDate" | "endDate" | "city" | "headliners" | "lineup" | "ticketsUrl" | "status">;
+  field: keyof Pick<Festival, "startDate" | "endDate" | "city" | "headliners" | "lineup" | "ticketsUrl" | "ticketStatus" | "timetable" | "status">;
   sourceUrl: string;
   observedAt: string;
   excerpt?: string;
 };
 
-export type FestivalCandidate = Partial<Pick<Festival, "startDate" | "endDate" | "city" | "headliners" | "lineup" | "ticketsUrl" | "status">> & {
+export type FestivalCandidate = Partial<Pick<Festival, "startDate" | "endDate" | "city" | "headliners" | "lineup" | "ticketsUrl" | "ticketStatus" | "status">> & {
+  timetable?: { date: string; stage: string; start: string; artist: string }[];
   schemaVersion: typeof INGESTION_SCHEMA_VERSION;
   festivalSlug: string;
   sourceUrl: string;
   fetchedAt: string;
   evidence: FieldEvidence[];
   warnings: string[];
+  observedEditionYears: number[];
 };
 
-export type ChangeKind = "date_changed" | "city_changed" | "artist_added" | "artist_removed" | "headliner_added" | "headliner_removed" | "tickets_changed" | "status_changed";
+export type ChangeKind = "date_changed" | "city_changed" | "artist_added" | "artist_removed" | "headliner_added" | "headliner_removed" | "tickets_changed" | "ticket_status_changed" | "timetable_published" | "status_changed";
 export type FestivalChange = { kind: ChangeKind; field: string; before?: string; after?: string; reviewRequired: boolean; reason?: string };
 export type IngestionResult = {
   schemaVersion: typeof INGESTION_SCHEMA_VERSION;

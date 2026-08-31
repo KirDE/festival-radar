@@ -27,18 +27,22 @@ export function ArtistDetail({
       </Link>
       <FavoriteButton kind="artist" value={artist.name} />
       <div className="artistHero">
-        <div className="artistMonogram">{artist.name[0]}</div>
+        {artist.image ? (
+          <img className="artistPortrait" src={artist.image.url} alt={artist.image.alt} width={artist.image.width} height={artist.image.height} />
+        ) : (
+          <div className="artistMonogram" aria-hidden="true">{artist.name[0]}</div>
+        )}
         <div>
           <div className="eyebrow">{t("artist")}</div>
           <h1>{artist.name}</h1>
           <p>{sentence}</p>
           {artist.aliases.length > 0 && (
-            <small>Also known as {artist.aliases.join(", ")}</small>
+            <small>{t("alsoKnownAs")} {artist.aliases.join(", ")}</small>
           )}
         </div>
       </div>
       <div className="artistActions">
-        {artist.links.map((link) => (
+        {artist.links.filter((link) => link.verified).map((link) => (
           <a
             href={link.url}
             key={`${link.source}-${link.label}`}
@@ -52,22 +56,22 @@ export function ArtistDetail({
       {(artist.biography || artist.genres.length > 0) && (
         <section className="artistMetadata">
           <div>
-            <div className="eyebrow">Profile</div>
+            <div className="eyebrow">{t("profile")}</div>
             {artist.biography && <p>{artist.biography}</p>}
             {artist.origin && (
               <p>
-                <strong>Origin:</strong> {artist.origin}
+                <strong>{t("origin")}:</strong> {artist.origin}
               </p>
             )}
             {artist.genres.length > 0 && (
               <p>
-                <strong>Genres:</strong> {artist.genres.join(" · ")}
+                <strong>{t("genres")}:</strong> {artist.genres.join(" · ")}
               </p>
             )}
           </div>
           {artist.topTracks.length > 0 && (
             <div>
-              <div className="eyebrow">Top tracks</div>
+              <div className="eyebrow">{t("topTracks")}</div>
               <ol>
                 {artist.topTracks.map((track) => (
                   <li key={track}>{track}</li>
@@ -75,6 +79,20 @@ export function ArtistDetail({
               </ol>
             </div>
           )}
+        </section>
+      )}
+      {artist.recentSetlists.length > 0 && (
+        <section className="artistSetlists" aria-labelledby="recent-setlists-heading">
+          <div className="eyebrow" id="recent-setlists-heading">{t("recentSetlists")}</div>
+          <ul>
+            {artist.recentSetlists.map((setlist) => (
+              <li key={`${setlist.date}-${setlist.url}`}>
+                <time dateTime={setlist.date}>{setlist.date}</time>
+                <span>{setlist.venue}</span>
+                <a href={setlist.url} target="_blank" rel="noreferrer" aria-label={`${t("viewSetlist")} ${artist.name} ${setlist.date}`}>{t("viewSetlist")} ↗</a>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       <section className="appearances">
@@ -89,7 +107,7 @@ export function ArtistDetail({
         ))}
       </section>
       <details className="artistSources">
-        <summary>Sources and canonical identities</summary>
+        <summary>{t("sourcesAndIdentities")}</summary>
         {Object.entries(artist.identities).map(
           ([source, id]) =>
             id && (
@@ -105,9 +123,12 @@ export function ArtistDetail({
             target="_blank"
             rel="noreferrer"
           >
-            {item.field}: {item.source} · checked {item.checkedAt}
+            {item.field}: {item.source} · {t("checked")} {item.checkedAt}
           </a>
         ))}
+        <p className="freshnessNote">
+          {t("freshnessProfile")} {artist.freshness.profile.cadenceDays} {t("freshnessDays")}; {t("freshnessMusic")} {artist.freshness.music.cadenceDays} {t("freshnessDays")}; {t("freshnessSetlists")} {artist.freshness.setlists.cadenceDays} {t("freshnessDays")}.
+        </p>
       </details>
     </div>
   );

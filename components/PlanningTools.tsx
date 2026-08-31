@@ -12,7 +12,7 @@ export function PlanningTools({ item, festivals }: { item: Festival; festivals: 
   return <section className="planningSection">
     <div className="sectionHeading"><div><div className="eyebrow">PLAN THE TRIP</div><h2>Calendar & map</h2></div></div>
     <div className="planningActions">
-      {calendar ? <><a href={calendar.ics} download={`${item.slug}-2027.ics`}>Download .ics</a><a href={calendar.google} target="_blank" rel="noreferrer">Google Calendar ↗</a></> : <span>Calendar export unlocks when dates are announced.</span>}
+      {calendar ? <><a href={calendar.ics} download={`${item.slug}-2027.ics`}>Download .ics</a><a href={calendar.google} target="_blank" rel="noreferrer">Google Calendar ↗</a><a href={calendar.apple} download={`${item.slug}-apple-calendar-2027.ics`}>Add to Apple Calendar</a></> : <span>Calendar export unlocks when dates are announced.</span>}
       <a href={map} target="_blank" rel="noreferrer">Open European map ↗</a>
     </div>
     <StageTimetable entries={item.timetable} />
