@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 
-const source = { festivalSlug: "example", url: "https://example.test/", strategies: ["json_ld_event", "html_fallback"], refreshPolicy: "daily", enabled: true };
+const source = { festivalSlug: "example", url: "https://example.test/", strategies: ["json_ld_event", "html_fallback"], refreshPolicy: "daily", enabled: true, editionYear: 2027 };
 
 test("combined extraction keeps JSON-LD precedence and fills missing HTML fields", () => {
   const html = `

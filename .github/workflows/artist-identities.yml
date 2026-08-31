@@ -1,0 +1,55 @@
+name: Resolve artist identities
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artist-identity-resolver
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Restore latest checkpoint
+        uses: actions/cache/restore@v4
+        with:
+          path: outputs/artist-identities/state.json
+          key: artist-identities-${{ github.run_id }}
+          restore-keys: artist-identities-
+      - name: Resolve bounded batch
+        env:
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+          SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          IDENTITY_BATCH_SIZE: "20"
+        run: |
+          test -n "$SPOTIFY_CLIENT_ID"
+          test -n "$SPOTIFY_CLIENT_SECRET"
+          mkdir -p outputs/artist-identities
+          npm run resolve:artists
+      - name: Save updated checkpoint
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: outputs/artist-identities/state.json
+          key: artist-identities-${{ github.run_id }}
+      - name: Retain auditable checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artist-identities-${{ github.run_id }}
+          path: outputs/artist-identities/state.json
+          if-no-files-found: error
+          retention-days: 30

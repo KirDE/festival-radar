@@ -16,7 +16,7 @@ npm install
 npm run dev
 ```
 
-Production export:
+Production build:
 
 ```bash
 npm run typecheck
@@ -32,6 +32,21 @@ npx prisma migrate deploy
 npm run dev
 ```
 
+Run the route-level integration suite against an isolated PostgreSQL database
+after applying the migrations:
+
+```bash
+DATABASE_URL=postgresql://festival:festival@127.0.0.1:5432/festival_integration \
+  npx prisma migrate deploy
+DATABASE_URL=postgresql://festival:festival@127.0.0.1:5432/festival_integration \
+  npm run test:integration
+```
+
+The suite resets only the database named by `DATABASE_URL`, starts a local
+Next.js server, and mocks Spotify OAuth and Web API traffic. Never point it at
+a shared or production database. CI provisions a fresh PostgreSQL 16 service
+for every job before running this required check.
+
 The account API uses 30-day opaque, hashed database sessions in an HTTP-only
 cookie. `PUT /api/sync/{favorites|collections|saved-filters|plans}` provides
 optimistic concurrency through a required revision number; stale writes return
@@ -40,23 +55,62 @@ Authenticated users can connect Spotify at `/api/spotify/connect`; refresh
 tokens are encrypted at rest using `AUTH_SECRET`, and `/api/spotify/sync`
 imports their owned/followed playlists into the collections sync document.
 
-The deployable static site is written to `out/`. Festival seed data lives in
-`data/festivals.ts`. Official source availability and the setlist.fm API are
-checked automatically every three days by GitHub Actions.
+Production runs as a Next.js standalone server behind Apache, managed by
+systemd, with PostgreSQL-backed account APIs. The deploy workflow packages the
+exact `main` commit together with the supported Node.js 22 runtime, runs
+`prisma migrate deploy`, atomically switches the `/opt/festival-radar/current`
+symlink, and restores the previous release if the
+database-aware health check fails. The public deployed revision is available
+from `/api/health/deployment/`.
+
+The GitHub `production` environment must define `DEPLOY_HOST`, `DEPLOY_PORT`,
+`DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `DATABASE_URL`, `AUTH_SECRET`, `APP_URL`,
+`SPOTIFY_CLIENT_ID`, and `SPOTIFY_CLIENT_SECRET`. Values are written to a
+root-owned mode-0600 environment file on the server and are never committed or
+printed. The configured SSH principal is root because the installer manages
+systemd and the Plesk Apache vhost include.
+Provision the initial least-privilege PostgreSQL database and role once on the
+server (the password is read only from the environment):
+
+```bash
+sudo FESTIVAL_DB_PASSWORD='<generated secret>' \
+  bash scripts/deploy/bootstrap-postgres.sh
+```
+
+Store the resulting connection string as the protected `DATABASE_URL` secret.
+The bootstrap is idempotent; subsequent schema updates are applied by the
+checked-in Prisma migrations.
+
+Festival seed data lives in `data/festivals.ts`. Official source availability
+and the setlist.fm API are checked automatically every three days by GitHub
+Actions.
 
 Festival ingestion runs daily and selects sources according to their adaptive
 daily, three-day, weekly, or archived cadence. Run one source with
 `npm run ingest -- --slug=wacken-open-air`; add `--due` to select only sources
 whose last successful check is older than its configured interval. Scheduled
-runs retain normalized candidates and review diagnostics for 30 days.
+runs publish policy-approved additive changes into
+`data/ingestion-publications.json` through an automatically generated pull
+request. Every observation is appended to `data/ingestion-history.jsonl` with
+source URL, fetch time, old/new values and outcome. Destructive, ambiguous and
+date changes are recorded as `review_required` and never auto-published. Dry
+runs record evidence without changing the overlay. Roll back by reverting the
+generated PR (or its overlay/history entries) in a new PR.
+
+Stage schedules use a separate provenance-aware reviewed import because official
+running orders are often published later and change rapidly. See
+[`docs/timetables.md`](docs/timetables.md) for validation, conflict handling,
+cancellations, timezone rules and the atomic import procedure.
 
 ## Main scripts
 
-- `scripts/spotify_gmm_2026/festival_playlists.py` - current playlist builder for Graspop, Wacken, Rock im Park, Summer Breeze, and Impericon.
+- `scripts/export-playlist-catalog.mjs` exports all normalized festivals for the single current edition.
+- `scripts/spotify_gmm_2026/festival_playlists.py` builds playlists from that catalog, rejects mixed/wrong editions before mutation, and writes explicit empty-lineup skips to `_catalog_summary.json`.
 - `scripts/spotify_gmm_2026/spotify_auth.py` - Spotify OAuth token loading and refresh.
 - `scripts/spotify_gmm_2026/init_spotify_auth.py` - exchanges a Spotify callback `code` for local tokens or refreshes the token file.
 - `scripts/spotify_gmm_2026/init_youtube_music_auth.py` - starts YouTube Music OAuth device-flow and saves local tokens.
 - `scripts/spotify_gmm_2026/youtube_music_transfer.py` - transfers a generated festival report to YouTube Music.
+- `scripts/refresh-youtube-music-playlists.py` - refreshes every eligible persisted YouTube Music playlist independently and records per-provider failures.
 
 ## Setup
 
@@ -87,6 +141,12 @@ python3 scripts/spotify_gmm_2026/init_spotify_auth.py "<code>"
 ```
 
 ## Build playlists
+
+Export the canonical catalog first. Set `FESTIVAL_SEASON` to enforce the expected edition; a mismatch aborts before Spotify is changed.
+
+```bash
+npm run playlists:catalog
+```
 
 ```bash
 python3 scripts/spotify_gmm_2026/festival_playlists.py
@@ -133,6 +193,14 @@ Resume an existing YouTube Music playlist after the daily quota resets:
 ```bash
 YOUTUBE_MUSIC_PLAYLIST_ID=... python3 scripts/spotify_gmm_2026/youtube_music_transfer.py --publish --resume-publish
 ```
+
+The scheduled workflow requires three encrypted repository secrets:
+`YOUTUBE_MUSIC_CREDENTIALS_JSON`, `YOUTUBE_MUSIC_OAUTH_JSON`, and
+`YOUTUBE_MUSIC_PLAYLIST_IDS` (a JSON object mapping canonical festival slugs to
+persisted playlist IDs). Missing IDs fail closed so an unattended retry cannot
+create duplicate playlists. A failure for one festival is recorded without
+preventing later festivals from being attempted; the job itself remains failed
+until every eligible provider refresh succeeds.
 
 For unattended quota checks, use the auto-resume wrapper. It first verifies that the playlist can be read, then runs the same quota-capped resume publish and prints one JSON line for each step:
 
