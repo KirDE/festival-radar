@@ -12,6 +12,8 @@ export type FestivalSource = {
   enabled: boolean;
   editionYear: number;
   lastSuccessfulCheck?: string;
+  fetchUrl?: string;
+  headers?: Record<string, string>;
 };
 
 export type FieldEvidence = {

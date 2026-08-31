@@ -4,6 +4,7 @@ import process from "node:process";
 import { festivals } from "../data/festivals.ts";
 import { festivalSources } from "../data/festival-sources.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
+import { fetchSource } from "../lib/ingestion/fetch.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
 import { dueFestivalSources } from "../lib/ingestion/schedule.ts";
 import { notificationEventsForChanges } from "../lib/ingestion/notification-events.ts";
@@ -21,6 +22,9 @@ const fixturePath = process.argv.find((value) => value.startsWith("--fixture="))
 const publish = args.has("--publish");
 const force = args.has("--force");
 const maxFetchErrorsArg = process.argv.find((value) => value.startsWith("--max-fetch-errors="))?.slice(19) ?? process.env.INGESTION_MAX_FETCH_ERRORS;
+const failureThresholdArg = process.argv.find((value) => value.startsWith("--failure-threshold="))?.slice(20) ?? process.env.INGESTION_FAILURE_THRESHOLD ?? "3";
+const failureThreshold = Number(failureThresholdArg);
+if (!Number.isInteger(failureThreshold) || failureThreshold < 1) throw new Error(`Invalid consecutive failure threshold: ${failureThresholdArg}`);
 const persistenceEnabled = Boolean(process.env.DATABASE_URL);
 const dueOnly = args.has("--due") && !force;
 const persistedStates = dueOnly && persistenceEnabled ? await ingestionQueries.sourceStates(db) : [];
@@ -38,7 +42,7 @@ if (!Number.isInteger(maxFetchErrors) || maxFetchErrors < 0) throw new Error(`In
 await mkdir(outputDirectory, { recursive: true });
 const trigger = process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL";
 const run = persistenceEnabled ? await createIngestionRun(db, { trigger, sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length }) : null;
-const summary = { schemaVersion: 1, ingestionRunId: run?.id ?? null, generatedAt: new Date().toISOString(), dryRun: !publish, totalSources: selected.length, attempted: 0, processed: 0, changed: 0, publishable: 0, published: 0, reviewRequired: 0, fetchErrors: 0, notificationEvents: 0, maxFetchErrors, status: "RUNNING", results: [] };
+const summary = { schemaVersion: 1, ingestionRunId: run?.id ?? null, generatedAt: new Date().toISOString(), dryRun: !publish, totalSources: selected.length, attempted: 0, processed: 0, changed: 0, publishable: 0, published: 0, reviewRequired: 0, fetchErrors: 0, escalatedFailures: 0, notificationEvents: 0, maxFetchErrors, failureThreshold, status: "RUNNING", results: [] };
 let publicationStore = JSON.parse(await readFile(publicationsPath, "utf8"));
 const history = [];
 
@@ -51,17 +55,20 @@ for (const source of selected) {
   let response;
   let html;
   try {
-    response = fixturePath ? null : await fetch(source.url, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(20_000),
-      headers: { "user-agent": "FestivalRadarBot/1.0 (+https://festivals.kir-it.de/)" },
-    });
-    if (response && !response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!fixturePath) {
+      const fetched = await fetchSource(source);
+      response = fetched.response;
+      if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { httpStatus: response.status, attempts: fetched.attempts });
+    }
     html = fixturePath ? await readFile(path.resolve(fixturePath), "utf8") : await response.text();
   } catch (error) {
-    if (run) await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), error: error instanceof Error ? error.message : String(error) });
+    const attempts = Number(error?.attempts) || 1;
+    if (run) await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, httpStatus: Number(error?.httpStatus) || undefined, durationMs: Date.now() - startedAt.getTime(), retryCount: attempts - 1, startedAt, endedAt: new Date(), error: error instanceof Error ? error.message : String(error) });
+    const consecutiveFailures = persistenceEnabled ? await ingestionQueries.consecutiveFailures(db, source.festivalSlug) : 1;
+    const escalated = consecutiveFailures >= failureThreshold;
     summary.fetchErrors += 1;
-    summary.results.push({ festivalSlug: source.festivalSlug, status: "fetch_error", error: error instanceof Error ? error.message : String(error) });
+    if (escalated) summary.escalatedFailures += 1;
+    summary.results.push({ festivalSlug: source.festivalSlug, status: escalated ? "escalated_failure" : "fetch_error", error: error instanceof Error ? error.message : String(error), attempts, consecutiveFailures });
     continue;
   }
 
@@ -98,7 +105,7 @@ for (const source of selected) {
 }
 
 if (run) await finishIngestionRun(db, run.id);
-summary.status = summary.fetchErrors === 0 ? "COMPLETED" : summary.fetchErrors <= maxFetchErrors ? "PARTIAL" : "FAILED";
+summary.status = summary.fetchErrors === 0 ? "COMPLETED" : summary.fetchErrors <= maxFetchErrors && summary.escalatedFailures === 0 ? "PARTIAL" : "FAILED";
 if (publish) await writeFile(publicationsPath, `${JSON.stringify(publicationStore, null, 2)}\n`);
 if (history.length) await appendFile(historyPath, `${history.map((record) => JSON.stringify(record)).join("\n")}\n`);
 await writeFile(path.join(outputDirectory, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);

@@ -66,4 +66,8 @@ export const ingestionQueries = {
   candidateHistory: (db: Client, festivalSlug: string) => db.ingestionCandidate.findMany({ where: { festivalSlug }, orderBy: { createdAt: "desc" }, include: { evidence: true } }),
   diffHistory: (db: Client, festivalSlug: string) => db.ingestionDiff.findMany({ where: { candidate: { festivalSlug } }, orderBy: { createdAt: "desc" } }),
   sourceStates: (db: Client) => db.ingestionSourceState.findMany({ select: { festivalSlug: true, lastSuccessfulCheck: true } }),
+  consecutiveFailures: async (db: Client, festivalSlug: string) => {
+    const attempts = await db.ingestionAttempt.findMany({ where: { festivalSlug }, orderBy: { endedAt: "desc" }, take: 100, select: { status: true } });
+    return attempts.findIndex(({ status }) => status !== "FAILED") === -1 ? attempts.length : attempts.findIndex(({ status }) => status !== "FAILED");
+  },
 };
