@@ -10,11 +10,13 @@ on:
         required: false
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -23,24 +25,27 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Restore per-source ingestion health
-        uses: actions/cache@v4
-        with:
-          path: outputs/ingestion-state
-          key: festival-ingestion-health-${{ github.run_id }}
-          restore-keys: festival-ingestion-health-
-      - name: Refresh due festival sources
+      - name: Run durable ingestion inside production
         env:
           FESTIVAL: ${{ inputs.festival }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+          APP_URL: ${{ secrets.APP_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
         run: |
-          args=(--due --output=outputs/ingestion --state=outputs/ingestion-state/source-state.json)
-          if [[ -n "$FESTIVAL" ]]; then args+=("--slug=$FESTIVAL"); fi
-          npm run ingest -- "${args[@]}"
+          test -n "$APP_URL" && test -n "$INTERNAL_API_SECRET"
+          mkdir -p outputs
+          jq -n --arg festival "$FESTIVAL" --argjson force "$FORCE" '{festival: (if $festival == "" then null else $festival end), force: $force}' > request.json
+          curl --fail-with-body --silent --show-error --max-time 1200 \
+            -H "authorization: Bearer $INTERNAL_API_SECRET" \
+            -H "content-type: application/json" \
+            --data-binary @request.json \
+            "${APP_URL%/}/api/ingestion/run/" | tee outputs/ingestion-response.json
+          jq -e '.runId and (.summary.attempted > 0) and (.readBack.attempts == .summary.attempted) and (.summary.status == "COMPLETED" or .summary.status == "PARTIAL") and (if env.FORCE == "true" then (.summary.totalSources == 50 and .summary.attempted == 50 and .readBack.candidates > 0 and .readBack.evidence > 0 and .readBack.diffs > 0 and .readBack.hasPersistedFailure and .readBack.lastSuccessfulCheck) else true end)' outputs/ingestion-response.json
       - name: Retain review and diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: festival-ingestion-${{ github.run_id }}
-          path: outputs/ingestion/
+          path: outputs/ingestion-response.json
           if-no-files-found: error
           retention-days: 30

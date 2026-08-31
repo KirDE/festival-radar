@@ -99,6 +99,7 @@ class Festival:
     spotify_artist_ids: dict[str, str] | None = None
     mbids: dict[str, str] | None = None
     extra_excludes: set[str] | None = None
+    edition_year: int | None = None
 
 
 def load_report_mbid_cache(report_dir: Path) -> dict[str, str]:
@@ -839,6 +840,8 @@ def build_playlist(festival: Festival, user_id: str):
         playlist_replace_all(playlist_id, playlist_uris)
 
     output = {
+        'slug': festival.key,
+        'edition_year': festival.edition_year,
         'festival': festival.display_name,
         'playlist_name': festival.playlist_name,
         'playlist_id': playlist_id,
@@ -883,10 +886,54 @@ def build_playlist(festival: Festival, user_id: str):
     }))
 
 
+def load_canonical_festivals(path: Path | None = None) -> tuple[int, list[Festival], list[dict]]:
+    path = path or Path(os.environ.get('FESTIVAL_CATALOG', 'tmp/festival-playlist-catalog.json'))
+    catalog = json.loads(path.read_text(encoding='utf-8'))
+    season = int(catalog['season'])
+    expected = int(os.environ.get('FESTIVAL_SEASON', season))
+    if expected != season:
+        raise RuntimeError(f'edition mismatch: requested {expected}, canonical catalog is {season}; no playlists mutated')
+    festivals, skipped = [], []
+    seen_slugs = set()
+    for entry in catalog['festivals']:
+        slug = entry['slug']
+        if slug in seen_slugs:
+            raise RuntimeError(f'duplicate festival slug in canonical catalog: {slug}')
+        seen_slugs.add(slug)
+        if int(entry.get('editionYear') or 0) != season:
+            raise RuntimeError(f'edition mismatch for {slug}: {entry.get("editionYear")} != {season}; no playlists mutated')
+        artists = list(dict.fromkeys([*entry.get('headliners', []), *entry.get('artists', [])]))
+        eligible = [artist for artist in artists if artist and not looks_like_tribute(artist)]
+        if not eligible:
+            skipped.append({'slug': slug, 'edition_year': season, 'reason': 'empty_lineup'})
+            continue
+        headliners = [artist for artist in entry.get('headliners', []) if artist in eligible]
+        festivals.append(Festival(
+            key=slug, display_name=f'{entry["name"]} {season}',
+            playlist_name=f'{entry["name"]} {season}: Festival Crash Course',
+            description=f'Current {season} lineup from Festival Radar.',
+            lineup_fn=lambda artists=eligible, headliners=headliners: (artists, headliners),
+            edition_year=season,
+            existing_playlist_id=(entry.get('playlistUrl') or '').rstrip('/').split('/')[-1] or None,
+        ))
+    return season, festivals, skipped
+
+
+def write_catalog_summary(season: int, festivals: list[Festival], skipped: list[dict]):
+    summary = {
+        'generated_at': datetime.utcnow().isoformat(timespec='seconds') + 'Z',
+        'season': season,
+        'catalog_count': len(festivals) + len(skipped),
+        'eligible': [festival.key for festival in festivals],
+        'skipped': skipped,
+    }
+    (REPORT_DIR / '_catalog_summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
 def main():
     if not CACHE_ONLY_SETLIST:
         require_setlist_api_key()
-    festivals = [
+    legacy_festivals = [
         Festival(
             key='graspop_2026',
             display_name='Graspop Metal Meeting 2026',
@@ -975,10 +1022,24 @@ def main():
             },
         ),
     ]
+    season, festivals, skipped = load_canonical_festivals()
+    legacy_by_slug = {
+        'graspop': legacy_festivals[0], 'rock-im-park': legacy_festivals[1],
+        'wacken-open-air': legacy_festivals[2], 'summer-breeze': legacy_festivals[4],
+    }
+    for festival in festivals:
+        legacy = legacy_by_slug.get(festival.key)
+        if legacy:
+            festival.existing_playlist_id = legacy.existing_playlist_id
+            festival.aliases = legacy.aliases
+            festival.spotify_artist_ids = legacy.spotify_artist_ids
+            festival.mbids = legacy.mbids
+            festival.extra_excludes = legacy.extra_excludes
     selected = os.environ.get('FESTIVALS')
     if selected:
         allowed = {item.strip() for item in selected.split(',') if item.strip()}
         festivals = [festival for festival in festivals if festival.key in allowed]
+    write_catalog_summary(season, festivals, skipped)
     user_id = '' if REPORT_ONLY else spotify_get('https://api.spotify.com/v1/me')['id']
     for festival in festivals:
         build_playlist(festival, user_id)
