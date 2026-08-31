@@ -32,6 +32,7 @@ jobs:
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
         run: |
           test -n "$APP_URL" && test -n "$INTERNAL_API_SECRET"
+          mkdir -p outputs
           jq -n --arg festival "$FESTIVAL" '{festival: (if $festival == "" then null else $festival end)}' > request.json
           curl --fail-with-body --silent --show-error --max-time 1200 \
             -H "authorization: Bearer $INTERNAL_API_SECRET" \

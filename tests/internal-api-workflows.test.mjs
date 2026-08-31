@@ -22,6 +22,7 @@ test("ingestion keeps database access inside production and uses the canonical i
   const workflow = await readFile(".github/workflows/ingestion.yml", "utf8");
   assert.doesNotMatch(workflow, /DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}/);
   assert.match(workflow, /"\$\{APP_URL%\/\}\/api\/ingestion\/run\/"/);
+  assert.match(workflow, /mkdir -p outputs/);
   assert.match(workflow, /jq -e '\.runId and \(\.summary\.attempted > 0\)[\s\S]*\.readBack\.attempts == \.summary\.attempted/);
 });
 
