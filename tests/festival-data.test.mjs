@@ -62,11 +62,40 @@ test("every lineup name has one explicit artist identity state", () => {
   for (const artist of artistProfiles) {
     assert.ok(artist.name);
     assert.match(artist.identityState, /^(linked|ambiguous|unresolved|retryable)$/);
-    if (artist.identityState === "linked") {
-      assert.ok(artist.links.some(({ source }) => source === "spotify"));
-      assert.ok(artist.links.some(({ source }) => source === "musicbrainz"));
-      assert.ok(artist.links.some(({ source }) => source === "setlist.fm"));
+    assert.ok(artist.freshness.profile.refreshAfter > artist.freshness.profile.checkedAt);
+    assert.ok(artist.freshness.music.cadenceDays <= 14);
+    assert.ok(artist.freshness.setlists.cadenceDays <= 7);
+  }
+});
+
+test("only verified artist links are identity evidence and enriched records are accessible", () => {
+  const enriched = artistProfiles.filter((artist) => artist.biography || artist.image || artist.recentSetlists.length);
+  const partial = artistProfiles.filter((artist) => !artist.biography && !artist.image && artist.recentSetlists.length === 0);
+  assert.ok(enriched.length >= 3);
+  assert.ok(partial.length > 0);
+  for (const artist of artistProfiles) {
+    for (const item of artist.provenance.filter(({ field }) => field === "identity")) {
+      assert.ok(artist.links.some((link) => link.source === item.source && link.url === item.url && link.verified));
     }
+    if (artist.image) {
+      assert.ok(artist.image.alt.includes(artist.name));
+      assert.ok(artist.image.width > 0 && artist.image.height > 0);
+    }
+    for (const setlist of artist.recentSetlists) {
+      assert.match(setlist.date, /^\d{4}-\d{2}-\d{2}$/);
+      assert.match(setlist.url, /^https:\/\/www\.setlist\.fm\//);
+    }
+  }
+});
+
+test("resolved identities include provenance and stable provider IDs", () => {
+  const resolved = artistProfiles.filter(({ identities }) => identities.musicbrainz);
+  assert.ok(resolved.length > 3);
+  for (const artist of resolved) {
+    if (artist.identities.spotify) assert.match(artist.identities.spotify, /^[A-Za-z0-9]{22}$/);
+    assert.match(artist.identities.musicbrainz, /^[0-9a-f-]{36}$/);
+    assert.equal(artist.identities.setlistFm, artist.identities.musicbrainz);
+    assert.ok(artist.provenance.some(({ field, source }) => field === "identity" && source === "musicbrainz"));
   }
 });
 
@@ -76,17 +105,6 @@ test("the production deploy smoke uses an existing artist profile", async () => 
 
   assert.ok(match, "deploy workflow must smoke-test an artist route");
   assert.ok(artistProfiles.some(({ slug }) => slug === match[1]), match[1]);
-});
-
-test("curated identities include provenance and stable provider IDs", () => {
-  const curated = artistProfiles.filter(({ identities }) => Object.keys(identities).length > 0);
-  assert.ok(curated.length >= 3);
-  for (const artist of curated) {
-    assert.match(artist.identities.spotify, /^[A-Za-z0-9]{22}$/);
-    assert.match(artist.identities.musicbrainz, /^[0-9a-f-]{36}$/);
-    assert.equal(artist.identities.setlistFm, artist.identities.musicbrainz);
-    assert.ok(artist.provenance.length >= 3);
-  }
 });
 
 test("every festival has exactly one enabled ingestion source", () => {

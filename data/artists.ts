@@ -1,6 +1,13 @@
 import { allArtists, artistSlug } from "./festivals.ts";
+import enrichment from "./artist-enrichment.json" with { type: "json" };
 
-export type ArtistSource = "official" | "spotify" | "musicbrainz" | "setlist.fm";
+export type ArtistSource = "official" | "spotify" | "musicbrainz" | "setlist.fm" | "wikimedia";
+
+export type ArtistFreshness = {
+  checkedAt: string;
+  refreshAfter: string;
+  cadenceDays: number;
+};
 
 export type ArtistProfile = {
   name: string;
@@ -9,13 +16,14 @@ export type ArtistProfile = {
   origin?: string;
   genres: string[];
   biography?: string;
-  imageUrl?: string;
+  image?: { url: string; alt: string; width: number; height: number };
   identities: { spotify?: string; musicbrainz?: string; setlistFm?: string };
   identityState: "linked" | "ambiguous" | "unresolved" | "retryable";
-  links: { label: string; url: string; source: ArtistSource }[];
+  links: { label: string; url: string; source: ArtistSource; verified: boolean }[];
   topTracks: string[];
   recentSetlists: { date: string; venue: string; url: string }[];
   provenance: { field: string; source: ArtistSource; url: string; checkedAt: string }[];
+  freshness: { profile: ArtistFreshness; music: ArtistFreshness; setlists: ArtistFreshness };
 };
 
 const checkedAt = "2026-08-28";
@@ -26,13 +34,34 @@ const curated: Record<string, Partial<ArtistProfile>> = {
     origin: "Castrop-Rauxel, Germany",
     genres: ["electronicore", "metalcore"],
     biography: "German electronicore band known for combining metalcore with electronic and dance music.",
+    image: {
+      url: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/15/Electric_Callboy_%282024%29.jpg/960px-Electric_Callboy_%282024%29.jpg",
+      alt: "Electric Callboy performing in 2024",
+      width: 800,
+      height: 600,
+    },
     identities: {
       spotify: "5pz7f2hG2q2TuFovkw4Z0n",
       musicbrainz: "8e5d91df-ec18-4c9b-8d56-4f4039f03ae8",
       setlistFm: "8e5d91df-ec18-4c9b-8d56-4f4039f03ae8",
     },
     topTracks: ["Hypa Hypa", "We Got the Moves", "Pump It"],
-    links: [{ label: "Official site", url: "https://www.electriccallboy.com/", source: "official" }],
+    links: [
+      { label: "Official site", url: "https://www.electriccallboy.com/", source: "official", verified: true },
+      { label: "Instagram", url: "https://www.instagram.com/electriccallboy/", source: "official", verified: true },
+      { label: "setlist.fm", url: "https://www.setlist.fm/setlists/electric-callboy-3bd5d8b0.html", source: "setlist.fm", verified: true },
+    ],
+    recentSetlists: [
+      { date: "2026-08-01", venue: "Wacken Open Air, Wacken, Germany", url: "https://www.setlist.fm/setlists/electric-callboy-3bd5d8b0.html" },
+    ],
+    provenance: [
+      {
+        field: "image",
+        source: "wikimedia",
+        url: "https://commons.wikimedia.org/wiki/File:Electric_Callboy_(2024).jpg",
+        checkedAt,
+      },
+    ],
   },
   halestorm: {
     origin: "Red Lion, Pennsylvania, United States",
@@ -44,7 +73,7 @@ const curated: Record<string, Partial<ArtistProfile>> = {
       setlistFm: "95ca1a93-2392-4c21-9c78-2cb161b080e6",
     },
     topTracks: ["I Miss the Misery", "Love Bites (So Do I)", "I Am the Fire"],
-    links: [{ label: "Official site", url: "https://www.halestormrocks.com/", source: "official" }],
+    links: [{ label: "Official site", url: "https://www.halestormrocks.com/", source: "official", verified: true }],
   },
   helloween: {
     origin: "Hamburg, Germany",
@@ -56,22 +85,59 @@ const curated: Record<string, Partial<ArtistProfile>> = {
       setlistFm: "a5679add-31e5-45b1-9e94-4b1c3d9d9efb",
     },
     topTracks: ["I Want Out", "Future World", "Eagle Fly Free"],
-    links: [{ label: "Official site", url: "https://www.helloween.org/", source: "official" }],
+    links: [{ label: "Official site", url: "https://www.helloween.org/", source: "official", verified: true }],
   },
 };
 
+type GeneratedProfile = {
+  origin?: string;
+  genres: string[];
+  identities: { musicbrainz: string; setlistFm: string };
+  links: ArtistProfile["links"];
+  provenance: ArtistProfile["provenance"];
+};
+
+function generatedProfile(slug: string): Partial<ArtistProfile> {
+  const profile = (enrichment.profiles as Record<string, GeneratedProfile | undefined>)[slug];
+  if (!profile) return {};
+  return {
+    origin: profile.origin,
+    genres: profile.genres,
+    identities: profile.identities,
+    links: profile.links as ArtistProfile["links"],
+    provenance: profile.provenance as ArtistProfile["provenance"],
+  };
+}
+
 export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
   const slug = artistSlug(name);
-  const entry = curated[slug] || {};
+  const generated = generatedProfile(slug);
+  const override = curated[slug] || {};
+  const entry: Partial<ArtistProfile> = {
+    ...generated,
+    ...override,
+    identities: { ...generated.identities, ...override.identities },
+    genres: override.genres || generated.genres,
+    links: [...(generated.links || []), ...(override.links || [])],
+    provenance: [
+      ...(generated.provenance || []).filter(({ field }) => field !== "identity" || !override.identities?.musicbrainz),
+      ...(override.provenance || []),
+    ],
+  };
+  const identityLinks: ArtistProfile["links"] = [
+    ...(entry.identities?.spotify ? [{ label: "Spotify", url: `https://open.spotify.com/artist/${entry.identities.spotify}`, source: "spotify" as const, verified: true }] : []),
+    ...(entry.identities?.musicbrainz ? [{ label: "MusicBrainz", url: `https://musicbrainz.org/artist/${entry.identities.musicbrainz}`, source: "musicbrainz" as const, verified: true }] : []),
+  ];
+  const links = [...(entry.links || []), ...identityLinks];
   const identities = entry.identities || {};
-  const providerLinks: ArtistProfile["links"] = [];
-  if (identities.spotify) providerLinks.push({ label: "Spotify", url: `https://open.spotify.com/artist/${identities.spotify}`, source: "spotify" });
-  if (identities.musicbrainz) providerLinks.push({ label: "MusicBrainz", url: `https://musicbrainz.org/artist/${identities.musicbrainz}`, source: "musicbrainz" });
-  if (identities.setlistFm) providerLinks.push({ label: "setlist.fm", url: `https://www.setlist.fm/setlists/artist-${identities.setlistFm}.html`, source: "setlist.fm" });
-  const links = [...(entry.links || []), ...providerLinks];
   const identitySources = (["spotify", "musicbrainz", "setlist.fm"] as ArtistSource[])
-    .filter((source) => links.some((link) => link.source === source))
-    .map((source) => ({ field: "identity", source, url: links.find((link) => link.source === source)!.url, checkedAt }));
+    .filter((source) => links.some((link) => link.source === source && link.verified))
+    .map((source) => ({ field: "identity", source, url: links.find((link) => link.source === source && link.verified)!.url, checkedAt }));
+  const freshness = (cadenceDays: number): ArtistFreshness => ({
+    checkedAt,
+    cadenceDays,
+    refreshAfter: new Date(Date.parse(`${checkedAt}T00:00:00Z`) + cadenceDays * 86_400_000).toISOString().slice(0, 10),
+  });
   return {
     ...entry,
     name,
@@ -84,6 +150,7 @@ export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
     topTracks: entry.topTracks || [],
     recentSetlists: entry.recentSetlists || [],
     provenance: [...(entry.provenance || []), ...identitySources],
+    freshness: entry.freshness || { profile: freshness(90), music: freshness(14), setlists: freshness(7) },
   };
 });
 
