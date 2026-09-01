@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Festival } from "@/data/festivals";
 import type { AuditEntry, ParserRun, ReviewChange } from "@/lib/admin";
 import { useLanguage, type Language } from "./LanguageProvider";
 
 type Section = "content" | "review" | "submissions" | "assets" | "diagnostics" | "audit";
 type Submission = { reference:string; name:string; year:number; officialUrl:string; notes:string|null; status:"pending"|"approved"|"rejected"; submittedAt:string; audit:{action:string;at:string}[] };
+type Operator = { email: string; role: "USER" | "EDITOR" | "ADMIN" };
 
 export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntries, submissions: initialSubmissions }: { festivals: Festival[]; initialChanges: ReviewChange[]; parserRuns: ParserRun[]; auditEntries: AuditEntry[]; submissions: Submission[] }) {
   const [section, setSection] = useState<Section>("review");
@@ -21,8 +22,18 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
   const [artistDraft, setArtistDraft] = useState<Record<string, string>>({});
   const [festivalDraft, setFestivalDraft] = useState<Record<string, string>>({});
   const [assetDraft, setAssetDraft] = useState<Record<string, string>>({});
+  const [operator, setOperator] = useState<Operator | null>(null);
   const { language, setLanguage, ta } = useLanguage();
   const artists = useMemo(() => Array.from(new Set(festivals.flatMap((item) => [...item.headliners, ...item.lineup]))).filter((artist) => artist.toLowerCase().includes(artistQuery.toLowerCase())).slice(0, 12), [festivals, artistQuery]);
+  useEffect(() => {
+    fetch("/api/auth/me", { headers: { accept: "application/json" } })
+      .then((response) => response.ok ? response.json() : null)
+      .then((body) => {
+        const user = body?.user;
+        if (user && (user.role === "ADMIN" || user.role === "EDITOR" || user.role === "USER")) setOperator({ email: user.email, role: user.role });
+      })
+      .catch(() => undefined);
+  }, []);
 
   const decide = async (id: string, status: "approved" | "rejected") => {
     const response = await fetch(`/api/admin/changes/${id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ decision: status === "approved" ? "approve" : "reject" }) });
@@ -61,7 +72,7 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
       <a href="/">← {ta("publicSite")}</a>
     </nav>
     <section className="adminMain">
-      <header className="adminHeader"><div><div className="eyebrow">{ta("operations")}</div><h2>{section === "review" ? ta("detectedChanges") : section === "content" ? ta("contentEditor") : ta(section)}</h2></div><span className="adminRole">{ta("role")}</span></header>
+      <header className="adminHeader"><div><div className="eyebrow">{ta("operations")}</div><h2>{section === "review" ? ta("detectedChanges") : section === "content" ? ta("contentEditor") : ta(section)}</h2></div>{operator && <span className="adminRole"><strong>{ta(operator.role === "ADMIN" ? "roleAdmin" : operator.role === "EDITOR" ? "roleEditor" : "roleUser")}</strong><small>{operator.email}</small></span>}</header>
       {notice && <div className="adminNotice" role="status" aria-live="polite">{notice}<button onClick={() => setNotice("")} aria-label={ta("dismiss")}>×</button></div>}
 
       {section === "review" && <div className="reviewList">
