@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { festivals } from "../data/festivals.ts";
-import { artistProfiles } from "../data/artists.ts";
+import { artistProfiles, mergeArtistProfileSources } from "../data/artists.ts";
 import { festivalSources } from "../data/festival-sources.ts";
 import { INGESTION_SCHEMA_VERSION } from "../lib/ingestion/types.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
@@ -133,6 +133,31 @@ test("curated artist fields never retain provenance from discarded generated val
   const generatedPartial = artistProfiles.find(({ slug }) => slug !== "electric-callboy" && !artistProfiles.find(({ slug: candidate }) => candidate === slug)?.biography);
   assert.ok(generatedPartial);
   assert.ok(generatedPartial.provenance.length > 0);
+});
+
+test("a conflicting curated identity fails closed on generated artist enrichment", () => {
+  const discardedIdentity = "11111111-1111-4111-8111-111111111111";
+  const curatedIdentity = "22222222-2222-4222-8222-222222222222";
+  const discardedUrl = `https://musicbrainz.org/artist/${discardedIdentity}`;
+  const merged = mergeArtistProfileSources({
+    origin: "Wrong artist origin",
+    genres: ["wrong artist genre"],
+    identities: { musicbrainz: discardedIdentity, setlistFm: discardedIdentity },
+    links: [{ label: "MusicBrainz", url: discardedUrl, source: "musicbrainz", verified: true }],
+    provenance: [
+      { field: "identity", source: "musicbrainz", url: discardedUrl, checkedAt: "2026-08-30" },
+      { field: "origin", source: "musicbrainz", url: discardedUrl, checkedAt: "2026-08-30" },
+      { field: "genres", source: "musicbrainz", url: discardedUrl, checkedAt: "2026-08-30" },
+    ],
+  }, {
+    identities: { musicbrainz: curatedIdentity },
+  });
+
+  assert.deepEqual(merged.identities, { musicbrainz: curatedIdentity });
+  assert.equal(merged.origin, undefined);
+  assert.equal(merged.genres, undefined);
+  assert.deepEqual(merged.links, []);
+  assert.deepEqual(merged.provenance, []);
 });
 
 test("the production deploy smoke uses an existing artist profile", async () => {
