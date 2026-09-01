@@ -10,7 +10,7 @@ export function PrivacyAnalytics() {
 
   useEffect(() => {
     const endpoint = process.env.NEXT_PUBLIC_ANALYTICS_ENDPOINT;
-    if (!endpoint || lastPath.current === pathname) return;
+    if (!endpoint || !pathname || lastPath.current === pathname) return;
     lastPath.current = pathname;
     sendPrivacyPageView({ endpoint, pathname, navigator, document });
   }, [pathname]);

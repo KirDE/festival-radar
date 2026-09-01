@@ -22,7 +22,7 @@ export function ArtistDetail({
       : `${appearances.length} ${festivalWord} ${t("announcedFor")}`;
   return (
     <div className="artistPage">
-      <Link className="back" href="/">
+      <Link className="back" href={`/${language}/`}>
         ← {t("festivalDirectory")}
       </Link>
       <FavoriteButton kind="artist" value={artist.name} />
@@ -98,7 +98,7 @@ export function ArtistDetail({
       <section className="appearances">
         <div className="eyebrow">{t("appearances")}</div>
         {appearances.map((festival) => (
-          <Link href={`/festivals/${festival.slug}/`} key={festival.slug}>
+          <Link href={`/${language}/festivals/${festival.slug}/`} key={festival.slug}>
             <span>{festival.countryCode}</span>
             <strong>{festival.name}</strong>
             <em>{festival.city}</em>
