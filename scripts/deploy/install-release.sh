@@ -145,6 +145,34 @@ ProxyPassReverse / http://127.0.0.1:$port/
 RequestHeader set X-Forwarded-Proto "https" env=HTTPS
 APACHE
 
+# Privacy analytics bypasses both nginx and Apache access logs. The exact
+# locations proxy directly to the loopback application and deliberately omit
+# client-address forwarding; query strings do not participate in nginx
+# location matching, so both endpoint spellings remain covered.
+nginx_vhost="/var/www/vhosts/system/$domain/conf/vhost_nginx.conf"
+cat > "$nginx_vhost" <<NGINX
+location = /api/analytics/page-view {
+    access_log off;
+    proxy_pass http://127.0.0.1:$port;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Real-IP "";
+    proxy_set_header X-Forwarded-For "";
+}
+
+location = /api/analytics/page-view/ {
+    access_log off;
+    proxy_pass http://127.0.0.1:$port;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Real-IP "";
+    proxy_set_header X-Forwarded-For "";
+}
+NGINX
+chmod 0644 "$nginx_vhost"
+
 if [[ -f "$env_file" ]]; then
   cp -p "$env_file" "$previous_env"
   had_previous_env=true
