@@ -12,6 +12,17 @@ import youtube_music_auto_resume as auto_resume
 
 
 class YouTubeMusicTransferTest(unittest.TestCase):
+    def test_search_client_does_not_receive_playlist_oauth(self):
+        unauthenticated_client = mock.Mock()
+        ytmusic_module = mock.Mock()
+        ytmusic_module.YTMusic.return_value = unauthenticated_client
+
+        with mock.patch.dict(sys.modules, {'ytmusicapi': ytmusic_module}):
+            result = transfer.load_ytmusic()
+
+        self.assertIs(result, unauthenticated_client)
+        ytmusic_module.YTMusic.assert_called_once_with()
+
     def test_search_errors_are_counted_without_caching_provider_text(self):
         query = {
             'artist': 'Example Artist',

@@ -126,14 +126,14 @@ def save_json(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
-def load_ytmusic(auth_path: Path | None = None, credentials_path: Path = DEFAULT_CREDENTIALS):
+def load_ytmusic():
     from ytmusicapi import YTMusic
-    from ytmusicapi.auth.oauth.credentials import OAuthCredentials
 
-    if auth_path and auth_path.exists():
-        creds = load_json(credentials_path, {})
-        oauth_credentials = OAuthCredentials(creds['client_id'], creds['client_secret'])
-        return YTMusic(auth=str(auth_path), oauth_credentials=oauth_credentials)
+    # Search is a public YouTube Music operation. The OAuth token used for
+    # playlist writes is intentionally scoped to the YouTube Data API and can
+    # be rejected by YouTube Music's private search endpoint. Keep discovery
+    # unauthenticated and use the protected OAuth files only in the explicit
+    # Data API write/read-back helpers below.
     return YTMusic()
 
 
@@ -531,7 +531,7 @@ def main() -> int:
     if not source_tracks:
         raise RuntimeError(f'no tracks found in report: {report_path}')
 
-    ytmusic = load_ytmusic(Path(args.oauth) if args.publish else None, Path(args.credentials))
+    ytmusic = load_ytmusic()
     cache_path = Path(args.cache)
     cache = load_json(cache_path, {})
     matched = []
