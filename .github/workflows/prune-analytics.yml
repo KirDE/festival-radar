@@ -18,14 +18,16 @@ jobs:
     environment: production
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx prisma generate
-      - run: npm run analytics:prune
+      - name: Prune through production-local retention API
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          ANALYTICS_RETENTION_DAYS: ${{ vars.ANALYTICS_RETENTION_DAYS || '90' }}
+          APP_URL: ${{ secrets.APP_URL }}
+          ANALYTICS_RETENTION_TOKEN: ${{ secrets.ANALYTICS_RETENTION_TOKEN }}
+        run: |
+          test -n "$APP_URL"
+          test -n "$ANALYTICS_RETENTION_TOKEN"
+          response="$(curl --fail-with-body --silent --show-error --max-time 60 \
+            -X POST \
+            -H "authorization: Bearer $ANALYTICS_RETENTION_TOKEN" \
+            "${APP_URL%/}/api/analytics/prune/")"
+          jq -e '.deletedAggregateRows >= 0 and (.cutoff | type == "string") and (.retentionDays >= 1 and .retentionDays <= 730)' <<<"$response"
+          printf '%s\n' "$response"

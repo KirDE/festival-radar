@@ -47,10 +47,19 @@ test("deployment builds and installs the privacy analytics contract", async () =
   const pruneWorkflow = await readFile(".github/workflows/prune-analytics.yml", "utf8");
   assert.match(workflow, /NEXT_PUBLIC_ANALYTICS_ENDPOINT: \/api\/analytics\/page-view\//);
   assert.match(workflow, /ANALYTICS_OPERATOR_TOKEN: \$\{\{ secrets\.ANALYTICS_OPERATOR_TOKEN \}\}/);
+  assert.match(workflow, /ANALYTICS_RETENTION_TOKEN: \$\{\{ secrets\.ANALYTICS_RETENTION_TOKEN \}\}/);
   assert.match(workflow, /printf 'ANALYTICS_OPERATOR_TOKEN=%q\\n'/);
   assert.match(workflow, /printf 'ANALYTICS_RETENTION_DAYS=%q\\n'/);
   assert.match(pruneWorkflow, /environment: production/);
-  assert.match(pruneWorkflow, /DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}/);
+  assert.doesNotMatch(pruneWorkflow, /DATABASE_URL/);
+  assert.match(pruneWorkflow, /ANALYTICS_RETENTION_TOKEN: \$\{\{ secrets\.ANALYTICS_RETENTION_TOKEN \}\}/);
+  assert.match(pruneWorkflow, /\/api\/analytics\/prune\//);
+});
+
+test("analytics retention route fails closed behind its dedicated secret", async () => {
+  const route = await readFile("app/api/analytics/prune/route.ts", "utf8");
+  assert.match(route, /!token \|\| request\.headers\.get\("authorization"\) !== `Bearer \$\{token\}`/);
+  assert.match(route, /pruneAnalytics\(db, process\.env\.ANALYTICS_RETENTION_DAYS\)/);
 });
 
 for (const routeName of ["events", "dispatch"]) {
