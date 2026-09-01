@@ -22,7 +22,11 @@ DEFAULT_OAUTH = Path('/home/openclaw/.openclaw/credentials/youtube-music-oauth.j
 DEFAULT_CACHE = Path('tmp/festival_playlists_cache/youtube_music_search_cache.json')
 DEFAULT_OUTPUT_DIR = Path('outputs/youtube_music')
 SEARCH_CACHE_VERSION = 'ytm-transfer-v2'
-DEFAULT_MAX_NEW_ITEMS = 190
+# The default YouTube Data API project quota is commonly 10,000 units/day and
+# each playlist insertion costs 50 units. Reserve half of that daily budget for
+# metadata, read-back, retries, other playlists, and unrelated project traffic;
+# resume mode will finish larger playlists across subsequent runs.
+DEFAULT_MAX_NEW_ITEMS = 100
 YOUTUBE_QUOTA_PLAYLIST_WRITE = 50
 YOUTUBE_QUOTA_PLAYLIST_ITEM_WRITE = 50
 YOUTUBE_QUOTA_PLAYLIST_ITEM_LIST = 1

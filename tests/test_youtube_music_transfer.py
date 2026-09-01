@@ -12,6 +12,13 @@ import youtube_music_auto_resume as auto_resume
 
 
 class YouTubeMusicTransferTest(unittest.TestCase):
+    def test_default_write_cap_reserves_half_of_the_daily_quota(self):
+        self.assertEqual(transfer.DEFAULT_MAX_NEW_ITEMS, 100)
+        self.assertEqual(
+            transfer.DEFAULT_MAX_NEW_ITEMS * transfer.YOUTUBE_QUOTA_PLAYLIST_ITEM_WRITE,
+            5000,
+        )
+
     def test_data_api_error_exposes_only_status_and_provider_reason(self):
         response = mock.Mock(status_code=403)
 

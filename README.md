@@ -225,7 +225,7 @@ Publish a new YouTube Music playlist after OAuth is ready:
 python3 scripts/spotify_gmm_2026/youtube_music_transfer.py --publish
 ```
 
-YouTube Data API quota is counted in units, not requests. Playlist item inserts cost 50 units each, so the default publisher caps each run at 190 new items and reports the remaining count.
+YouTube Data API quota is counted in units, not requests. Playlist item inserts cost 50 units each, so the default publisher caps each run at 100 new items (5,000 units), preserving half of a typical 10,000-unit daily project budget for metadata, read-back, retries, other playlists, and unrelated project traffic. Resume mode reports and processes the remaining count on later runs.
 
 Resume an existing YouTube Music playlist after the daily quota resets:
 
