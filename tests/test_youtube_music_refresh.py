@@ -101,6 +101,11 @@ class YouTubeRefreshTests(unittest.TestCase):
         self.assertEqual(MODULE.classify_provider_failure('invalid_grant'), 'authentication')
         self.assertEqual(MODULE.classify_provider_failure('invalid playlist id'), 'mapping')
         self.assertEqual(MODULE.classify_provider_failure('unexpected provider response'), 'publishing')
+        self.assertEqual(
+            MODULE.provider_diagnostic('YouTube playlist read-back failed: persisted metadata does not match'),
+            'read_back_metadata',
+        )
+        self.assertEqual(MODULE.provider_diagnostic('provider said something private'), 'provider_rejected')
 
     def test_provider_file_validation_reports_fields_without_values(self):
         with tempfile.TemporaryDirectory() as root:

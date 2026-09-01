@@ -56,6 +56,27 @@ def classify_provider_failure(stderr: str) -> str:
     return 'publishing'
 
 
+def provider_diagnostic(stderr: str) -> str:
+    normalized = stderr.casefold()
+    known_read_back_failures = (
+        ('persisted playlist id was not returned', 'read_back_playlist_id'),
+        ('persisted metadata does not match', 'read_back_metadata'),
+        ('persisted track set is empty', 'read_back_empty_tracks'),
+        ('persisted track set contains duplicates', 'read_back_duplicate_tracks'),
+        ('no requested tracks were persisted', 'read_back_requested_tracks'),
+        ('publishing aborted: no matched tracks', 'no_matched_tracks'),
+    )
+    for marker, diagnostic in known_read_back_failures:
+        if marker in normalized:
+            return diagnostic
+    return {
+        'authentication': 'authentication_rejected',
+        'quota': 'quota_rejected',
+        'mapping': 'mapping_rejected',
+        'publishing': 'provider_rejected',
+    }[classify_provider_failure(stderr)]
+
+
 def run_all(report_dir: Path, output_dir: Path, playlist_ids: dict[str, str], *, publish: bool, credentials: Path | None = None, oauth: Path | None = None) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     results = []
@@ -85,6 +106,7 @@ def run_all(report_dir: Path, output_dir: Path, playlist_ids: dict[str, str], *,
             'status': 'ok' if completed.returncode == 0 else 'failed',
             'category': category,
             'returncode': completed.returncode,
+            **({'diagnostic': provider_diagnostic(completed.stderr)} if completed.returncode else {}),
         })
     succeeded = sum(item['status'] == 'ok' for item in results)
     failed = sum(item['status'] == 'failed' for item in results)
