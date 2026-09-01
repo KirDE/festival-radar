@@ -34,4 +34,5 @@ test("admin renders the authenticated operator role instead of a hard-coded edit
   assert.match(admin, /operator\.email/);
   assert.match(catalog, /roleAdmin: "Administrator"/);
   assert.match(catalog, /roleEditor: "Editor · Review required"/);
+  assert.match(admin, /operator\?\.role === "ADMIN"/);
 });

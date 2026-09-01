@@ -37,7 +37,7 @@ class Client {
 test.before(async () => {
   await db.$executeRawUnsafe('TRUNCATE TABLE "AdminChange", "AdminDraft", "AdminParserRun", "AdminResourceState", "AdminAuditEntry", "Session", "User" CASCADE');
   sourceServer.listen(3250, "127.0.0.1"); await once(sourceServer, "listening");
-  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(port)], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "admin-integration-secret-at-least-32", SUBMISSION_HASH_SALT: "integration-submission-salt", ADMIN_EMAILS: "admin@example.test", ADMIN_TEST_SOURCE_URL: "http://127.0.0.1:3250/source" }, stdio: "ignore" });
+  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(port)], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "admin-integration-secret-at-least-32", SUBMISSION_HASH_SALT: "integration-submission-salt", ADMIN_EMAILS: "viewer@example.test,editor@example.test,admin@example.test", ADMIN_TEST_SOURCE_URL: "http://127.0.0.1:3250/source" }, stdio: "ignore" });
   for (let attempt = 0; attempt < 120; attempt += 1) { try { if ((await fetch(origin)).status < 500) return; } catch {} await new Promise((resolve) => setTimeout(resolve, 250)); }
   throw new Error("Integration server did not start");
 });
@@ -60,8 +60,19 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   const nonAdmin = new Client();
   assert.equal((await nonAdmin.json("/api/auth/register", "POST", { email: "viewer@example.test", password: "correct horse battery staple" })).status, 201);
   assert.equal((await nonAdmin.json("/api/admin")).status, 403);
+  assert.equal((await nonAdmin.json("/api/admin", "POST", { resourceKind: "festival", resourceKey: "denied", baseRevision: 0, values: { city: "denied" } })).status, 403);
+  assert.equal((await nonAdmin.json("/api/admin/refresh/wacken-open-air", "POST")).status, 403);
+
+  const editor = new Client();
+  assert.equal((await editor.json("/api/auth/register", "POST", { email: "editor@example.test", password: "correct horse battery staple" })).status, 201);
+  await db.user.update({ where: { email: "editor@example.test" }, data: { role: "EDITOR" } });
+  assert.equal((await editor.json("/api/admin")).status, 200);
+  assert.equal((await editor.json("/api/admin", "POST", { resourceKind: "link", resourceKey: "editor-draft", baseRevision: 0, values: { officialUrl: "https://editor.example.test" } })).status, 201);
+  assert.equal((await editor.json("/api/admin/refresh/wacken-open-air", "POST")).status, 403);
+
   const admin = new Client();
   assert.equal((await admin.json("/api/auth/register", "POST", { email: "admin@example.test", password: "correct horse battery staple" })).status, 201);
+  await db.user.update({ where: { email: "admin@example.test" }, data: { role: "ADMIN" } });
   const draftResponse = await admin.json("/api/admin", "POST", { resourceKind: "festival", resourceKey: "wacken-open-air", baseRevision: 0, values: { city: "Wacken Preview", status: "confirmed" } });
   assert.equal(draftResponse.status, 201);
   const draft = await draftResponse.json();
