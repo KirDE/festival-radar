@@ -20,9 +20,12 @@ test("admin edits, reviews, diagnostics and audit survive reload", async ({ page
   await page.getByRole("button", { name: "Send for editorial review" }).click();
   await expect(page.getByRole("status")).toContainText("Received for review");
   expect((await page.request.post("/api/auth/register", { data: { email: "browser-admin@example.test", password: "correct horse battery staple" } })).status()).toBe(201);
+  await db.user.update({ where: { email: "browser-admin@example.test" }, data: { role: "ADMIN" } });
 
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Detected changes" })).toBeVisible();
+  await expect(page.locator(".adminRole")).toContainText("Administrator");
+  await expect(page.locator(".adminRole")).toContainText("browser-admin@example.test");
   await page.getByRole("button", { name: /Festival submissions/ }).click();
   const submission = page.locator("article.reviewCard").filter({ hasText: "Browser Metal Festival" });
   await expect(submission).toContainText("Browser-created durable submission");
@@ -75,4 +78,28 @@ test("admin edits, reviews, diagnostics and audit survive reload", async ({ page
   expect(snapshot.drafts).toHaveLength(4);
   expect(snapshot.resources.find((item) => item.resourceKind === "FESTIVAL")?.values.city).toBe("Wacken E2E City");
   expect(new Set(snapshot.drafts.map((item) => item.resourceKind))).toEqual(new Set(["FESTIVAL", "ARTIST", "LINK", "ASSET"]));
+
+  const sections = ["Review queue", "Festival submissions", "Festivals & artists", "Links & assets", "Parser diagnostics", "Audit history"];
+  for (const width of [320, 375, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const name of sections) {
+      await page.getByRole("button", { name: new RegExp(name) }).click();
+      const layout = await page.evaluate(() => ({
+        viewport: window.innerWidth,
+        document: document.documentElement.scrollWidth,
+        body: document.body.scrollWidth,
+        nav: document.querySelector(".adminNav")?.scrollWidth,
+        main: document.querySelector(".adminMain")?.scrollWidth,
+      }));
+      expect(layout.document, `${name} at ${width}px: ${JSON.stringify(layout)}`).toBeLessThanOrEqual(layout.viewport);
+    }
+  }
+});
+
+test("editor identity is rendered truthfully", async ({ page }) => {
+  expect((await page.request.post("/api/auth/register", { data: { email: "browser-editor@example.test", password: "correct horse battery staple" } })).status()).toBe(201);
+  await db.user.update({ where: { email: "browser-editor@example.test" }, data: { role: "EDITOR" } });
+  await page.goto("/admin");
+  await expect(page.locator(".adminRole")).toContainText("Editor · Review required");
+  await expect(page.locator(".adminRole")).toContainText("browser-editor@example.test");
 });
