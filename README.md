@@ -121,8 +121,10 @@ The receiver stores only daily `path`/`locale` counters in PostgreSQL. Set
 `ANALYTICS_RETENTION_DAYS` (90 by default) and configure the dedicated
 `ANALYTICS_RETENTION_TOKEN` used by the daily production retention workflow.
 The workflow invokes `/api/analytics/prune/`; database credentials remain
-inside production. Reverse-proxy access logging for `/api/analytics/page-view` must be
-disabled so IP addresses are not retained outside this schema. Operators can
+inside production. Each release installs exact nginx locations for both
+`/api/analytics/page-view` spellings. Those locations disable access logging,
+proxy directly to the loopback application, and remove client-address forwarding
+so IP addresses are not retained outside this schema. Operators can
 verify accepted counts without visitor data:
 
 ```bash
@@ -133,7 +135,11 @@ curl -fsS -H "Authorization: Bearer $ANALYTICS_OPERATOR_TOKEN" \
 The response contains only the time window, total views and aggregate rows.
 Production verification is complete when a test page view returns HTTP 204,
 the total increments once after one route transition, and the database has no
-analytics rows older than the configured retention window.
+analytics rows older than the configured retention window. Record the current
+line counts of both Plesk proxy access logs, submit uniquely marked requests to
+the endpoint with and without the trailing slash, then confirm neither marker
+nor a new analytics request line appears while an ordinary control request is
+still logged.
 
 ## Main scripts
 
