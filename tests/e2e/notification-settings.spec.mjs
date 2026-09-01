@@ -31,7 +31,7 @@ test.afterAll(async () => db.$disconnect());
 test("canonical event values persist and authenticated mobile layout does not overflow", async ({ page }) => {
   const registration = await page.request.post("/api/auth/register", { data: { email, password } });
   expect(registration.status()).toBe(201);
-  await db.user.update({ where: { email }, data: { emailVerified: new Date() } });
+  await db.user.update({ where: { email }, data: { emailVerifiedAt: new Date() } });
 
   await page.goto("/en/notifications/");
   await expect(page.getByRole("heading", { name: "Notification settings", exact: true }).first()).toBeVisible();
@@ -80,7 +80,7 @@ test("canonical event values persist and authenticated mobile layout does not ov
 test("operation feedback follows the selected German and Russian language", async ({ page }) => {
   const registration = await page.request.post("/api/auth/register", { data: { email: localeEmail, password } });
   expect(registration.status()).toBe(201);
-  await db.user.update({ where: { email: localeEmail }, data: { emailVerified: new Date() } });
+  await db.user.update({ where: { email: localeEmail }, data: { emailVerifiedAt: new Date() } });
 
   await page.goto("/en/notifications/");
   await page.locator(".languagePicker select").selectOption("de");

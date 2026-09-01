@@ -16,6 +16,10 @@ export default defineConfig({
       APP_URL: "http://localhost:3245",
       ADMIN_EMAILS: "browser-admin@example.test,browser-editor@example.test,browser-viewer@example.test",
       SUBMISSION_HASH_SALT: "browser-submission-test-salt",
+      EMAIL_WEBHOOK_URL: "http://provider.example.test/email",
+      TELEGRAM_BOT_TOKEN: "browser-test-token",
+      WEB_PUSH_WEBHOOK_URL: "http://provider.example.test/web-push",
+      NEXT_PUBLIC_WEB_PUSH_VAPID_KEY: "browser-test-vapid-key",
     },
   },
 });
