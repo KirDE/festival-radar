@@ -38,6 +38,8 @@ set +a
 export DEPLOYED_COMMIT="$commit" PORT="$port" HOSTNAME=127.0.0.1
 "$release/.runtime/node" node_modules/prisma/build/index.js generate
 "$release/.runtime/node" node_modules/prisma/build/index.js migrate deploy
+python3 -m venv "$shared/playlist-venv"
+"$shared/playlist-venv/bin/pip" install --disable-pip-version-check --no-input -r "$release/requirements.txt"
 
 cat > "/etc/systemd/system/$service.service" <<UNIT
 [Unit]
@@ -65,6 +67,48 @@ ReadWritePaths=$app_root
 [Install]
 WantedBy=multi-user.target
 UNIT
+
+cat > "/etc/systemd/system/$service-collection@.service" <<UNIT
+[Unit]
+Description=Festival Radar production collection job %i
+After=network-online.target $service.service
+Requires=$service.service
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=$app_root/current
+EnvironmentFile=$shared/production.env
+Environment=NODE_ENV=production
+Environment=APP_ROOT=$app_root
+Environment=PLAYLIST_PYTHON=$shared/playlist-venv/bin/python
+Environment=COLLECTION_APP_URL=http://127.0.0.1:$port
+ExecStart=$app_root/current/scripts/deploy/run-collection-job.sh %i
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=$shared $app_root/current/data
+TimeoutStartSec=2700
+UNIT
+
+install_collection_timer() {
+  local job="$1" calendar="$2"
+  cat > "/etc/systemd/system/$service-collection-$job.timer" <<UNIT
+[Unit]
+Description=Schedule Festival Radar collection job $job
+[Timer]
+OnCalendar=$calendar
+Persistent=true
+RandomizedDelaySec=300
+Unit=$service-collection@$job.service
+[Install]
+WantedBy=timers.target
+UNIT
+}
+install_collection_timer artist-identities '*-*-* *:17:00 UTC'
+install_collection_timer ingestion '*-*-* 03:23:00 UTC'
+install_collection_timer playlists 'Tue,Fri *-*-* 04:17:00 UTC'
+install_collection_timer source-monitor '*-*-01,04,07,10,13,16,19,22,25,28 04:17:00 UTC'
 
 cat > "/etc/systemd/system/$service-notifications.service" <<UNIT
 [Unit]
@@ -190,6 +234,9 @@ ln -sfn "$release" "$app_root/current"
 chown -R www-data:www-data "$release" "$shared"
 systemctl daemon-reload
 systemctl enable "$service"
+for collection_job in artist-identities ingestion playlists source-monitor; do
+  systemctl enable --now "$service-collection-$collection_job.timer"
+done
 systemctl restart "$service"
 systemctl enable --now "$service-notifications.timer"
 systemctl enable --now "$service-analytics-retention.timer"
