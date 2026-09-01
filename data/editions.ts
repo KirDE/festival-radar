@@ -45,16 +45,41 @@ const wacken2026: FestivalEdition = Object.freeze({
   ]),
 });
 
-const ABSENCE_ONLY_EVIDENCE = /\b(?:no|not|nothing|tba|unannounced|unconfirmed)\b/i;
+const ABSENCE_ONLY_EVIDENCE = /\b(?:no|nothing|tba|unannounced|unconfirmed|not\s+(?:yet\s+)?(?:been\s+)?(?:announced|confirmed|published|established))\b/i;
+
+function normalizedHostname(url: URL) {
+  return url.hostname.toLocaleLowerCase().replace(/^www\./, "");
+}
 
 export function hasEditionSpecificOfficialEvidence(item: FestivalEdition) {
-  const year = String(item.editionYear);
-  return item.provenance.some((source) =>
-    source.field === "edition"
-    && source.url.startsWith("https://")
-    && (source.url.includes(year) || source.note.includes(year))
-    && !ABSENCE_ONLY_EVIDENCE.test(source.note),
-  );
+  if (item.recordState !== "tracking") return false;
+
+  let officialSource: URL;
+  try {
+    officialSource = new URL(item.officialUrl);
+  } catch {
+    return false;
+  }
+
+  const yearPattern = new RegExp(`(^|[^0-9])${item.editionYear}([^0-9]|$)`);
+  return item.provenance.some((source) => {
+    if (source.field !== "edition" || ABSENCE_ONLY_EVIDENCE.test(source.note)) return false;
+
+    try {
+      const artifact = new URL(source.url);
+      return artifact.protocol === "https:"
+        && normalizedHostname(artifact) === normalizedHostname(officialSource)
+        // Notes describe evidence; they are not evidence themselves. The durable
+        // official artifact must identify the edition year in its own URL.
+        && yearPattern.test(`${artifact.pathname}${artifact.search}${artifact.hash}`);
+    } catch {
+      return false;
+    }
+  });
+}
+
+export function publishableFutureEditions(items: readonly FestivalEdition[]) {
+  return Object.freeze(items.filter(hasEditionSpecificOfficialEvidence));
 }
 
 const currentEditions: FestivalEdition[] = festivals.map((item) => ({
@@ -69,7 +94,7 @@ export const archivedEditions = Object.freeze([wacken2026]);
 // Future editions belong here only after an official, edition-specific artifact
 // explicitly establishes the year. A generic homepage or an absence-of-news
 // check is a research watchlist signal, not evidence for a FestivalEdition.
-export const trackedFutureEditions: readonly FestivalEdition[] = Object.freeze([]);
+export const trackedFutureEditions: readonly FestivalEdition[] = publishableFutureEditions([]);
 export const festivalEditions: readonly FestivalEdition[] = Object.freeze([
   ...archivedEditions,
   ...currentEditions,
