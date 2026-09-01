@@ -19,6 +19,16 @@ export async function adminSnapshot() {
   return { drafts, resources, changes, runs, audit, submissions };
 }
 
+export async function parserRunLog(id: string) {
+  if (!id) throw new Error("Parser run not found");
+  const run = await db.adminParserRun.findUnique({
+    where: { id },
+    select: { id: true, festivalSlug: true, status: true, startedAt: true, finishedAt: true, log: true },
+  });
+  if (!run) throw new Error("Parser run not found");
+  return run;
+}
+
 export async function decideSubmission(reference: string, decision: "approve" | "reject", reviewNote: string, actor: { id: string; email: string }) {
   return db.$transaction(async (tx) => {
     const submission = await tx.festivalSubmission.findUnique({ where: { publicReference: reference } });
