@@ -24,6 +24,14 @@
 .channelRow small, .preferenceRow small { display: block; color: #68665f; }
 @media (max-width: 850px) { .notificationForm { grid-template-columns: 1fr 1fr; } .notificationGrid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .notificationPage { padding: 32px 18px; } .notificationForm { grid-template-columns: 1fr; } .channelRow, .preferenceRow { align-items: stretch; flex-direction: column; } }
+@media (max-width: 600px) {
+  .siteHeader { height: auto; min-height: 78px; flex-wrap: wrap; gap: 10px 14px; padding-top: 12px; padding-bottom: 12px; }
+  .siteHeader .brand { flex: 1 1 auto; min-width: 0; }
+  .siteHeader nav { order: 3; width: 100%; gap: 10px 16px; flex-wrap: wrap; }
+  .siteHeader nav a { min-width: 0; }
+  .siteHeader .accountMenu { max-width: min(48%, 190px); min-width: 0; }
+  .siteHeader .accountButton { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
 
 .localActions {
   display: flex;
