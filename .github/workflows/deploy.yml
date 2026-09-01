@@ -61,13 +61,15 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           APP_URL: ${{ secrets.APP_URL }}
+          ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
           ANALYTICS_OPERATOR_TOKEN: ${{ secrets.ANALYTICS_OPERATOR_TOKEN }}
+          ANALYTICS_RETENTION_TOKEN: ${{ secrets.ANALYTICS_RETENTION_TOKEN }}
           ANALYTICS_RETENTION_DAYS: ${{ vars.ANALYTICS_RETENTION_DAYS || '90' }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         run: |
-          for name in DATABASE_URL AUTH_SECRET APP_URL INTERNAL_API_SECRET ANALYTICS_OPERATOR_TOKEN SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
+          for name in DATABASE_URL AUTH_SECRET APP_URL ADMIN_EMAILS INTERNAL_API_SECRET ANALYTICS_OPERATOR_TOKEN ANALYTICS_RETENTION_TOKEN SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
             test -n "${!name}" || { echo "Missing required production secret: $name" >&2; exit 1; }
           done
           umask 077
@@ -75,15 +77,20 @@ jobs:
             printf 'DATABASE_URL=%q\n' "$DATABASE_URL"
             printf 'AUTH_SECRET=%q\n' "$AUTH_SECRET"
             printf 'APP_URL=%q\n' "$APP_URL"
+            printf 'ADMIN_EMAILS=%q\n' "$ADMIN_EMAILS"
             printf 'INTERNAL_API_SECRET=%q\n' "$INTERNAL_API_SECRET"
             printf 'ANALYTICS_OPERATOR_TOKEN=%q\n' "$ANALYTICS_OPERATOR_TOKEN"
+            printf 'ANALYTICS_RETENTION_TOKEN=%q\n' "$ANALYTICS_RETENTION_TOKEN"
             printf 'ANALYTICS_RETENTION_DAYS=%q\n' "$ANALYTICS_RETENTION_DAYS"
+            printf 'ANALYTICS_RETENTION_STATE_FILE=%q\n' '/opt/festival-radar/shared/analytics-retention-state.json'
             printf 'SPOTIFY_CLIENT_ID=%q\n' "$SPOTIFY_CLIENT_ID"
             printf 'SPOTIFY_CLIENT_SECRET=%q\n' "$SPOTIFY_CLIENT_SECRET"
+            printf 'NOTIFICATION_SCHEDULER_STATE_FILE=%q\n' '/opt/festival-radar/shared/notification-scheduler-state.json'
             printf 'DEPLOYED_COMMIT=%q\n' "$GITHUB_SHA"
           } > production.env
       - name: Upload and activate release
         run: |
+          ssh production sudo -n /usr/local/libexec/festival-radar/upgrade-deployment-assets "$GITHUB_SHA"
           ssh production 'test "$(id -un)" = festival-radar-deploy && sudo -n /usr/local/libexec/festival-radar/activate-release 0000000000000000000000000000000000000000 2>&1 | grep -Fq "missing regular deployment input"'
           scp release.tar.gz "production:/var/lib/festival-radar-deploy/incoming/$GITHUB_SHA.tar.gz"
           scp production.env "production:/var/lib/festival-radar-deploy/incoming/$GITHUB_SHA.env"

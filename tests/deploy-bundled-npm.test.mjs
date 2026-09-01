@@ -5,11 +5,19 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-test("release bundles npm and the installer never calls a system npm", async () => {
+test("installer invokes only the bundled npm for production dependencies", async () => {
   const installer = await readFile("scripts/deploy/install-release.sh", "utf8");
   assert.match(installer, /\.runtime\/node" "\$release\/\.runtime\/npm\/bin\/npm-cli\.js"/);
+  assert.match(installer, /ci --omit=dev --ignore-scripts --no-audit --no-fund/);
   assert.doesNotMatch(installer, /^npm\s+ci/m);
+  assert.ok(
+    installer.indexOf(".runtime/npm/bin/npm-cli.js") <
+      installer.indexOf("node_modules/prisma/build/index.js generate"),
+    "bundled npm must install dependencies before Prisma activation",
+  );
+});
 
+test("release bundles a working npm that needs no system npm on PATH", async () => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "festival-radar-release-"));
   try {
     await mkdir(path.join(temporary, ".next", "standalone"), { recursive: true });
@@ -18,13 +26,17 @@ test("release bundles npm and the installer never calls a system npm", async () 
     await mkdir(path.join(temporary, "prisma"));
     await mkdir(path.join(temporary, "data"));
     await mkdir(path.join(temporary, "lib"));
+    await mkdir(path.join(temporary, "scripts", "analytics"), { recursive: true });
     await mkdir(path.join(temporary, "scripts", "deploy"), { recursive: true });
+    await mkdir(path.join(temporary, "scripts", "notifications"), { recursive: true });
     await writeFile(path.join(temporary, ".next", "standalone", "server.js"), "");
     for (const file of ["package.json", "package-lock.json"]) {
       await writeFile(path.join(temporary, file), await readFile(file));
     }
     await writeFile(path.join(temporary, "scripts", "ingest-festivals.mjs"), "");
     await writeFile(path.join(temporary, "scripts", "deploy", "reconfigure-webserver.sh"), "#!/bin/sh\n");
+    await writeFile(path.join(temporary, "scripts", "analytics", "prune-production.sh"), "#!/bin/sh\n");
+    await writeFile(path.join(temporary, "scripts", "notifications", "dispatch-production.sh"), "#!/bin/sh\n");
     const archive = path.join(temporary, "release.tar.gz");
     execFileSync("bash", [path.resolve("scripts/deploy/package-release.sh"), "a".repeat(40), archive], {
       cwd: temporary,
