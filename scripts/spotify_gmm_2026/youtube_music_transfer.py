@@ -346,10 +346,24 @@ def read_back_youtube_playlist(
     }
 
 
-def search_youtube_track(ytmusic, query: dict, cache: dict, *, pause_seconds: float = 0.0) -> dict | None:
+def classify_search_exception(exc: Exception) -> str:
+    response = getattr(exc, 'response', None)
+    status_code = getattr(response, 'status_code', None)
+    normalized = str(exc).casefold()
+    if status_code == 429 or 'quota' in normalized or 'rate limit' in normalized:
+        return 'quota'
+    if status_code in (401, 403) or any(marker in normalized for marker in ('auth', 'unauthorized', 'invalid_grant', 'access token')):
+        return 'authentication'
+    return 'provider'
+
+
+def search_youtube_track(ytmusic, query: dict, cache: dict, *, pause_seconds: float = 0.0, stats: dict | None = None) -> dict | None:
+    stats = stats if stats is not None else {}
+    stats['queries'] = stats.get('queries', 0) + 1
     cache_key = f"{SEARCH_CACHE_VERSION}:{query['artist']} - {query['title']}"
     cached = cache.get(cache_key)
     if cached is not None:
+        stats['cache_hits'] = stats.get('cache_hits', 0) + 1
         return cached or None
 
     results = []
@@ -357,10 +371,15 @@ def search_youtube_track(ytmusic, query: dict, cache: dict, *, pause_seconds: fl
         try:
             results.extend(ytmusic.search(f"{query['artist']} {query['title']}", filter=search_filter, limit=10))
         except Exception as exc:
-            cache[cache_key] = {'error': f'{type(exc).__name__}: {exc}'}
-            return None
+            category = classify_search_exception(exc)
+            key = f'{category}_errors'
+            stats[key] = stats.get(key, 0) + 1
+            continue
         if results:
             break
+    if not results:
+        stats['empty_results'] = stats.get('empty_results', 0) + 1
+        return None
 
     best = None
     best_score = None
@@ -378,6 +397,10 @@ def search_youtube_track(ytmusic, query: dict, cache: dict, *, pause_seconds: fl
             best = candidate
 
     cache[cache_key] = best or {}
+    if best is None:
+        stats['rejected_results'] = stats.get('rejected_results', 0) + 1
+    else:
+        stats['matched'] = stats.get('matched', 0) + 1
     if pause_seconds:
         time.sleep(pause_seconds)
     return best
@@ -514,9 +537,10 @@ def main() -> int:
     matched = []
     missing = []
     used_video_ids = set()
+    search_stats = {}
 
     for index, query in enumerate(source_tracks, 1):
-        candidate = search_youtube_track(ytmusic, query, cache, pause_seconds=args.pause_seconds)
+        candidate = search_youtube_track(ytmusic, query, cache, pause_seconds=args.pause_seconds, stats=search_stats)
         if not candidate:
             missing.append(query)
             print(f"[{index}/{len(source_tracks)}] missing: {query['label']}")
@@ -545,6 +569,16 @@ def main() -> int:
     playlist_url = ''
     publish_summary = {}
     if args.publish:
+        if not matched:
+            if search_stats.get('authentication_errors'):
+                raise RuntimeError('YouTube search authentication failure; no matched tracks')
+            if search_stats.get('quota_errors'):
+                raise RuntimeError('YouTube search quota failure; no matched tracks')
+            if search_stats.get('provider_errors'):
+                raise RuntimeError('YouTube search provider failure; no matched tracks')
+            if search_stats.get('empty_results'):
+                raise RuntimeError('YouTube search returned no candidates; no matched tracks')
+            raise RuntimeError('YouTube search rejected all candidates; no matched tracks')
         max_new_items = None if args.max_new_items < 0 else args.max_new_items
         playlist_id, playlist_url, publish_summary = publish_playlist(
             source_report,
@@ -560,6 +594,7 @@ def main() -> int:
     output = build_youtube_report(source_report, source_tracks, matched, missing, playlist_id, playlist_url)
     if publish_summary:
         output['publish_summary'] = publish_summary
+    output['search_summary'] = search_stats
     save_json(Path(args.output), output)
     summary = {
         'output': args.output,

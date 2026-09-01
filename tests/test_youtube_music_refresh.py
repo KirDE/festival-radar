@@ -105,6 +105,7 @@ class YouTubeRefreshTests(unittest.TestCase):
             MODULE.provider_diagnostic('YouTube playlist read-back failed: persisted metadata does not match'),
             'read_back_metadata',
         )
+        self.assertEqual(MODULE.provider_diagnostic('YouTube search authentication failure'), 'search_authentication')
         self.assertEqual(MODULE.provider_diagnostic('provider said something private'), 'provider_rejected')
 
     def test_provider_file_validation_reports_fields_without_values(self):

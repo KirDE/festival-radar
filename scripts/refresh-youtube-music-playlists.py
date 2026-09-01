@@ -65,6 +65,11 @@ def provider_diagnostic(stderr: str) -> str:
         ('persisted track set contains duplicates', 'read_back_duplicate_tracks'),
         ('no requested tracks were persisted', 'read_back_requested_tracks'),
         ('publishing aborted: no matched tracks', 'no_matched_tracks'),
+        ('search authentication failure', 'search_authentication'),
+        ('search quota failure', 'search_quota'),
+        ('search provider failure', 'search_provider'),
+        ('search returned no candidates', 'search_empty_results'),
+        ('search rejected all candidates', 'search_rejected_results'),
     )
     for marker, diagnostic in known_read_back_failures:
         if marker in normalized:

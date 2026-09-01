@@ -12,6 +12,28 @@ import youtube_music_auto_resume as auto_resume
 
 
 class YouTubeMusicTransferTest(unittest.TestCase):
+    def test_search_errors_are_counted_without_caching_provider_text(self):
+        query = {
+            'artist': 'Example Artist',
+            'query_artist': 'Example Artist',
+            'lineup_artist': 'Example Artist',
+            'title': 'Example Song',
+        }
+        response = mock.Mock(status_code=401)
+        error = RuntimeError('provider-private-text')
+        error.response = response
+        ytmusic = mock.Mock()
+        ytmusic.search.side_effect = error
+        cache = {}
+        stats = {}
+
+        result = transfer.search_youtube_track(ytmusic, query, cache, stats=stats)
+
+        self.assertIsNone(result)
+        self.assertEqual(cache, {})
+        self.assertEqual(stats['authentication_errors'], 2)
+        self.assertEqual(stats['empty_results'], 1)
+
     def test_parse_report_tracks_deduplicates_artist_title_pairs(self):
         report = {
             'report': [
