@@ -102,4 +102,14 @@ test("editor identity is rendered truthfully", async ({ page }) => {
   await page.goto("/admin");
   await expect(page.locator(".adminRole")).toContainText("Editor · Review required");
   await expect(page.locator(".adminRole")).toContainText("browser-editor@example.test");
+  await expect(page.getByRole("heading", { name: "Manual refresh" })).toHaveCount(0);
+  expect((await page.request.post("/api/admin/refresh/wacken-open-air")).status()).toBe(403);
+});
+
+test("allowlisted USER cannot enter or mutate the admin console", async ({ page }) => {
+  expect((await page.request.post("/api/auth/register", { data: { email: "browser-viewer@example.test", password: "correct horse battery staple" } })).status()).toBe(201);
+  expect((await page.request.get("/api/admin")).status()).toBe(403);
+  expect((await page.request.post("/api/admin", { data: { resourceKind: "festival", resourceKey: "denied", baseRevision: 0, values: { city: "denied" } } })).status()).toBe(403);
+  await page.goto("/admin");
+  await expect(page).toHaveURL(/\?admin=forbidden$/);
 });
