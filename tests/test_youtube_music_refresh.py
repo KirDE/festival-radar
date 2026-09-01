@@ -20,6 +20,24 @@ class Completed:
 
 
 class YouTubeRefreshTests(unittest.TestCase):
+    def test_scoped_report_directory_only_refreshes_selected_export(self):
+        with tempfile.TemporaryDirectory() as root:
+            reports = Path(root) / 'reports'
+            output = Path(root) / 'output'
+            reports.mkdir()
+            (reports / '_catalog_summary.json').write_text(json.dumps({'eligible': ['summer-breeze']}))
+            (reports / 'summer-breeze.json').write_text(json.dumps({
+                'slug': 'summer-breeze', 'artists_count': 2, 'track_count': 4,
+            }))
+            with patch.object(MODULE.subprocess, 'run', return_value=Completed()) as run:
+                summary = MODULE.run_all(
+                    reports, output, {'summer-breeze': 'PLpersisted'}, publish=True,
+                )
+            self.assertEqual(summary['processed'], 1)
+            self.assertEqual(summary['succeeded'], 1)
+            self.assertIn('--playlist-id', run.call_args.args[0])
+            self.assertIn('PLpersisted', run.call_args.args[0])
+
     def test_empty_and_missing_playlist_id_never_mutate(self):
         with tempfile.TemporaryDirectory() as root:
             reports = Path(root) / 'reports'

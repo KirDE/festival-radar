@@ -2,6 +2,11 @@ name: Refresh festival playlists
 
 on:
   workflow_dispatch:
+    inputs:
+      festival_slug:
+        description: "Optional canonical festival slug for a scoped acceptance refresh"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -33,6 +38,7 @@ jobs:
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
           SPOTIFY_REFRESH_TOKEN: ${{ secrets.SPOTIFY_REFRESH_TOKEN }}
+          FESTIVALS: ${{ inputs.festival_slug }}
         run: python3 scripts/spotify_gmm_2026/festival_playlists.py
       - name: Refresh YouTube Music playlists and reports
         id: youtube
