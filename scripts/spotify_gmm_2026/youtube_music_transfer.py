@@ -22,7 +22,11 @@ DEFAULT_OAUTH = Path('/home/openclaw/.openclaw/credentials/youtube-music-oauth.j
 DEFAULT_CACHE = Path('tmp/festival_playlists_cache/youtube_music_search_cache.json')
 DEFAULT_OUTPUT_DIR = Path('outputs/youtube_music')
 SEARCH_CACHE_VERSION = 'ytm-transfer-v2'
-DEFAULT_MAX_NEW_ITEMS = 190
+# The default YouTube Data API project quota is commonly 10,000 units/day and
+# each playlist insertion costs 50 units. Reserve half of that daily budget for
+# metadata, read-back, retries, other playlists, and unrelated project traffic;
+# resume mode will finish larger playlists across subsequent runs.
+DEFAULT_MAX_NEW_ITEMS = 100
 YOUTUBE_QUOTA_PLAYLIST_WRITE = 50
 YOUTUBE_QUOTA_PLAYLIST_ITEM_WRITE = 50
 YOUTUBE_QUOTA_PLAYLIST_ITEM_LIST = 1
@@ -36,6 +40,22 @@ YOUTUBE_VERSION_HINTS = {
     'rework',
     'sample',
 }
+DATA_API_REASON_PATTERN = re.compile(r'[^a-z0-9]+')
+
+
+class YouTubeDataApiError(RuntimeError):
+    def __init__(self, status_code: int, reason: str = 'unknown'):
+        normalized_reason = DATA_API_REASON_PATTERN.sub('_', str(reason).casefold()).strip('_') or 'unknown'
+        self.status_code = status_code
+        self.reason = normalized_reason
+        super().__init__(f'YouTube Data API failure: status={status_code} reason={normalized_reason}')
+
+
+def raise_youtube_data_api_error(response, data: dict) -> None:
+    error = data.get('error', {}) if isinstance(data, dict) else {}
+    details = error.get('errors', []) if isinstance(error, dict) else []
+    reason = details[0].get('reason') if details and isinstance(details[0], dict) else 'unknown'
+    raise YouTubeDataApiError(response.status_code, reason)
 
 
 def parse_report_tracks(report: dict) -> list[dict]:
@@ -126,14 +146,14 @@ def save_json(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
-def load_ytmusic(auth_path: Path | None = None, credentials_path: Path = DEFAULT_CREDENTIALS):
+def load_ytmusic():
     from ytmusicapi import YTMusic
-    from ytmusicapi.auth.oauth.credentials import OAuthCredentials
 
-    if auth_path and auth_path.exists():
-        creds = load_json(credentials_path, {})
-        oauth_credentials = OAuthCredentials(creds['client_id'], creds['client_secret'])
-        return YTMusic(auth=str(auth_path), oauth_credentials=oauth_credentials)
+    # Search is a public YouTube Music operation. The OAuth token used for
+    # playlist writes is intentionally scoped to the YouTube Data API and can
+    # be rejected by YouTube Music's private search endpoint. Keep discovery
+    # unauthenticated and use the protected OAuth files only in the explicit
+    # Data API write/read-back helpers below.
     return YTMusic()
 
 
@@ -163,8 +183,7 @@ def youtube_data_api_request(method: str, url: str, *, headers: dict[str, str], 
     response = requests.request(method, url, params=params, headers=headers, json=body, timeout=30)
     data = response.json()
     if response.status_code >= 400:
-        error = data.get('error', {})
-        raise RuntimeError(f"YouTube Data API failed: {response.status_code} {error.get('message')}")
+        raise_youtube_data_api_error(response, data)
     return data
 
 
@@ -216,8 +235,7 @@ def list_youtube_playlist_items(credentials_path: Path, oauth_path: Path, playli
         )
         data = response.json()
         if response.status_code >= 400:
-            error = data.get('error', {})
-            raise RuntimeError(f"YouTube Data API failed: {response.status_code} {error.get('message')}")
+            raise_youtube_data_api_error(response, data)
         items.extend(data.get('items', []))
         page_token = data.get('nextPageToken') or ''
         if not page_token:
@@ -233,8 +251,7 @@ def delete_youtube_playlist_item(credentials_path: Path, oauth_path: Path, item_
     )
     if response.status_code not in (200, 204):
         data = response.json()
-        error = data.get('error', {})
-        raise RuntimeError(f"YouTube Data API failed: {response.status_code} {error.get('message')}")
+        raise_youtube_data_api_error(response, data)
 
 
 def add_youtube_playlist_item(credentials_path: Path, oauth_path: Path, playlist_id: str, video_id: str, position: int) -> None:
@@ -302,10 +319,68 @@ def sync_youtube_playlist_items(
     }
 
 
-def search_youtube_track(ytmusic, query: dict, cache: dict, *, pause_seconds: float = 0.0) -> dict | None:
+def read_back_youtube_playlist(
+    credentials_path: Path,
+    oauth_path: Path,
+    playlist_id: str,
+    expected_title: str,
+    expected_description: str,
+    expected_video_ids: list[str],
+) -> dict:
+    data = youtube_data_api_request(
+        'GET',
+        'https://www.googleapis.com/youtube/v3/playlists',
+        headers=youtube_data_api_headers(credentials_path, oauth_path),
+        params={'part': 'snippet,status', 'id': playlist_id},
+        body={},
+    )
+    playlists = data.get('items', [])
+    if len(playlists) != 1 or playlists[0].get('id') != playlist_id:
+        raise RuntimeError('YouTube playlist read-back failed: persisted playlist id was not returned')
+    snippet = playlists[0].get('snippet', {})
+    if snippet.get('title') != expected_title or snippet.get('description') != expected_description:
+        raise RuntimeError('YouTube playlist read-back failed: persisted metadata does not match')
+
+    items = list_youtube_playlist_items(credentials_path, oauth_path, playlist_id)
+    video_ids = [
+        item.get('snippet', {}).get('resourceId', {}).get('videoId')
+        for item in items
+        if item.get('snippet', {}).get('resourceId', {}).get('videoId')
+    ]
+    if not video_ids:
+        raise RuntimeError('YouTube playlist read-back failed: persisted track set is empty')
+    if len(video_ids) != len(set(video_ids)):
+        raise RuntimeError('YouTube playlist read-back failed: persisted track set contains duplicates')
+    expected_set = set(expected_video_ids)
+    if expected_set and not expected_set.intersection(video_ids):
+        raise RuntimeError('YouTube playlist read-back failed: no requested tracks were persisted')
+    return {
+        'playlist_id': playlist_id,
+        'metadata_matches': True,
+        'track_count': len(video_ids),
+        'unique_track_count': len(set(video_ids)),
+        'requested_tracks_present': len(expected_set.intersection(video_ids)),
+    }
+
+
+def classify_search_exception(exc: Exception) -> str:
+    response = getattr(exc, 'response', None)
+    status_code = getattr(response, 'status_code', None)
+    normalized = str(exc).casefold()
+    if status_code == 429 or 'quota' in normalized or 'rate limit' in normalized:
+        return 'quota'
+    if status_code in (401, 403) or any(marker in normalized for marker in ('auth', 'unauthorized', 'invalid_grant', 'access token')):
+        return 'authentication'
+    return 'provider'
+
+
+def search_youtube_track(ytmusic, query: dict, cache: dict, *, pause_seconds: float = 0.0, stats: dict | None = None) -> dict | None:
+    stats = stats if stats is not None else {}
+    stats['queries'] = stats.get('queries', 0) + 1
     cache_key = f"{SEARCH_CACHE_VERSION}:{query['artist']} - {query['title']}"
     cached = cache.get(cache_key)
     if cached is not None:
+        stats['cache_hits'] = stats.get('cache_hits', 0) + 1
         return cached or None
 
     results = []
@@ -313,10 +388,15 @@ def search_youtube_track(ytmusic, query: dict, cache: dict, *, pause_seconds: fl
         try:
             results.extend(ytmusic.search(f"{query['artist']} {query['title']}", filter=search_filter, limit=10))
         except Exception as exc:
-            cache[cache_key] = {'error': f'{type(exc).__name__}: {exc}'}
-            return None
+            category = classify_search_exception(exc)
+            key = f'{category}_errors'
+            stats[key] = stats.get(key, 0) + 1
+            continue
         if results:
             break
+    if not results:
+        stats['empty_results'] = stats.get('empty_results', 0) + 1
+        return None
 
     best = None
     best_score = None
@@ -334,6 +414,10 @@ def search_youtube_track(ytmusic, query: dict, cache: dict, *, pause_seconds: fl
             best = candidate
 
     cache[cache_key] = best or {}
+    if best is None:
+        stats['rejected_results'] = stats.get('rejected_results', 0) + 1
+    else:
+        stats['matched'] = stats.get('matched', 0) + 1
     if pause_seconds:
         time.sleep(pause_seconds)
     return best
@@ -363,6 +447,8 @@ def publish_playlist(
     update_metadata: bool,
     max_new_items: int | None,
 ) -> tuple[str, str, dict]:
+    if not video_ids:
+        raise RuntimeError('YouTube publishing aborted: no matched tracks')
     title = source_report['playlist_name']
     festival = source_report.get('festival') or title
     description = f'Listen to the announced artists for {festival}. Generated by Festival Radar.'
@@ -389,6 +475,14 @@ def publish_playlist(
     publish_summary['estimated_total_quota_units'] = (
         publish_summary['estimated_total_write_quota_units']
         + publish_summary['estimated_read_quota_units']
+    )
+    publish_summary['read_back'] = read_back_youtube_playlist(
+        credentials_path,
+        oauth_path,
+        playlist_id,
+        title,
+        description,
+        video_ids,
     )
     return playlist_id, f'https://music.youtube.com/playlist?list={playlist_id}', publish_summary
 
@@ -454,15 +548,16 @@ def main() -> int:
     if not source_tracks:
         raise RuntimeError(f'no tracks found in report: {report_path}')
 
-    ytmusic = load_ytmusic(Path(args.oauth) if args.publish else None, Path(args.credentials))
+    ytmusic = load_ytmusic()
     cache_path = Path(args.cache)
     cache = load_json(cache_path, {})
     matched = []
     missing = []
     used_video_ids = set()
+    search_stats = {}
 
     for index, query in enumerate(source_tracks, 1):
-        candidate = search_youtube_track(ytmusic, query, cache, pause_seconds=args.pause_seconds)
+        candidate = search_youtube_track(ytmusic, query, cache, pause_seconds=args.pause_seconds, stats=search_stats)
         if not candidate:
             missing.append(query)
             print(f"[{index}/{len(source_tracks)}] missing: {query['label']}")
@@ -491,6 +586,16 @@ def main() -> int:
     playlist_url = ''
     publish_summary = {}
     if args.publish:
+        if not matched:
+            if search_stats.get('authentication_errors'):
+                raise RuntimeError('YouTube search authentication failure; no matched tracks')
+            if search_stats.get('quota_errors'):
+                raise RuntimeError('YouTube search quota failure; no matched tracks')
+            if search_stats.get('provider_errors'):
+                raise RuntimeError('YouTube search provider failure; no matched tracks')
+            if search_stats.get('empty_results'):
+                raise RuntimeError('YouTube search returned no candidates; no matched tracks')
+            raise RuntimeError('YouTube search rejected all candidates; no matched tracks')
         max_new_items = None if args.max_new_items < 0 else args.max_new_items
         playlist_id, playlist_url, publish_summary = publish_playlist(
             source_report,
@@ -506,6 +611,7 @@ def main() -> int:
     output = build_youtube_report(source_report, source_tracks, matched, missing, playlist_id, playlist_url)
     if publish_summary:
         output['publish_summary'] = publish_summary
+    output['search_summary'] = search_stats
     save_json(Path(args.output), output)
     summary = {
         'output': args.output,

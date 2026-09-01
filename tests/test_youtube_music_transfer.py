@@ -12,6 +12,60 @@ import youtube_music_auto_resume as auto_resume
 
 
 class YouTubeMusicTransferTest(unittest.TestCase):
+    def test_default_write_cap_reserves_half_of_the_daily_quota(self):
+        self.assertEqual(transfer.DEFAULT_MAX_NEW_ITEMS, 100)
+        self.assertEqual(
+            transfer.DEFAULT_MAX_NEW_ITEMS * transfer.YOUTUBE_QUOTA_PLAYLIST_ITEM_WRITE,
+            5000,
+        )
+
+    def test_data_api_error_exposes_only_status_and_provider_reason(self):
+        response = mock.Mock(status_code=403)
+
+        with self.assertRaisesRegex(
+            transfer.YouTubeDataApiError,
+            r'^YouTube Data API failure: status=403 reason=playlistitemsnotaccessible$',
+        ):
+            transfer.raise_youtube_data_api_error(response, {
+                'error': {
+                    'message': 'provider-private-message',
+                    'errors': [{'reason': 'playlistItemsNotAccessible'}],
+                },
+            })
+
+    def test_search_client_does_not_receive_playlist_oauth(self):
+        unauthenticated_client = mock.Mock()
+        ytmusic_module = mock.Mock()
+        ytmusic_module.YTMusic.return_value = unauthenticated_client
+
+        with mock.patch.dict(sys.modules, {'ytmusicapi': ytmusic_module}):
+            result = transfer.load_ytmusic()
+
+        self.assertIs(result, unauthenticated_client)
+        ytmusic_module.YTMusic.assert_called_once_with()
+
+    def test_search_errors_are_counted_without_caching_provider_text(self):
+        query = {
+            'artist': 'Example Artist',
+            'query_artist': 'Example Artist',
+            'lineup_artist': 'Example Artist',
+            'title': 'Example Song',
+        }
+        response = mock.Mock(status_code=401)
+        error = RuntimeError('provider-private-text')
+        error.response = response
+        ytmusic = mock.Mock()
+        ytmusic.search.side_effect = error
+        cache = {}
+        stats = {}
+
+        result = transfer.search_youtube_track(ytmusic, query, cache, stats=stats)
+
+        self.assertIsNone(result)
+        self.assertEqual(cache, {})
+        self.assertEqual(stats['authentication_errors'], 2)
+        self.assertEqual(stats['empty_results'], 1)
+
     def test_parse_report_tracks_deduplicates_artist_title_pairs(self):
         report = {
             'report': [
@@ -157,6 +211,17 @@ class YouTubeMusicTransferTest(unittest.TestCase):
                     'estimated_write_quota_units': 50,
                 },
             ) as sync_items,
+            mock.patch.object(
+                transfer,
+                'read_back_youtube_playlist',
+                return_value={
+                    'playlist_id': 'playlist-id',
+                    'metadata_matches': True,
+                    'track_count': 1,
+                    'unique_track_count': 1,
+                    'requested_tracks_present': 1,
+                },
+            ) as read_back,
         ):
             playlist_id, playlist_url, summary = transfer.publish_playlist(
                 source,
@@ -172,11 +237,84 @@ class YouTubeMusicTransferTest(unittest.TestCase):
         update_playlist.assert_not_called()
         create_playlist.assert_not_called()
         sync_items.assert_called_once()
+        read_back.assert_called_once()
         self.assertEqual(playlist_id, 'playlist-id')
         self.assertEqual(playlist_url, 'https://music.youtube.com/playlist?list=playlist-id')
         self.assertEqual(summary['metadata_quota_units'], 0)
         self.assertEqual(summary['estimated_total_write_quota_units'], 50)
         self.assertEqual(summary['estimated_total_quota_units'], 51)
+        self.assertTrue(summary['read_back']['metadata_matches'])
+
+    def test_read_back_requires_matching_metadata_and_deduplicated_tracks(self):
+        playlist_response = {
+            'items': [{
+                'id': 'playlist-id',
+                'snippet': {'title': 'Example Playlist', 'description': 'Example Description'},
+            }],
+        }
+        playlist_items = [
+            {'snippet': {'resourceId': {'videoId': 'video-1'}}},
+            {'snippet': {'resourceId': {'videoId': 'video-2'}}},
+        ]
+        with (
+            mock.patch.object(transfer, 'youtube_data_api_headers', return_value={}),
+            mock.patch.object(transfer, 'youtube_data_api_request', return_value=playlist_response),
+            mock.patch.object(transfer, 'list_youtube_playlist_items', return_value=playlist_items),
+        ):
+            result = transfer.read_back_youtube_playlist(
+                Path('credentials.json'),
+                Path('oauth.json'),
+                'playlist-id',
+                'Example Playlist',
+                'Example Description',
+                ['video-2'],
+            )
+
+        self.assertEqual(result['playlist_id'], 'playlist-id')
+        self.assertEqual(result['track_count'], 2)
+        self.assertEqual(result['unique_track_count'], 2)
+        self.assertEqual(result['requested_tracks_present'], 1)
+
+    def test_read_back_rejects_duplicate_tracks(self):
+        playlist_response = {
+            'items': [{
+                'id': 'playlist-id',
+                'snippet': {'title': 'Example Playlist', 'description': 'Example Description'},
+            }],
+        }
+        duplicate_items = [
+            {'snippet': {'resourceId': {'videoId': 'video-1'}}},
+            {'snippet': {'resourceId': {'videoId': 'video-1'}}},
+        ]
+        with (
+            mock.patch.object(transfer, 'youtube_data_api_headers', return_value={}),
+            mock.patch.object(transfer, 'youtube_data_api_request', return_value=playlist_response),
+            mock.patch.object(transfer, 'list_youtube_playlist_items', return_value=duplicate_items),
+        ):
+            with self.assertRaisesRegex(RuntimeError, 'contains duplicates'):
+                transfer.read_back_youtube_playlist(
+                    Path('credentials.json'),
+                    Path('oauth.json'),
+                    'playlist-id',
+                    'Example Playlist',
+                    'Example Description',
+                    ['video-1'],
+                )
+
+    def test_publish_refuses_empty_matched_track_set_before_mutation(self):
+        with mock.patch.object(transfer, 'update_youtube_playlist') as update_playlist:
+            with self.assertRaisesRegex(RuntimeError, 'no matched tracks'):
+                transfer.publish_playlist(
+                    {'playlist_name': 'Example Playlist'},
+                    [],
+                    'playlist-id',
+                    Path('credentials.json'),
+                    Path('oauth.json'),
+                    resume=True,
+                    update_metadata=True,
+                    max_new_items=190,
+                )
+        update_playlist.assert_not_called()
 
     def test_auto_resume_detects_quota_errors(self):
         self.assertTrue(auto_resume.is_quota_error(RuntimeError('quotaExceeded')))
