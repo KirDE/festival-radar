@@ -97,6 +97,55 @@ type GeneratedProfile = {
   provenance: ArtistProfile["provenance"];
 };
 
+type IdentityKey = keyof ArtistProfile["identities"];
+
+const identitySources: Record<IdentityKey, ArtistSource> = {
+  spotify: "spotify",
+  musicbrainz: "musicbrainz",
+  setlistFm: "setlist.fm",
+};
+
+function hasOwn(object: object, key: PropertyKey) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+export function mergeArtistProfileSources(
+  generated: Partial<ArtistProfile>,
+  override: Partial<ArtistProfile>,
+): Partial<ArtistProfile> {
+  const generatedIdentities = generated.identities || {};
+  const overrideIdentities = override.identities || {};
+  const generatedIdentityDiscarded = (Object.keys(identitySources) as IdentityKey[]).some((provider) =>
+    hasOwn(overrideIdentities, provider)
+      && hasOwn(generatedIdentities, provider)
+      && overrideIdentities[provider] !== generatedIdentities[provider],
+  );
+  const safeGenerated = generatedIdentityDiscarded ? {} : generated;
+  const overriddenProvenanceFields = new Set(
+    Object.keys(override).map((field) => field === "identities" ? "identity" : field),
+  );
+  const overriddenIdentitySources = new Set<ArtistSource>(
+    (Object.keys(identitySources) as IdentityKey[])
+      .filter((provider) => hasOwn(overrideIdentities, provider))
+      .map((provider) => identitySources[provider]),
+  );
+
+  return {
+    ...safeGenerated,
+    ...override,
+    identities: { ...safeGenerated.identities, ...override.identities },
+    genres: override.genres !== undefined ? override.genres : safeGenerated.genres,
+    links: [
+      ...(safeGenerated.links || []).filter(({ source }) => !overriddenIdentitySources.has(source)),
+      ...(override.links || []),
+    ],
+    provenance: [
+      ...(safeGenerated.provenance || []).filter(({ field }) => !overriddenProvenanceFields.has(field)),
+      ...(override.provenance || []),
+    ],
+  };
+}
+
 function generatedProfile(slug: string): Partial<ArtistProfile> {
   const profile = (enrichment.profiles as Record<string, GeneratedProfile | undefined>)[slug];
   if (!profile) return {};
@@ -113,17 +162,7 @@ export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
   const slug = artistSlug(name);
   const generated = generatedProfile(slug);
   const override = curated[slug] || {};
-  const entry: Partial<ArtistProfile> = {
-    ...generated,
-    ...override,
-    identities: { ...generated.identities, ...override.identities },
-    genres: override.genres || generated.genres,
-    links: [...(generated.links || []), ...(override.links || [])],
-    provenance: [
-      ...(generated.provenance || []).filter(({ field }) => field !== "identity" || !override.identities?.musicbrainz),
-      ...(override.provenance || []),
-    ],
-  };
+  const entry = mergeArtistProfileSources(generated, override);
   const identityLinks: ArtistProfile["links"] = [
     ...(entry.identities?.spotify ? [{ label: "Spotify", url: `https://open.spotify.com/artist/${entry.identities.spotify}`, source: "spotify" as const, verified: true }] : []),
     ...(entry.identities?.musicbrainz ? [{ label: "MusicBrainz", url: `https://musicbrainz.org/artist/${entry.identities.musicbrainz}`, source: "musicbrainz" as const, verified: true }] : []),

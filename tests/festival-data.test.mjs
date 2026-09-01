@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { festivals } from "../data/festivals.ts";
-import { artistProfiles } from "../data/artists.ts";
+import { artistProfiles, mergeArtistProfileSources } from "../data/artists.ts";
 import { festivalSources } from "../data/festival-sources.ts";
 import { INGESTION_SCHEMA_VERSION } from "../lib/ingestion/types.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
@@ -113,6 +113,51 @@ test("resolved identities include provenance and stable provider IDs", () => {
     assert.equal(artist.identities.setlistFm, artist.identities.musicbrainz);
     assert.ok(artist.provenance.some(({ field, source }) => field === "identity" && source === "musicbrainz"));
   }
+});
+
+test("curated artist fields never retain provenance from discarded generated values", () => {
+  const electricCallboy = artistProfiles.find(({ slug }) => slug === "electric-callboy");
+  assert.ok(electricCallboy);
+  assert.equal(electricCallboy.origin, "Castrop-Rauxel, Germany");
+  assert.deepEqual(electricCallboy.genres, ["electronicore", "metalcore"]);
+  assert.equal(electricCallboy.identities.musicbrainz, "8e5d91df-ec18-4c9b-8d56-4f4039f03ae8");
+  assert.equal(electricCallboy.provenance.some(({ field }) => field === "origin" || field === "genres"), false);
+  assert.equal(
+    electricCallboy.provenance.some(({ url }) => url.includes("cf075492-d880-4afc-b87b-d6b03e33dacc")),
+    false,
+  );
+  assert.ok(electricCallboy.provenance.some(({ field, url }) =>
+    field === "identity" && url.endsWith("/8e5d91df-ec18-4c9b-8d56-4f4039f03ae8"),
+  ));
+
+  const generatedPartial = artistProfiles.find(({ slug }) => slug !== "electric-callboy" && !artistProfiles.find(({ slug: candidate }) => candidate === slug)?.biography);
+  assert.ok(generatedPartial);
+  assert.ok(generatedPartial.provenance.length > 0);
+});
+
+test("a conflicting curated identity fails closed on generated artist enrichment", () => {
+  const discardedIdentity = "11111111-1111-4111-8111-111111111111";
+  const curatedIdentity = "22222222-2222-4222-8222-222222222222";
+  const discardedUrl = `https://musicbrainz.org/artist/${discardedIdentity}`;
+  const merged = mergeArtistProfileSources({
+    origin: "Wrong artist origin",
+    genres: ["wrong artist genre"],
+    identities: { musicbrainz: discardedIdentity, setlistFm: discardedIdentity },
+    links: [{ label: "MusicBrainz", url: discardedUrl, source: "musicbrainz", verified: true }],
+    provenance: [
+      { field: "identity", source: "musicbrainz", url: discardedUrl, checkedAt: "2026-08-30" },
+      { field: "origin", source: "musicbrainz", url: discardedUrl, checkedAt: "2026-08-30" },
+      { field: "genres", source: "musicbrainz", url: discardedUrl, checkedAt: "2026-08-30" },
+    ],
+  }, {
+    identities: { musicbrainz: curatedIdentity },
+  });
+
+  assert.deepEqual(merged.identities, { musicbrainz: curatedIdentity });
+  assert.equal(merged.origin, undefined);
+  assert.equal(merged.genres, undefined);
+  assert.deepEqual(merged.links, []);
+  assert.deepEqual(merged.provenance, []);
 });
 
 test("the production deploy smoke uses an existing artist profile", async () => {
