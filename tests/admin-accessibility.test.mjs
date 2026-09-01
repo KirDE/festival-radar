@@ -24,4 +24,14 @@ test("admin has complete EN, DE and RU catalogs and language control", () => {
 test("admin exposes visible keyboard focus and responsive navigation", () => {
   assert.match(css, /\.adminShell :is\([^}]+\):focus-visible/);
   assert.match(css, /\.adminNav\{position:relative;height:auto;overflow-x:auto\}/);
+  assert.match(css, /grid-template-columns:260px minmax\(0,1fr\)/);
+  assert.match(css, /\.adminNav,.adminMain[^}]+min-width:0/);
+  assert.match(css, /overflow-wrap:anywhere/);
+});
+
+test("admin renders the authenticated operator role instead of a hard-coded editor label", () => {
+  assert.match(admin, /operator\.role === "ADMIN" \? "roleAdmin" : operator\.role === "EDITOR" \? "roleEditor" : "roleUser"/);
+  assert.match(admin, /operator\.email/);
+  assert.match(catalog, /roleAdmin: "Administrator"/);
+  assert.match(catalog, /roleEditor: "Editor · Review required"/);
 });

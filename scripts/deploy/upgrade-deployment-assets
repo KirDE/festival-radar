@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+commit="${1:?usage: upgrade-deployment-assets COMMIT}"
+deploy_user="festival-radar-deploy"
+repository="KirDE/festival-radar"
+destination="/usr/local/libexec/festival-radar"
+
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid commit" >&2; exit 2; }
+[[ "${SUDO_USER:-}" == "$deploy_user" ]] || { echo "unauthorized deploy caller" >&2; exit 3; }
+
+temporary="$(mktemp -d)"
+trap 'rm -rf "$temporary"' EXIT
+
+main_sha="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+  --max-time 20 "https://api.github.com/repos/$repository/commits/main" \
+  | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
+  | head -n 1)"
+[[ "$main_sha" == "$commit" ]] || { echo "commit is not the current main head" >&2; exit 4; }
+
+for asset in activate-release install-release.sh upgrade-deployment-assets; do
+  curl --fail --silent --show-error --proto '=https' --tlsv1.2 --max-time 20 \
+    "https://raw.githubusercontent.com/$repository/$commit/scripts/deploy/$asset" \
+    --output "$temporary/$asset"
+  test -s "$temporary/$asset"
+  bash -n "$temporary/$asset"
+done
+
+install -d -o root -g root -m 0755 "$destination"
+for asset in activate-release install-release.sh upgrade-deployment-assets; do
+  install -o root -g root -m 0755 "$temporary/$asset" "$destination/$asset"
+done
+printf '%s\n' "$commit" > "$destination/DEPLOYMENT_ASSETS_COMMIT"
+chmod 0644 "$destination/DEPLOYMENT_ASSETS_COMMIT"

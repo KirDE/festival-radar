@@ -38,8 +38,16 @@ test("forced ingestion bypasses adaptive due filtering for full acceptance runs"
 test("deployment requires and installs the internal API secret", async () => {
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
   assert.match(workflow, /INTERNAL_API_SECRET: \$\{\{ secrets\.INTERNAL_API_SECRET \}\}/);
-  assert.match(workflow, /for name in DATABASE_URL AUTH_SECRET APP_URL INTERNAL_API_SECRET/);
+  assert.match(workflow, /for name in DATABASE_URL AUTH_SECRET APP_URL ADMIN_EMAILS INTERNAL_API_SECRET/);
   assert.match(workflow, /printf 'INTERNAL_API_SECRET=%q\\n' "\$INTERNAL_API_SECRET"/);
+});
+
+test("deployment preserves the protected admin allowlist", async () => {
+  const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
+  assert.match(workflow, /ADMIN_EMAILS: \$\{\{ secrets\.ADMIN_EMAILS \}\}/);
+  assert.match(workflow, /for name in DATABASE_URL AUTH_SECRET APP_URL ADMIN_EMAILS INTERNAL_API_SECRET/);
+  assert.match(workflow, /printf 'ADMIN_EMAILS=%q\\n' "\$ADMIN_EMAILS"/);
+  assert.doesNotMatch(workflow, /echo.*ADMIN_EMAILS/);
 });
 
 test("deployment builds and installs the privacy analytics contract", async () => {
@@ -47,10 +55,21 @@ test("deployment builds and installs the privacy analytics contract", async () =
   const pruneWorkflow = await readFile(".github/workflows/prune-analytics.yml", "utf8");
   assert.match(workflow, /NEXT_PUBLIC_ANALYTICS_ENDPOINT: \/api\/analytics\/page-view\//);
   assert.match(workflow, /ANALYTICS_OPERATOR_TOKEN: \$\{\{ secrets\.ANALYTICS_OPERATOR_TOKEN \}\}/);
+  assert.match(workflow, /ANALYTICS_RETENTION_TOKEN: \$\{\{ secrets\.ANALYTICS_RETENTION_TOKEN \}\}/);
   assert.match(workflow, /printf 'ANALYTICS_OPERATOR_TOKEN=%q\\n'/);
   assert.match(workflow, /printf 'ANALYTICS_RETENTION_DAYS=%q\\n'/);
   assert.match(pruneWorkflow, /environment: production/);
-  assert.match(pruneWorkflow, /DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}/);
+  assert.doesNotMatch(pruneWorkflow, /schedule:/);
+  assert.match(pruneWorkflow, /workflow_dispatch:/);
+  assert.doesNotMatch(pruneWorkflow, /DATABASE_URL/);
+  assert.match(pruneWorkflow, /ANALYTICS_RETENTION_TOKEN: \$\{\{ secrets\.ANALYTICS_RETENTION_TOKEN \}\}/);
+  assert.match(pruneWorkflow, /\/api\/analytics\/prune\//);
+});
+
+test("analytics retention route fails closed behind its dedicated secret", async () => {
+  const route = await readFile("app/api/analytics/prune/route.ts", "utf8");
+  assert.match(route, /!token \|\| request\.headers\.get\("authorization"\) !== `Bearer \$\{token\}`/);
+  assert.match(route, /pruneAnalytics\(db, process\.env\.ANALYTICS_RETENTION_DAYS\)/);
 });
 
 for (const routeName of ["events", "dispatch"]) {
