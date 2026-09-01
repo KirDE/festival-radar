@@ -4,6 +4,7 @@ import test from "node:test";
 
 const provider = await readFile(new URL("../components/LanguageProvider.tsx", import.meta.url), "utf8");
 const artistDetail = await readFile(new URL("../components/ArtistDetail.tsx", import.meta.url), "utf8");
+const providerRoute = await readFile(new URL("../app/[lang]/artists/[slug]/page.tsx", import.meta.url), "utf8");
 
 const expected = {
   en: ["Also known as", "Profile", "Origin", "Genres", "Top tracks", "Sources and canonical identities", "checked", "Recent setlists", "View setlist", "Profile refreshed every"],
@@ -17,6 +18,14 @@ test("artist enrichment labels are complete when switching every supported langu
     assert.ok(languageBlock, `${language} translation catalog is present`);
     for (const label of labels) assert.match(languageBlock[1], new RegExp(label), `${language} includes ${label}`);
   }
+});
+
+test("artist routes and links preserve every supported locale", () => {
+  assert.match(provider, /languageDestination\(window\.location\.pathname, selected\)/);
+  assert.match(provider, /languagePath\(pathname, selected\)/);
+  assert.match(providerRoute, /supportedLanguages\.flatMap/);
+  assert.match(providerRoute, /canonical: `\/\$\{lang\}\/artists\/\$\{artist\.slug\}\//);
+  assert.match(artistDetail, /href=\{`\/\$\{language\}\//);
 });
 
 test("artist enrichment UI renders all labels through LanguageProvider", () => {

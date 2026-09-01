@@ -7,7 +7,7 @@ import { useLanguage } from "./LanguageProvider";
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { t, ta } = useLanguage();
-  const admin = pathname.startsWith("/admin");
+  const admin = pathname?.startsWith("/admin") ?? false;
 
   return <>
     <a className="skipLink" href="#main-content">{admin ? ta("skip") : t("skip")}</a>

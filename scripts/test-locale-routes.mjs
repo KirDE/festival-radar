@@ -39,6 +39,23 @@ try {
     assert.equal(planner.status, 200);
     assert.match(await planner.text(), new RegExp(`<html lang="${lang}"`));
 
+    const enrichedArtist = await fetch(`${origin}/${lang}/artists/electric-callboy/`);
+    assert.equal(enrichedArtist.status, 200);
+    const enrichedHtml = await enrichedArtist.text();
+    assert.match(enrichedHtml, new RegExp(`<html lang="${lang}"`));
+    assert.ok(enrichedHtml.includes({ en: "Recent setlists", de: "Aktuelle Setlists", ru: "Недавние сетлисты" }[lang]));
+    assert.ok(enrichedHtml.includes(`href="/${lang}/"`));
+
+    const partialArtist = await fetch(`${origin}/${lang}/artists/abbie-falls/`);
+    assert.equal(partialArtist.status, 200);
+    assert.match(await partialArtist.text(), new RegExp(`<html lang="${lang}"`));
+
+    const festival = await fetch(`${origin}/${lang}/festivals/wacken-open-air/`);
+    assert.equal(festival.status, 200);
+    const festivalHtml = await festival.text();
+    assert.match(festivalHtml, new RegExp(`<html lang="${lang}"`));
+    assert.ok(festivalHtml.includes(`href="/${lang}/artists/electric-callboy/"`));
+
     const manifest = await fetch(`${origin}/${lang}/manifest.webmanifest`);
     assert.equal(manifest.status, 200);
     const pwa = await manifest.json();

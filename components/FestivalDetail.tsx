@@ -16,7 +16,7 @@ import {
 } from "./LocalPlanner";
 
 export function FestivalDetail({ item }: { item: Festival }) {
-  const { locale, t } = useLanguage();
+  const { language, locale, t } = useLanguage();
   const planner = useLocalPlanner();
   const displayNames = new Intl.DisplayNames([locale], { type: "region" });
   const prettyDate = (value: string) =>
@@ -38,7 +38,7 @@ export function FestivalDetail({ item }: { item: Festival }) {
   const playlistUrl = playlist?.spotifyUrl || item.playlistUrl;
   return (
     <div className="detailPage">
-      <Link className="back" href="/">
+      <Link className="back" href={`/${language}/`}>
         ← {t("allFestivals")}
       </Link>
       <section className="detailHero">
@@ -74,7 +74,7 @@ export function FestivalDetail({ item }: { item: Festival }) {
           <option value="maybe">Maybe</option>
           <option value="not-going">Not going</option>
         </select>
-        <Link href="/planner/">Open my plan →</Link>
+        <Link href={`/${language}/planner/`}>Open my plan →</Link>
       </section>
       <div className="actionGrid">
         <a href={item.officialUrl} target="_blank" rel="noreferrer">
@@ -134,7 +134,7 @@ export function FestivalDetail({ item }: { item: Festival }) {
             <h3>{t("headliners")}</h3>
             <div className="headlinerGrid">
               {item.headliners.map((artist) => (
-                <Link href={`/artists/${artistSlug(artist)}/`} key={artist}>
+                <Link href={`/${language}/artists/${artistSlug(artist)}/`} key={artist}>
                   {artist}
                   <span>{t("viewArtist")}</span>
                 </Link>
@@ -152,7 +152,7 @@ export function FestivalDetail({ item }: { item: Festival }) {
             <h3>{t("alsoAnnounced")}</h3>
             <div className="lineupGrid">
               {item.lineup.map((artist) => (
-                <Link href={`/artists/${artistSlug(artist)}/`} key={artist}>
+                <Link href={`/${language}/artists/${artistSlug(artist)}/`} key={artist}>
                   {artist}
                 </Link>
               ))}

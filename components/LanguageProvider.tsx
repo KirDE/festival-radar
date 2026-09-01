@@ -77,6 +77,15 @@ export function translate(language: Language, key: TranslationKey, values: Trans
   return Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), translations[language][key] as string);
 }
 
+export function languagePath(pathname: string, language: Language) {
+  const normalized = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  const localized = normalized.match(/^\/(?:en|de|ru)(\/.*|$)/)?.[1];
+  if (localized !== undefined) return `/${language}${localized || "/"}`;
+  if (normalized === "/") return `/${language}/`;
+  if (/^\/(?:artists|festivals)\/[^/]+\/?$/.test(normalized)) return `/${language}${normalized.endsWith("/") ? normalized : `${normalized}/`}`;
+  return `/${language}/`;
+}
+
 const localeMap: Record<Language, string> = { en: "en-US", de: "de-DE", ru: "ru-RU" };
 const LanguageContext = createContext<{ language: Language; locale: string; setLanguage: (language: Language) => void; t: (key: TranslationKey, values?: TranslationValues) => string; ta: (key: AdminTranslationKey) => string } | null>(null);
 
@@ -89,7 +98,7 @@ function browserLanguage(): Language {
 }
 
 export function languageDestination(pathname: string, selected: Language) {
-  return pathname === "/admin" || pathname.startsWith("/admin/") ? null : `/${selected}/`;
+  return pathname === "/admin" || pathname.startsWith("/admin/") ? null : languagePath(pathname, selected);
 }
 
 export function LanguageProvider({ children, initialLanguage }: { children: React.ReactNode; initialLanguage?: Language }) {
