@@ -13,12 +13,8 @@ export default defineConfig({
     env: {
       DATABASE_URL: process.env.DATABASE_URL,
       AUTH_SECRET: "admin-e2e-secret-at-least-32-characters",
-<<<<<<< HEAD
-      ADMIN_EMAILS: "browser-admin@example.test,browser-editor@example.test,browser-viewer@example.test",
-=======
       APP_URL: "http://localhost:3245",
-      ADMIN_EMAILS: "browser-admin@example.test,browser-editor@example.test",
->>>>>>> 20517a6 (Enforce trusted origins on session mutations)
+      ADMIN_EMAILS: "browser-admin@example.test,browser-editor@example.test,browser-viewer@example.test",
       SUBMISSION_HASH_SALT: "browser-submission-test-salt",
     },
   },

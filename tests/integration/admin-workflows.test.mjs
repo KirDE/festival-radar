@@ -38,11 +38,7 @@ class Client {
 test.before(async () => {
   await db.$executeRawUnsafe('TRUNCATE TABLE "AdminChange", "AdminDraft", "AdminParserRun", "AdminResourceState", "AdminAuditEntry", "Session", "User" CASCADE');
   sourceServer.listen(3250, "127.0.0.1"); await once(sourceServer, "listening");
-<<<<<<< HEAD
-  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(port)], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "admin-integration-secret-at-least-32", SUBMISSION_HASH_SALT: "integration-submission-salt", ADMIN_EMAILS: "viewer@example.test,editor@example.test,admin@example.test", ADMIN_TEST_SOURCE_URL: "http://127.0.0.1:3250/source" }, stdio: "ignore" });
-=======
-  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(port)], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "admin-integration-secret-at-least-32", APP_URL: origin, SUBMISSION_HASH_SALT: "integration-submission-salt", ADMIN_EMAILS: "admin@example.test", ADMIN_TEST_SOURCE_URL: "http://127.0.0.1:3250/source" }, stdio: "ignore" });
->>>>>>> 20517a6 (Enforce trusted origins on session mutations)
+  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "-p", String(port)], { env: { ...process.env, DATABASE_URL: databaseUrl, AUTH_SECRET: "admin-integration-secret-at-least-32", APP_URL: origin, SUBMISSION_HASH_SALT: "integration-submission-salt", ADMIN_EMAILS: "viewer@example.test,editor@example.test,admin@example.test", ADMIN_TEST_SOURCE_URL: "http://127.0.0.1:3250/source" }, stdio: "ignore" });
   for (let attempt = 0; attempt < 120; attempt += 1) { try { if ((await fetch(origin)).status < 500) return; } catch {} await new Promise((resolve) => setTimeout(resolve, 250)); }
   throw new Error("Integration server did not start");
 });
@@ -77,15 +73,12 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
 
   const admin = new Client();
   assert.equal((await admin.json("/api/auth/register", "POST", { email: "admin@example.test", password: "correct horse battery staple" })).status, 201);
-<<<<<<< HEAD
   await db.user.update({ where: { email: "admin@example.test" }, data: { role: "ADMIN" } });
-=======
   const beforeForgedDrafts = await db.adminDraft.count();
   const beforeForgedAudit = await db.adminAuditEntry.count();
   assert.equal((await admin.json("/api/admin", "POST", { resourceKind: "festival", resourceKey: "forged", baseRevision: 0, values: { city: "forged" } }, { origin: "https://foreign.example" })).status, 403);
   assert.equal(await db.adminDraft.count(), beforeForgedDrafts);
   assert.equal(await db.adminAuditEntry.count(), beforeForgedAudit);
->>>>>>> 20517a6 (Enforce trusted origins on session mutations)
   const draftResponse = await admin.json("/api/admin", "POST", { resourceKind: "festival", resourceKey: "wacken-open-air", baseRevision: 0, values: { city: "Wacken Preview", status: "confirmed" } });
   assert.equal(draftResponse.status, 201);
   const draft = await draftResponse.json();
