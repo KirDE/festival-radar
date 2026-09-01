@@ -1,13 +1,13 @@
 # Festival Radar product status
 
-Last verified: 2026-08-31 (production at `https://festivals.kir-it.de`, merge
-`f7b0bd142b47ae022b29c9e04d8f063ea71b2374`).
+Last verified: 2026-09-01 (production at `https://festivals.kir-it.de`, merge
+`015181ad0393c1f0f20f87dc152f81532ebb6c1e`).
 
 This document is the product-function inventory requested at the end of the
 2026 milestone. It describes the deployed behavior, not merely code that has
 passed CI. The gap list is based on production acceptance and regression
-testing of every pull request merged on 2026-08-30 and every milestone pull
-request from #73 through #88.
+testing of every pull request merged on 2026-08-30, every milestone pull
+request from #73 through #88, and the production remediations through PR #167.
 
 ## Original concept
 
@@ -67,6 +67,11 @@ and deploys can be verified and rolled back.
   history.
 - Store notification preferences and channel subscriptions, derive events from
   ingestion changes, claim deliveries safely and dispatch authenticated jobs.
+- Dispatch notifications from a production-owned systemd timer every ten
+  minutes. PRs [#139](https://github.com/KirDE/festival-radar/pull/139),
+  [#155](https://github.com/KirDE/festival-radar/pull/155) and
+  [#157](https://github.com/KirDE/festival-radar/pull/157) installed and made
+  the timer compatible with the production curl version.
 
 ### Languages, accessibility and offline use
 
@@ -94,6 +99,24 @@ and deploys can be verified and rolled back.
   honor Do Not Track and Global Privacy Control and protect aggregate read-back
   with an operator secret.
 
+## Current production evidence
+
+- `/`, `/planner/` and `/festivals/wacken-open-air/` returned HTTP 200 on the
+  verified commit.
+- `/api/health/deployment/` returned HTTP 200, the exact commit above and
+  `database: ok`.
+- `/api/health/notification-scheduler/` returned HTTP 200 with `ok: true`; the
+  latest run completed successfully and the health age was under two minutes
+  at verification time.
+- Analytics retention is owned by an enabled, active production systemd timer.
+  Two consecutive idempotent production runs succeeded, the protected endpoint
+  failed closed with JSON 401 for an invalid token, and the non-secret state
+  file recorded `ok: true`.
+- The Admin Console preserves `/admin/` while switching English, German and
+  Russian, renders the authenticated `ADMIN` role truthfully and fits all six
+  sections at 320, 375 and 390 px without horizontal overflow. The protected
+  admin allowlist is also preserved across production deploys.
+
 ## Remaining gaps against the concept
 
 The following are confirmed production or acceptance gaps. They are not hidden
@@ -101,11 +124,9 @@ behind a generic “deployed” status.
 
 | Area | Gap | Tracking |
 | --- | --- | --- |
-| Ingestion review | Scheduled ingestion can push its review branch but cannot create the required pull request. | [#113](https://github.com/KirDE/festival-radar/issues/113) |
 | Runtime ownership | Data collection still depends on GitHub workflows; production-owned execution is required. | [#125](https://github.com/KirDE/festival-radar/issues/125) |
 | Mobile discovery | The map popup is clipped/unusable and the planner overflows at 390 px. | [#124](https://github.com/KirDE/festival-radar/issues/124) |
 | Sessions | Apache rejects the real same-origin logout request, leaving the session valid. | [#126](https://github.com/KirDE/festival-radar/issues/126) |
-| Notifications | GitHub cron has multi-hour gaps and is not a durable production scheduler. | [#127](https://github.com/KirDE/festival-radar/issues/127) |
 | Notification UI | Six non-default event types submit non-canonical values; authenticated mobile layout overflows. | [#128](https://github.com/KirDE/festival-radar/issues/128) |
 | Administration | Artist, asset and playlist editors and a real parser-log workflow remain incomplete. | [#129](https://github.com/KirDE/festival-radar/issues/129) |
 | Localization | German/Russian navigation and planner views retain English strings. | [#130](https://github.com/KirDE/festival-radar/issues/130) |
@@ -115,7 +136,6 @@ behind a generic “deployed” status.
 | YouTube Music | Production refresh is not configured with a usable provider credential. | [#134](https://github.com/KirDE/festival-radar/issues/134) |
 | Artist provenance | A curated identity override can retain provenance from a different generated identity. | [#135](https://github.com/KirDE/festival-radar/issues/135) |
 | Artist localization | Localized artist links fall back to the unlocalized route, making translated enrichment unreachable. | [#136](https://github.com/KirDE/festival-radar/issues/136) |
-| Analytics retention | Retention runs on a hosted runner with a production-local database URL and cannot prune old aggregates. | [#137](https://github.com/KirDE/festival-radar/issues/137) |
 | Release portability | The installer still relies on a hidden system npm dependency and only configures one Plesk proxy vhost variant. | [#97](https://github.com/KirDE/festival-radar/issues/97), [#98](https://github.com/KirDE/festival-radar/issues/98) |
 
 Two acceptance areas remain evidence-limited rather than confirmed broken:
@@ -138,4 +158,3 @@ Two acceptance areas remain evidence-limited rather than confirmed broken:
   unavoidable retained test record.
 - Never infer that a closed implementation issue means the deployed behavior
   passed. The production audit result is authoritative.
-
