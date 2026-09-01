@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
+
+const execute = promisify(execFile);
 
 for (const workflowName of ["notifications", "ingestion"]) {
   test(`${workflowName} uses production-scoped internal API credentials`, async () => {
@@ -24,8 +30,45 @@ test("ingestion keeps database access inside production and uses the canonical i
   assert.match(workflow, /"\$\{APP_URL%\/\}\/api\/ingestion\/run\/"/);
   assert.match(workflow, /mkdir -p outputs/);
   assert.match(workflow, /--argjson force "\$FORCE"/);
-  assert.match(workflow, /jq -e '\.runId and \(\.summary\.attempted > 0\)[\s\S]*\.readBack\.attempts == \.summary\.attempted/);
-  assert.match(workflow, /\.summary\.totalSources == 50[\s\S]*\.readBack\.diffs > 0[\s\S]*\.readBack\.hasPersistedFailure[\s\S]*\.readBack\.lastSuccessfulCheck/);
+  assert.match(workflow, /scripts\/validate-ingestion-response\.jq/);
+});
+
+test("ingestion workflow validates scoped and full-catalogue responses independently", async () => {
+  const validate = async (response, festival, force = true) => {
+    const directory = await mkdtemp(path.join(tmpdir(), "ingestion-validation-"));
+    const responsePath = path.join(directory, "response.json");
+    try {
+      await writeFile(responsePath, JSON.stringify(response));
+      const { stdout } = await execute("jq", [
+        "-e",
+        "--arg", "festival", festival,
+        "--argjson", "force", String(force),
+        "-f", "scripts/validate-ingestion-response.jq",
+        responsePath,
+      ]);
+      return stdout.trim();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  };
+  const scoped = {
+    runId: "scoped-run",
+    summary: {
+      status: "COMPLETED", totalSources: 1, attempted: 1,
+      results: [{ festivalSlug: "pinkpop", extractionPath: ["official_markup"], evidenceFields: ["startDate"] }],
+    },
+    readBack: { attempts: 1, candidates: 1, evidence: 1, diffs: 0, hasPersistedFailure: false, lastSuccessfulCheck: "2026-08-31T16:34:00Z" },
+  };
+  assert.equal(await validate(scoped, "pinkpop"), "true");
+  await assert.rejects(validate({ ...scoped, summary: { ...scoped.summary, results: [{ ...scoped.summary.results[0], extractionPath: [] }] } }, "pinkpop"));
+
+  const full = {
+    runId: "full-run",
+    summary: { status: "PARTIAL", totalSources: 50, attempted: 50, results: [] },
+    readBack: { attempts: 50, candidates: 48, evidence: 55, diffs: 108, hasPersistedFailure: true, lastSuccessfulCheck: "2026-08-31T10:46:50Z" },
+  };
+  assert.equal(await validate(full, ""), "true");
+  await assert.rejects(validate({ ...full, readBack: { ...full.readBack, diffs: 0 } }, ""));
 });
 
 test("forced ingestion bypasses adaptive due filtering for full acceptance runs", async () => {

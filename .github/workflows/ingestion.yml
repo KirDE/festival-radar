@@ -40,7 +40,8 @@ jobs:
             -H "content-type: application/json" \
             --data-binary @request.json \
             "${APP_URL%/}/api/ingestion/run/" | tee outputs/ingestion-response.json
-          jq -e '.runId and (.summary.attempted > 0) and (.readBack.attempts == .summary.attempted) and (.summary.status == "COMPLETED" or .summary.status == "PARTIAL") and (if env.FORCE == "true" then (.summary.totalSources == 50 and .summary.attempted == 50 and .readBack.candidates > 0 and .readBack.evidence > 0 and .readBack.diffs > 0 and .readBack.hasPersistedFailure and .readBack.lastSuccessfulCheck) else true end)' outputs/ingestion-response.json
+          jq -e --arg festival "$FESTIVAL" --argjson force "$FORCE" \
+            -f scripts/validate-ingestion-response.jq outputs/ingestion-response.json
       - name: Retain review and diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@v4
