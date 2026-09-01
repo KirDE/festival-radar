@@ -66,6 +66,6 @@ export const festivalSources: FestivalSource[] = [
   manual("copenhell", "official home page has no stable authoritative date or location marker"),
   source("roskilde", "weekly"),
   manual("rockstadt", "official home page metadata has no authoritative current-edition date range"),
-  retired("metaldays", "the organizer ended MetalDays in 2024; no 2027 edition exists to monitor (catalogue correction tracked in #175)"),
+  source("tolminator", "every_3_days", ["official_markup", "html_fallback"]),
 ];
 export function getFestivalSource(slug: string) { return festivalSources.find((item) => item.festivalSlug === slug); }
