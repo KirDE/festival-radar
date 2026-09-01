@@ -124,7 +124,8 @@ test("notification routes and PostgreSQL delivery invariants", async () => {
   assert.ok(rawToken);
   const storedToken = await db.emailVerificationToken.findFirstOrThrow({ where: { userId: user.id } });
   assert.notEqual(storedToken.tokenHash, rawToken);
-  assert.equal((await client.request(`${confirmationUrl.pathname}${confirmationUrl.search}`)).status, 303);
+  const confirmationStatuses = await Promise.all([client.request(`${confirmationUrl.pathname}${confirmationUrl.search}`), client.request(`${confirmationUrl.pathname}${confirmationUrl.search}`)]);
+  assert.deepEqual(confirmationStatuses.map((response) => response.status).sort(), [303, 410]);
   assert.equal((await client.request(`${confirmationUrl.pathname}${confirmationUrl.search}`)).status, 410);
   assert.equal((await db.user.findUniqueOrThrow({ where: { id: user.id } })).emailVerifiedAt instanceof Date, true);
   assert.equal((await (await client.json("/api/auth/me")).json()).user.emailVerified, true);
