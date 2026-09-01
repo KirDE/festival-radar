@@ -38,8 +38,6 @@ set +a
 export DEPLOYED_COMMIT="$commit" PORT="$port" HOSTNAME=127.0.0.1
 "$release/.runtime/node" node_modules/prisma/build/index.js generate
 "$release/.runtime/node" node_modules/prisma/build/index.js migrate deploy
-python3 -m venv "$shared/playlist-venv"
-"$shared/playlist-venv/bin/pip" install --disable-pip-version-check --no-input -r "$release/requirements.txt"
 
 cat > "/etc/systemd/system/$service.service" <<UNIT
 [Unit]
@@ -81,7 +79,8 @@ WorkingDirectory=$app_root/current
 EnvironmentFile=$shared/production.env
 Environment=NODE_ENV=production
 Environment=APP_ROOT=$app_root
-Environment=PLAYLIST_PYTHON=$shared/playlist-venv/bin/python
+Environment=PLAYLIST_PYTHON=python3
+Environment=PYTHONPATH=$app_root/current/.python
 Environment=COLLECTION_APP_URL=http://127.0.0.1:$port
 ExecStart=$app_root/current/scripts/deploy/run-collection-job.sh %i
 NoNewPrivileges=true
