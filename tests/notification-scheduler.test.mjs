@@ -16,6 +16,9 @@ test("production owns notification scheduling and GitHub is manual diagnostics o
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(runner, /flock -n/);
   assert.match(runner, /authorization: Bearer \$INTERNAL_API_SECRET/);
+  assert.doesNotMatch(runner, /--fail-with-body/);
+  assert.match(runner, /--write-out '%\{http_code\}'/);
+  assert.match(runner, /\[\[ "\$http_status" == 2\?\? \]\]/);
   assert.doesNotMatch(runner, /INTERNAL_API_SECRET.*state_file/);
   assert.match(packager, /scripts\/notifications\/dispatch-production\.sh/);
 });

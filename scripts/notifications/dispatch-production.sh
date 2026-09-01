@@ -14,11 +14,14 @@ response_file="$(mktemp)"
 state_tmp="$(mktemp "$(dirname "$state_file")/.notification-scheduler-state.XXXXXX")"
 trap 'rm -f "$response_file" "$state_tmp"' EXIT
 
-if curl --fail-with-body --silent --show-error --max-time 240 \
+http_status=""
+if http_status="$(curl --silent --show-error --max-time 240 \
   -H "authorization: Bearer $INTERNAL_API_SECRET" \
   -H "content-type: application/json" \
   --data '{"limit":500}' \
-  "${app_url%/}/api/notifications/dispatch/" >"$response_file"; then
+  --output "$response_file" \
+  --write-out '%{http_code}' \
+  "${app_url%/}/api/notifications/dispatch/")" && [[ "$http_status" == 2?? ]]; then
   finished_at="$(date -u +%FT%TZ)"
   "$NODE_BINARY" - "$response_file" "$started_at" "$finished_at" >"$state_tmp" <<'NODE'
 const [file, startedAt, finishedAt] = process.argv.slice(2);
@@ -34,6 +37,11 @@ NODE
   cat "$state_file"
 else
   finished_at="$(date -u +%FT%TZ)"
+  if [[ -n "$http_status" && "$http_status" != "000" ]]; then
+    printf 'notification dispatch failed with HTTP %s\n' "$http_status" >&2
+  else
+    printf 'notification dispatch request failed before an HTTP response\n' >&2
+  fi
   printf '{"startedAt":"%s","finishedAt":"%s","ok":false}\n' "$started_at" "$finished_at" >"$state_tmp"
   chmod 0640 "$state_tmp"
   mv -f "$state_tmp" "$state_file"
