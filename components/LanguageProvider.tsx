@@ -98,7 +98,9 @@ function browserLanguage(): Language {
 }
 
 export function languageDestination(pathname: string, selected: Language) {
-  return pathname === "/admin" || pathname.startsWith("/admin/") ? null : languagePath(pathname, selected);
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return null;
+  if (/^\/(?:(?:en|de|ru)\/)?notifications\/?$/.test(pathname)) return `/${selected}/notifications/`;
+  return languagePath(pathname, selected);
 }
 
 export function LanguageProvider({ children, initialLanguage }: { children: React.ReactNode; initialLanguage?: Language }) {

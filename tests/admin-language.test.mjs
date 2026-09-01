@@ -12,3 +12,9 @@ test("language changes keep the existing public navigation behavior", () => {
   assert.equal(languageDestination("/", "de"), "/de/");
   assert.equal(languageDestination("/planner/", "ru"), "/ru/");
 });
+
+test("language changes preserve localized notification settings routes", () => {
+  assert.equal(languageDestination("/notifications/", "de"), "/de/notifications/");
+  assert.equal(languageDestination("/en/notifications/", "ru"), "/ru/notifications/");
+  assert.equal(languageDestination("/de/notifications", "en"), "/en/notifications/");
+});
