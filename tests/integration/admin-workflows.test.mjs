@@ -63,6 +63,8 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   assert.equal((await nonAdmin.json("/api/admin")).status, 403);
   assert.equal((await nonAdmin.json("/api/admin", "POST", { resourceKind: "festival", resourceKey: "denied", baseRevision: 0, values: { city: "denied" } })).status, 403);
   assert.equal((await nonAdmin.json("/api/admin/refresh/wacken-open-air", "POST")).status, 403);
+  assert.equal((await nonAdmin.json("/api/admin/parser-runs/missing/log")).status, 403);
+  assert.equal((await anonymous.json("/api/admin/parser-runs/missing/log")).status, 403);
 
   const editor = new Client();
   assert.equal((await editor.json("/api/auth/register", "POST", { email: "editor@example.test", password: "correct horse battery staple" })).status, 201);
@@ -70,7 +72,6 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   assert.equal((await editor.json("/api/admin")).status, 200);
   assert.equal((await editor.json("/api/admin", "POST", { resourceKind: "link", resourceKey: "editor-draft", baseRevision: 0, values: { officialUrl: "https://editor.example.test" } })).status, 201);
   assert.equal((await editor.json("/api/admin/refresh/wacken-open-air", "POST")).status, 403);
-
   const admin = new Client();
   assert.equal((await admin.json("/api/auth/register", "POST", { email: "admin@example.test", password: "correct horse battery staple" })).status, 201);
   await db.user.update({ where: { email: "admin@example.test" }, data: { role: "ADMIN" } });
@@ -91,6 +92,27 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   const status = await db.adminChange.findFirstOrThrow({ where: { draftId: draft.id, field: "status" } });
   assert.equal((await admin.json(`/api/admin/changes/${status.id}`, "POST", { decision: "reject" })).status, 200);
   assert.equal((await db.adminResourceState.findUniqueOrThrow({ where: { resourceKind_resourceKey: { resourceKind: "FESTIVAL", resourceKey: "wacken-open-air" } } })).values.city, "Wacken Preview");
+
+  const playlistResponse = await admin.json("/api/admin", "POST", { resourceKind: "playlist", resourceKey: "integration-playlist", baseRevision: 0, values: { url: "https://open.spotify.com/playlist/integration", platform: "spotify", status: "draft" } });
+  assert.equal(playlistResponse.status, 201);
+  const playlist = await playlistResponse.json();
+  let playlistSnapshot = await (await admin.json("/api/admin")).json();
+  assert.deepEqual(playlistSnapshot.drafts.find((item) => item.id === playlist.id).values, { url: "https://open.spotify.com/playlist/integration", platform: "spotify", status: "draft" });
+  assert.equal((await admin.json(`/api/admin/drafts/${playlist.id}`, "PATCH", { values: { url: "https://open.spotify.com/playlist/integration-updated", platform: "spotify", status: "published" } })).status, 200);
+  playlistSnapshot = await (await admin.json("/api/admin")).json();
+  assert.deepEqual(playlistSnapshot.drafts.find((item) => item.id === playlist.id).values, { url: "https://open.spotify.com/playlist/integration-updated", platform: "spotify", status: "published" });
+  const playlistChanges = await db.adminChange.findMany({ where: { draftId: playlist.id }, orderBy: { field: "asc" } });
+  assert.deepEqual(playlistChanges.map((change) => change.field), ["platform", "status", "url"]);
+  for (const change of playlistChanges) assert.equal((await admin.json(`/api/admin/changes/${change.id}`, "POST", { decision: "approve" })).status, 200);
+  const publishedPlaylist = await db.adminResourceState.findUniqueOrThrow({ where: { resourceKind_resourceKey: { resourceKind: "PLAYLIST", resourceKey: "integration-playlist" } } });
+  assert.equal(publishedPlaylist.revision, 3);
+  assert.deepEqual(publishedPlaylist.values, { url: "https://open.spotify.com/playlist/integration-updated", platform: "spotify", status: "published" });
+  assert.equal((await admin.json("/api/admin", "POST", { resourceKind: "playlist", resourceKey: "integration-playlist", baseRevision: 0, values: { status: "stale" } })).status, 409);
+  const disposablePlaylistResponse = await admin.json("/api/admin", "POST", { resourceKind: "playlist", resourceKey: "delete-playlist", baseRevision: 0, values: { url: "https://example.test/delete-playlist" } });
+  const disposablePlaylist = await disposablePlaylistResponse.json();
+  assert.equal((await admin.json(`/api/admin/drafts/${disposablePlaylist.id}`, "DELETE")).status, 200);
+  assert.equal(await db.adminDraft.count({ where: { id: disposablePlaylist.id } }), 0);
+
   const disposableResponse = await admin.json("/api/admin", "POST", { resourceKind: "asset", resourceKey: "delete-me", baseRevision: 0, values: { logoUrl: "https://example.test/logo.svg" } });
   const disposable = await disposableResponse.json();
   assert.equal((await admin.json(`/api/admin/drafts/${disposable.id}`, "DELETE")).status, 200);
@@ -103,7 +125,15 @@ test("persisted admin drafts, decisions, conflicts, authorization and audit inva
   assert.ok(await db.adminChange.count({ where: { parserRunId: successfulRun.id } }));
   sourceMode = "failure";
   assert.equal((await admin.json("/api/admin/refresh/wacken-open-air", "POST")).status, 502);
-  assert.equal((await db.adminParserRun.findFirstOrThrow({ orderBy: { startedAt: "desc" } })).status, "FAILED");
+  const failedRun = await db.adminParserRun.findFirstOrThrow({ orderBy: { startedAt: "desc" } });
+  assert.equal(failedRun.status, "FAILED");
+  const logResponse = await admin.json(`/api/admin/parser-runs/${failedRun.id}/log`);
+  assert.equal(logResponse.status, 200);
+  const storedLog = await logResponse.json();
+  assert.equal(storedLog.id, failedRun.id);
+  assert.equal(storedLog.status, "FAILED");
+  assert.deepEqual(storedLog.log, failedRun.log);
+  assert.equal((await admin.json("/api/admin/parser-runs/missing/log")).status, 404);
 
   const conflictA = await db.adminChange.create({ data: { resourceKind: "LINK", resourceKey: "concurrent", field: "url", baseRevision: 0, beforeValue: null, afterValue: "https://a.example", sourceEvidence: { test: true } } });
   const conflictB = await db.adminChange.create({ data: { resourceKind: "LINK", resourceKey: "concurrent", field: "url", baseRevision: 0, beforeValue: null, afterValue: "https://b.example", sourceEvidence: { test: true } } });

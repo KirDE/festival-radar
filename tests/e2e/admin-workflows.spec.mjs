@@ -52,6 +52,11 @@ test("admin edits, reviews, diagnostics and audit survive reload", async ({ page
     page.waitForResponse((response) => response.url().endsWith("/api/admin") && response.request().method() === "POST" && response.request().postData()?.includes('"resourceKind":"link"')),
     page.getByRole("button", { name: "Save links draft" }).click(),
   ]);
+  await page.getByLabel("Playlist URL").fill("https://open.spotify.com/playlist/e2e");
+  await Promise.all([
+    page.waitForResponse((response) => response.url().endsWith("/api/admin") && response.request().method() === "POST" && response.request().postData()?.includes('"resourceKind":"playlist"')),
+    page.getByRole("button", { name: "Save playlist draft" }).click(),
+  ]);
   await Promise.all([
     page.waitForResponse((response) => response.url().endsWith("/api/admin") && response.request().method() === "POST" && response.request().postData()?.includes('"resourceKind":"asset"')),
     page.getByRole("button", { name: "Save asset draft" }).click(),
@@ -73,11 +78,13 @@ test("admin edits, reviews, diagnostics and audit survive reload", async ({ page
   await page.reload();
   await page.getByRole("button", { name: "Parser diagnostics" }).click();
   await expect(page.getByText("E2E adapter failure")).toBeVisible();
+  await page.getByRole("button", { name: "View parser log" }).click();
+  await expect(page.getByLabel("wacken-open-air parser log")).toContainText("fixture");
 
   const snapshot = await (await page.request.get("/api/admin")).json();
-  expect(snapshot.drafts).toHaveLength(4);
+  expect(snapshot.drafts).toHaveLength(5);
   expect(snapshot.resources.find((item) => item.resourceKind === "FESTIVAL")?.values.city).toBe("Wacken E2E City");
-  expect(new Set(snapshot.drafts.map((item) => item.resourceKind))).toEqual(new Set(["FESTIVAL", "ARTIST", "LINK", "ASSET"]));
+  expect(new Set(snapshot.drafts.map((item) => item.resourceKind))).toEqual(new Set(["FESTIVAL", "ARTIST", "LINK", "ASSET", "PLAYLIST"]));
 
   const sections = ["Review queue", "Festival submissions", "Festivals & artists", "Links & assets", "Parser diagnostics", "Audit history"];
   for (const width of [320, 375, 390]) {

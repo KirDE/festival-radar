@@ -20,6 +20,7 @@ export type ParserRun = {
   durationMs: number;
   extracted: number;
   message: string;
+  log: unknown;
 };
 
 export type AuditEntry = {
@@ -38,9 +39,9 @@ export const reviewChanges: ReviewChange[] = [
 ];
 
 export const parserRuns: ParserRun[] = [
-  { festival: "Wacken Open Air", source: "JSON-LD", status: "healthy", lastRun: "2026-08-29 07:18 UTC", durationMs: 842, extracted: 49, message: "Schema validated; 2 new artists detected." },
-  { festival: "Rock am Ring", source: "HTML fallback", status: "warning", lastRun: "2026-08-29 07:12 UTC", durationMs: 2310, extracted: 12, message: "Primary selector changed; fallback selector succeeded." },
-  { festival: "Hellfest Open Air", source: "JSON-LD", status: "failed", lastRun: "2026-08-29 06:55 UTC", durationMs: 514, extracted: 0, message: "Invalid startDate/endDate range requires review." },
+  { festival: "Wacken Open Air", source: "JSON-LD", status: "healthy", lastRun: "2026-08-29 07:18 UTC", durationMs: 842, extracted: 49, message: "Schema validated; 2 new artists detected.", log: [] },
+  { festival: "Rock am Ring", source: "HTML fallback", status: "warning", lastRun: "2026-08-29 07:12 UTC", durationMs: 2310, extracted: 12, message: "Primary selector changed; fallback selector succeeded.", log: [] },
+  { festival: "Hellfest Open Air", source: "JSON-LD", status: "failed", lastRun: "2026-08-29 06:55 UTC", durationMs: 514, extracted: 0, message: "Invalid startDate/endDate range requires review.", log: [] },
 ];
 
 export const auditEntries: AuditEntry[] = [
