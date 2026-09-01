@@ -15,7 +15,7 @@ export function SiteHeader() {
       <nav>
         <Link href={`/${language}/`}>{t("festivals")}</Link>
         <Link href={`/${language}/planner/`}>{t("myPlan")}</Link>
-        <Link href="/notifications/">{t("notifications")}</Link>
+        <Link href={`/${language}/notifications/`}>{t("notifications")}</Link>
         <a href="https://github.com/KirDE/festival-radar">{t("aboutData")}</a>
       </nav>
       <AccountMenu />
