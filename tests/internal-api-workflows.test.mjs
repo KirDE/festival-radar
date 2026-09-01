@@ -51,6 +51,8 @@ test("deployment builds and installs the privacy analytics contract", async () =
   assert.match(workflow, /printf 'ANALYTICS_OPERATOR_TOKEN=%q\\n'/);
   assert.match(workflow, /printf 'ANALYTICS_RETENTION_DAYS=%q\\n'/);
   assert.match(pruneWorkflow, /environment: production/);
+  assert.doesNotMatch(pruneWorkflow, /schedule:/);
+  assert.match(pruneWorkflow, /workflow_dispatch:/);
   assert.doesNotMatch(pruneWorkflow, /DATABASE_URL/);
   assert.match(pruneWorkflow, /ANALYTICS_RETENTION_TOKEN: \$\{\{ secrets\.ANALYTICS_RETENTION_TOKEN \}\}/);
   assert.match(pruneWorkflow, /\/api\/analytics\/prune\//);
