@@ -50,6 +50,15 @@ test("deployment preserves the protected admin allowlist", async () => {
   assert.doesNotMatch(workflow, /echo.*ADMIN_EMAILS/);
 });
 
+test("deployment installs only configured protected notification providers", async () => {
+  const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
+  for (const name of ["EMAIL_WEBHOOK_URL", "TELEGRAM_BOT_TOKEN", "WEB_PUSH_WEBHOOK_URL", "NEXT_PUBLIC_WEB_PUSH_VAPID_KEY"]) {
+    assert.match(workflow, new RegExp(`${name}: \\$\\{\\{ secrets\\.${name} \\}\\}`));
+    assert.match(workflow, new RegExp(`test -z "\\$${name}" \\|\\| printf '${name}=%q\\\\n' "\\$${name}"`));
+  }
+  assert.doesNotMatch(workflow, /echo.*(?:EMAIL_WEBHOOK_URL|TELEGRAM_BOT_TOKEN|WEB_PUSH_WEBHOOK_URL|NEXT_PUBLIC_WEB_PUSH_VAPID_KEY)/);
+});
+
 test("deployment builds and installs the privacy analytics contract", async () => {
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
   const pruneWorkflow = await readFile(".github/workflows/prune-analytics.yml", "utf8");
