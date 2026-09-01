@@ -63,11 +63,12 @@ jobs:
           APP_URL: ${{ secrets.APP_URL }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
           ANALYTICS_OPERATOR_TOKEN: ${{ secrets.ANALYTICS_OPERATOR_TOKEN }}
+          ANALYTICS_RETENTION_TOKEN: ${{ secrets.ANALYTICS_RETENTION_TOKEN }}
           ANALYTICS_RETENTION_DAYS: ${{ vars.ANALYTICS_RETENTION_DAYS || '90' }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         run: |
-          for name in DATABASE_URL AUTH_SECRET APP_URL INTERNAL_API_SECRET ANALYTICS_OPERATOR_TOKEN SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
+          for name in DATABASE_URL AUTH_SECRET APP_URL INTERNAL_API_SECRET ANALYTICS_OPERATOR_TOKEN ANALYTICS_RETENTION_TOKEN SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
             test -n "${!name}" || { echo "Missing required production secret: $name" >&2; exit 1; }
           done
           umask 077
@@ -77,6 +78,7 @@ jobs:
             printf 'APP_URL=%q\n' "$APP_URL"
             printf 'INTERNAL_API_SECRET=%q\n' "$INTERNAL_API_SECRET"
             printf 'ANALYTICS_OPERATOR_TOKEN=%q\n' "$ANALYTICS_OPERATOR_TOKEN"
+            printf 'ANALYTICS_RETENTION_TOKEN=%q\n' "$ANALYTICS_RETENTION_TOKEN"
             printf 'ANALYTICS_RETENTION_DAYS=%q\n' "$ANALYTICS_RETENTION_DAYS"
             printf 'SPOTIFY_CLIENT_ID=%q\n' "$SPOTIFY_CLIENT_ID"
             printf 'SPOTIFY_CLIENT_SECRET=%q\n' "$SPOTIFY_CLIENT_SECRET"

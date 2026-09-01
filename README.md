@@ -118,8 +118,10 @@ aggregate, non-identifying measurement is the documented consent policy; the
 site does not set analytics cookies or build visitor profiles.
 
 The receiver stores only daily `path`/`locale` counters in PostgreSQL. Set
-`ANALYTICS_RETENTION_DAYS` (90 by default) and run `npm run analytics:prune`
-daily. Reverse-proxy access logging for `/api/analytics/page-view` must be
+`ANALYTICS_RETENTION_DAYS` (90 by default) and configure the dedicated
+`ANALYTICS_RETENTION_TOKEN` used by the daily production retention workflow.
+The workflow invokes `/api/analytics/prune/`; database credentials remain
+inside production. Reverse-proxy access logging for `/api/analytics/page-view` must be
 disabled so IP addresses are not retained outside this schema. Operators can
 verify accepted counts without visitor data:
 
