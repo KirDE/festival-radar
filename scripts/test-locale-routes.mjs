@@ -17,6 +17,11 @@ async function ready() {
 }
 
 const expected = { en: "Find your next", de: "Finde dein nächstes", ru: "Найди свои следующие" };
+const plannerExpected = {
+  en: { heading: "Your 2027 plan", notifications: "Notifications", calendar: "Festival calendar" },
+  de: { heading: "Dein Plan für 2027", notifications: "Benachrichtigungen", calendar: "Festivalkalender" },
+  ru: { heading: "Ваш план на 2027 год", notifications: "Уведомления", calendar: "Календарь фестивалей" },
+};
 try {
   await ready();
   for (const [lang, visible] of Object.entries(expected)) {
@@ -37,7 +42,12 @@ try {
 
     const planner = await fetch(`${origin}/${lang}/planner/`);
     assert.equal(planner.status, 200);
-    assert.match(await planner.text(), new RegExp(`<html lang="${lang}"`));
+    const plannerHtml = await planner.text();
+    assert.match(plannerHtml, new RegExp(`<html lang="${lang}"`));
+    assert.ok(plannerHtml.includes(plannerExpected[lang].heading), `${lang} planner heading is not localized`);
+    assert.ok(plannerHtml.includes(plannerExpected[lang].notifications), `${lang} notification navigation is not localized`);
+    assert.ok(plannerHtml.includes(plannerExpected[lang].calendar), `${lang} planner calendar is not localized`);
+    assert.ok(plannerHtml.includes(`href="/${lang}/planner/"`), `${lang} planner navigation does not preserve locale`);
 
     const manifest = await fetch(`${origin}/${lang}/manifest.webmanifest`);
     assert.equal(manifest.status, 200);
