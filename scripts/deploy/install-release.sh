@@ -66,6 +66,76 @@ ReadWritePaths=$app_root
 WantedBy=multi-user.target
 UNIT
 
+cat > "/etc/systemd/system/$service-notifications.service" <<UNIT
+[Unit]
+Description=Festival Radar notification dispatcher
+After=$service.service
+Requires=$service.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+EnvironmentFile=$shared/production.env
+Environment=NODE_BINARY=$release/.runtime/node
+ExecStart=$release/scripts/notifications/dispatch-production.sh
+RuntimeDirectory=festival-radar-notifications
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=$shared /run/festival-radar-notifications
+UNIT
+
+cat > "/etc/systemd/system/$service-notifications.timer" <<UNIT
+[Unit]
+Description=Dispatch Festival Radar notifications every ten minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=10min
+AccuracySec=15s
+Persistent=true
+Unit=$service-notifications.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+cat > "/etc/systemd/system/$service-analytics-retention.service" <<UNIT
+[Unit]
+Description=Festival Radar privacy analytics retention
+After=$service.service
+Requires=$service.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+EnvironmentFile=$shared/production.env
+Environment=NODE_BINARY=$release/.runtime/node
+Environment=ANALYTICS_RETENTION_APP_URL=http://127.0.0.1:$port
+ExecStart=$release/scripts/analytics/prune-production.sh
+RuntimeDirectory=festival-radar-analytics
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=$shared /run/festival-radar-analytics
+UNIT
+
+cat > "/etc/systemd/system/$service-analytics-retention.timer" <<UNIT
+[Unit]
+Description=Prune Festival Radar privacy analytics daily
+
+[Timer]
+OnCalendar=*-*-* 03:17:00 UTC
+RandomizedDelaySec=2min
+Persistent=true
+Unit=$service-analytics-retention.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 vhost="/var/www/vhosts/system/$domain/conf/vhost.conf"
 install -d -m 0755 "$(dirname "$vhost")"
 cat > "$vhost" <<APACHE
@@ -85,6 +155,8 @@ chown -R www-data:www-data "$release" "$shared"
 systemctl daemon-reload
 systemctl enable "$service"
 systemctl restart "$service"
+systemctl enable --now "$service-notifications.timer"
+systemctl enable --now "$service-analytics-retention.timer"
 bash "$release/scripts/deploy/reconfigure-webserver.sh" "$domain"
 
 healthy=false

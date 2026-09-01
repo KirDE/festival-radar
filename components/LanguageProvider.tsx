@@ -10,14 +10,23 @@ export type AdminTranslationKey = keyof typeof adminTranslations.en;
 export const adminTranslations = {
   "en": {
     submissions: "Festival submissions",
+    roleAdmin: "Administrator",
+    roleEditor: "Editor · Review required",
+    roleUser: "User",
     skip: "Skip to administration content", console: "Admin console", subtitle: "Review-first content operations", navigation: "Administration sections", publicSite: "Public site", review: "Review queue", content: "Festivals & artists", assets: "Links & assets", diagnostics: "Parser diagnostics", audit: "Audit history", operations: "Operations / 2027 season", detectedChanges: "Detected changes", contentEditor: "Content editor", role: "Editor · Review required", dismiss: "Dismiss notification", reviewHelp: "Approve trusted source changes or reject them without publishing automatically.", filter: "Filter changes", allPending: "All pending changes", conflicts: "Conflicts only", highConfidence: "High confidence", conflict: "Conflict", confidence: "confidence", current: "Current", detected: "Detected", reject: "Reject", approve: "Approve change", approved: "approved", rejected: "rejected", festival: "Festival", name: "Name", status: "Status", city: "City", country: "Country", startDate: "Start date", endDate: "End date", headliners: "Headliners", saveFestival: "Save festival draft", manualRefresh: "Manual refresh", refreshHelp: "Run only this festival’s configured adapters. Any differences go to the review queue.", refreshing: "Refreshing…", refresh: "Refresh", artistEditor: "Artist editor", findArtist: "Find an artist", edit: "Edit", officialUrl: "Official URL", ticketsUrl: "Tickets URL", playlistUrl: "Spotify / playlist URL", logoUrl: "Logo URL", saveAsset: "Save asset draft", validation: "Validation", reachable: "Official URL · reachable", httpsValid: "HTTPS · valid", logoReview: "Logo · manual review needed", externalValidation: "External links are validated before a draft can be approved.", adapter: "Adapter", duration: "Duration", records: "Records", viewLog: "View parser log", decisionNotice: "The decision was added to the audit trail.", refreshFinished: "refresh finished. One review item was queued; publication remains gated.", draftSaved: "Draft saved. It will not be published until reviewed.", assetSaved: "Link and asset draft saved for review.", artistOpened: "opened for canonical identity and link editing.", logOpened: "parser log opened.", language: "Language", pendingCount: "pending review items"
   },
   "de": {
     submissions: "Festivalvorschläge",
+    roleAdmin: "Administrator",
+    roleEditor: "Redaktion · Prüfung erforderlich",
+    roleUser: "Benutzer",
     skip: "Zum Administrationsinhalt springen", console: "Admin-Konsole", subtitle: "Inhaltsarbeit mit verpflichtender Prüfung", navigation: "Administrationsbereiche", publicSite: "Öffentliche Website", review: "Prüfwarteschlange", content: "Festivals & Künstler", assets: "Links & Medien", diagnostics: "Parser-Diagnose", audit: "Prüfverlauf", operations: "Betrieb / Saison 2027", detectedChanges: "Erkannte Änderungen", contentEditor: "Inhaltseditor", role: "Redaktion · Prüfung erforderlich", dismiss: "Benachrichtigung schließen", reviewHelp: "Änderungen aus vertrauenswürdigen Quellen freigeben oder ohne automatische Veröffentlichung ablehnen.", filter: "Änderungen filtern", allPending: "Alle offenen Änderungen", conflicts: "Nur Konflikte", highConfidence: "Hohe Zuverlässigkeit", conflict: "Konflikt", confidence: "Zuverlässigkeit", current: "Aktuell", detected: "Erkannt", reject: "Ablehnen", approve: "Änderung freigeben", approved: "freigegeben", rejected: "abgelehnt", festival: "Festival", name: "Name", status: "Status", city: "Stadt", country: "Land", startDate: "Startdatum", endDate: "Enddatum", headliners: "Headliner", saveFestival: "Festivalentwurf speichern", manualRefresh: "Manuelle Aktualisierung", refreshHelp: "Nur die konfigurierten Adapter dieses Festivals ausführen. Unterschiede kommen in die Prüfwarteschlange.", refreshing: "Aktualisierung…", refresh: "Aktualisieren:", artistEditor: "Künstlereditor", findArtist: "Künstler suchen", edit: "Bearbeiten", officialUrl: "Offizielle URL", ticketsUrl: "Ticket-URL", playlistUrl: "Spotify-/Playlist-URL", logoUrl: "Logo-URL", saveAsset: "Medienentwurf speichern", validation: "Validierung", reachable: "Offizielle URL · erreichbar", httpsValid: "HTTPS · gültig", logoReview: "Logo · manuelle Prüfung nötig", externalValidation: "Externe Links werden validiert, bevor ein Entwurf freigegeben werden kann.", adapter: "Adapter", duration: "Dauer", records: "Datensätze", viewLog: "Parser-Protokoll anzeigen", decisionNotice: "Die Entscheidung wurde dem Prüfverlauf hinzugefügt.", refreshFinished: "wurde aktualisiert. Ein Prüfeintrag wurde angelegt; die Veröffentlichung bleibt gesperrt.", draftSaved: "Entwurf gespeichert. Er wird erst nach der Prüfung veröffentlicht.", assetSaved: "Link- und Medienentwurf zur Prüfung gespeichert.", artistOpened: "wurde zur Bearbeitung der kanonischen Identität und Links geöffnet.", logOpened: "Parser-Protokoll wurde geöffnet.", language: "Sprache", pendingCount: "offene Prüfeinträge"
   },
   "ru": {
     submissions: "Предложения фестивалей",
+    roleAdmin: "Администратор",
+    roleEditor: "Редактор · нужна проверка",
+    roleUser: "Пользователь",
     skip: "Перейти к содержимому админ-панели", console: "Админ-панель", subtitle: "Операции с обязательной проверкой", navigation: "Разделы администрирования", publicSite: "Открыть сайт", review: "Очередь проверки", content: "Фестивали и артисты", assets: "Ссылки и материалы", diagnostics: "Диагностика парсера", audit: "Журнал аудита", operations: "Управление / сезон 2027", detectedChanges: "Обнаруженные изменения", contentEditor: "Редактор контента", role: "Редактор · нужна проверка", dismiss: "Закрыть уведомление", reviewHelp: "Подтвердите изменения из надёжных источников или отклоните их без автоматической публикации.", filter: "Фильтр изменений", allPending: "Все ожидающие изменения", conflicts: "Только конфликты", highConfidence: "Высокая уверенность", conflict: "Конфликт", confidence: "уверенности", current: "Сейчас", detected: "Обнаружено", reject: "Отклонить", approve: "Подтвердить", approved: "подтверждено", rejected: "отклонено", festival: "Фестиваль", name: "Название", status: "Статус", city: "Город", country: "Страна", startDate: "Дата начала", endDate: "Дата окончания", headliners: "Хедлайнеры", saveFestival: "Сохранить черновик фестиваля", manualRefresh: "Ручное обновление", refreshHelp: "Запустить настроенные адаптеры только для этого фестиваля. Различия попадут в очередь проверки.", refreshing: "Обновление…", refresh: "Обновить", artistEditor: "Редактор артистов", findArtist: "Найти артиста", edit: "Изменить", officialUrl: "Официальный URL", ticketsUrl: "URL билетов", playlistUrl: "URL Spotify / плейлиста", logoUrl: "URL логотипа", saveAsset: "Сохранить черновик материалов", validation: "Проверка", reachable: "Официальный URL · доступен", httpsValid: "HTTPS · корректен", logoReview: "Логотип · нужна ручная проверка", externalValidation: "Внешние ссылки проверяются до подтверждения черновика.", adapter: "Адаптер", duration: "Длительность", records: "Записи", viewLog: "Открыть журнал парсера", decisionNotice: "Решение добавлено в журнал аудита.", refreshFinished: "обновлён. Один элемент добавлен в очередь; публикация по-прежнему заблокирована.", draftSaved: "Черновик сохранён. Он не будет опубликован до проверки.", assetSaved: "Черновик ссылок и материалов сохранён для проверки.", artistOpened: "открыт для редактирования канонической записи и ссылок.", logOpened: "журнал парсера открыт.", language: "Язык", pendingCount: "элементов ожидают проверки"
   }
 } as const;
@@ -79,6 +88,10 @@ function browserLanguage(): Language {
   return "en";
 }
 
+export function languageDestination(pathname: string, selected: Language) {
+  return pathname === "/admin" || pathname.startsWith("/admin/") ? null : `/${selected}/`;
+}
+
 export function LanguageProvider({ children, initialLanguage }: { children: React.ReactNode; initialLanguage?: Language }) {
   const [language, updateLanguage] = useState<Language>(initialLanguage ?? "en");
   useEffect(() => {
@@ -92,7 +105,16 @@ export function LanguageProvider({ children, initialLanguage }: { children: Reac
     updateLanguage(selected);
     document.documentElement.lang = selected;
   }, [initialLanguage]);
-  const setLanguage = (selected: Language) => { localStorage.setItem("festival-radar-language", selected); window.location.assign(`/${selected}/`); };
+  const setLanguage = (selected: Language) => {
+    localStorage.setItem("festival-radar-language", selected);
+    const destination = languageDestination(window.location.pathname, selected);
+    if (destination) {
+      window.location.assign(destination);
+      return;
+    }
+    updateLanguage(selected);
+    document.documentElement.lang = selected;
+  };
   const value = useMemo(() => ({ language, locale: localeMap[language], setLanguage, t: (key: TranslationKey, values?: TranslationValues) => translate(language, key, values), ta: (key: AdminTranslationKey) => adminTranslations[language][key] }), [language]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
