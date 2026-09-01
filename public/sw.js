@@ -68,8 +68,16 @@ async function trim(cache) {
   for (const key of keys.slice(0, Math.max(0, keys.length - MAX_ENTRIES))) await cache.delete(key);
 }
 
+async function precache(cache) {
+  await Promise.all(PRECACHE.map(async (url) => {
+    const response = await fetch(url, { cache: "reload" });
+    if (!cacheable(response)) throw new Error(`Unable to precache ${url}: HTTP ${response.status}`);
+    await cache.put(url, await stamped(response));
+  }));
+}
+
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_VERSION).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_VERSION).then(precache).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {

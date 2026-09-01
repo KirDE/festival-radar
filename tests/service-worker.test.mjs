@@ -3,17 +3,55 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-async function loadWorker() {
+async function loadWorker({ fetchImpl, cachesImpl } = {}) {
   const listeners = {};
   const context = {
     module: { exports: {} }, URL, Headers, Response, Blob,
-    fetch: () => Promise.reject(new TypeError("offline")),
-    caches: { match: async () => new Response("offline") },
-    self: { location: { origin: "https://festivals.test" }, addEventListener: (name, fn) => { listeners[name] = fn; } },
+    fetch: fetchImpl || (() => Promise.reject(new TypeError("offline"))),
+    caches: cachesImpl || { match: async () => new Response("offline") },
+    self: {
+      location: { origin: "https://festivals.test" },
+      skipWaiting: async () => {},
+      clients: { claim: async () => {} },
+      addEventListener: (name, fn) => { listeners[name] = fn; },
+    },
   };
   vm.runInNewContext(await readFile(new URL("../public/sw.js", import.meta.url), "utf8"), context);
   return { helpers: context.module.exports, listeners };
 }
+
+test("install stamps every precache entry and serves the versioned payload offline", async () => {
+  const entries = new Map();
+  const cacheKey = (key) => new URL(typeof key === "string" ? key : key.url, "https://festivals.test").pathname;
+  const cache = {
+    put: async (key, response) => entries.set(cacheKey(key), response),
+    match: async (key) => entries.get(cacheKey(key)),
+    delete: async (key) => entries.delete(cacheKey(key)),
+    keys: async () => [...entries.keys()],
+  };
+  const caches = { open: async () => cache, match: cache.match, keys: async () => [], delete: async () => true };
+  const { listeners } = await loadWorker({
+    cachesImpl: caches,
+    fetchImpl: async (request) => new Response(String(request).includes(".json") ? '{"festivals":[]}' : "asset", { status: 200 }),
+  });
+  let install;
+  listeners.install({ waitUntil: (promise) => { install = promise; } });
+  await install;
+
+  for (const response of entries.values()) {
+    assert.ok(Number(response.headers.get("x-festival-radar-cached-at")) > 0);
+  }
+
+  let offlineResponse;
+  listeners.fetch({
+    request: { method: "GET", url: "https://festivals.test/offline/festivals-2027-v1.json", mode: "cors" },
+    respondWith: (promise) => { offlineResponse = promise; },
+  });
+  assert.deepEqual(await (await offlineResponse).json(), { festivals: [] });
+  for (const path of ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png"]) {
+    assert.ok(await cache.match(path), `${path} remains available offline`);
+  }
+});
 
 test("private/user APIs and authenticated routes are never cache candidates", async () => {
   const { helpers } = await loadWorker();
