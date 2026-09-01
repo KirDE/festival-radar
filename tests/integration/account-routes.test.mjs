@@ -161,6 +161,7 @@ test("auth, sync, sharing, and Spotify OAuth work against PostgreSQL", async () 
   assert.equal((await anonymous.json("/api/auth/register", "POST", { email: "bad", password: "short" })).status, 400);
   const registration = await anonymous.json("/api/auth/register", "POST", { email: "First@Example.com", password: "correct horse battery staple" });
   assert.equal(registration.status, 201);
+  assert.equal((await registration.clone().json()).user.emailVerified, false);
   const sessionCookie = registration.headers.getSetCookie().find((value) => value.startsWith("festival_radar_session="));
   assert.match(sessionCookie, /HttpOnly/i);
   assert.match(sessionCookie, /SameSite=Lax/i);
@@ -173,6 +174,7 @@ test("auth, sync, sharing, and Spotify OAuth work against PostgreSQL", async () 
   assert.equal((await anonymous.json("/api/auth/me")).status, 401);
   assert.equal((await anonymous.json("/api/auth/login", "POST", { email: "first@example.com", password: "wrong" })).status, 401);
   assert.equal((await anonymous.json("/api/auth/login", "POST", { email: "first@example.com", password: "correct horse battery staple" })).status, 200);
+  assert.equal((await (await anonymous.json("/api/auth/me")).json()).user.emailVerified, false);
 
   const firstUser = await db.user.findUniqueOrThrow({ where: { email: "first@example.com" } });
   await db.session.updateMany({ where: { userId: firstUser.id }, data: { expiresAt: new Date(0) } });

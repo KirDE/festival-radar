@@ -16,6 +16,7 @@ export async function GET() {
   return Response.json({
     subscriptions: subscriptions.map((item) => ({ ...item, endpoint: item.channel === NotificationChannel.EMAIL ? "account email" : item.channel === NotificationChannel.TELEGRAM ? `chat …${item.endpoint.slice(-4)}` : "browser subscription" })),
     recent,
+    emailVerified: user.emailVerified,
     providers: notificationProviderState(),
     webPushPublicKey: process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_KEY || null,
   });
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
   const originError = rejectUntrustedOrigin(request); if (originError) return originError;
   const user = await requireUser(); if (!user) return error("Authentication required.", 401);
   const parsed = requestSchema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return error("Invalid channel.");
+  if (parsed.data.channel === NotificationChannel.EMAIL && !user.emailVerified) return error("Verify your account email before sending an email test.", 409);
   if (parsed.data.channel !== NotificationChannel.EMAIL) {
     const enrolled = await db.notificationSubscription.findFirst({ where: { userId: user.id, channel: parsed.data.channel, enabled: true } });
     if (!enrolled) return error("Enroll and enable this channel before sending a test.", 409);
