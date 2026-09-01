@@ -16,6 +16,18 @@ test("release packaging includes the helper required by the installer", async ()
   assert.match(installer, /scripts\/deploy\/reconfigure-webserver\.sh/);
 });
 
+test("the generated Apache vhost bypasses ModSecurity only for logout", async () => {
+  const installer = await readFile("scripts/deploy/install-release.sh", "utf8");
+
+  assert.match(installer, /<IfModule mod_security2\.c>/);
+  assert.match(installer, /<LocationMatch "\^\/api\/auth\/logout\/\?\$">/);
+  assert.match(installer, /SecRuleEngine Off/);
+  assert.deepEqual(
+    [...installer.matchAll(/<LocationMatch "([^"]+)">/g)].map((match) => match[1]),
+    ["^/api/auth/logout/?$"],
+  );
+});
+
 test("release activation explicitly restarts an already-running service", async () => {
   const installer = await readFile("scripts/deploy/install-release.sh", "utf8");
 

@@ -143,6 +143,14 @@ ProxyPreserveHost On
 ProxyPass / http://127.0.0.1:$port/
 ProxyPassReverse / http://127.0.0.1:$port/
 RequestHeader set X-Forwarded-Proto "https" env=HTTPS
+<IfModule mod_security2.c>
+  # The OWASP CRS treats the word "logout" in this POST target as an attack
+  # before the request reaches Next.js. Keep the exception scoped to the one
+  # session-destruction endpoint; the application still enforces same-origin.
+  <LocationMatch "^/api/auth/logout/?$">
+    SecRuleEngine Off
+  </LocationMatch>
+</IfModule>
 APACHE
 
 # Privacy analytics bypasses both nginx and Apache access logs. The exact
