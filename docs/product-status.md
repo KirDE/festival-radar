@@ -1,13 +1,13 @@
 # Festival Radar product status
 
 Last verified: 2026-09-01 (production at `https://festivals.kir-it.de`, merge
-`d1c462ea6311951daf8a4970200add6c5f6ed23d`).
+`015181ad0393c1f0f20f87dc152f81532ebb6c1e`).
 
 This document is the product-function inventory requested at the end of the
 2026 milestone. It describes the deployed behavior, not merely code that has
 passed CI. The gap list is based on production acceptance and regression
 testing of every pull request merged on 2026-08-30, every milestone pull
-request from #73 through #88, and the production remediations through PR #157.
+request from #73 through #88, and the production remediations through PR #167.
 
 ## Original concept
 
@@ -108,11 +108,14 @@ and deploys can be verified and rolled back.
 - `/api/health/notification-scheduler/` returned HTTP 200 with `ok: true`; the
   latest run completed successfully and the health age was under two minutes
   at verification time.
-- The analytics prune endpoint succeeds with the production-local dedicated
-  token and fails closed with JSON 401 for an invalid token. The scheduled
-  hosted production run nevertheless failed, so retention remains unresolved
-  until [#137](https://github.com/KirDE/festival-radar/issues/137) passes a
-  production-owned scheduled acceptance run.
+- Analytics retention is owned by an enabled, active production systemd timer.
+  Two consecutive idempotent production runs succeeded, the protected endpoint
+  failed closed with JSON 401 for an invalid token, and the non-secret state
+  file recorded `ok: true`.
+- The Admin Console preserves `/admin/` while switching English, German and
+  Russian, renders the authenticated `ADMIN` role truthfully and fits all six
+  sections at 320, 375 and 390 px without horizontal overflow. The protected
+  admin allowlist is also preserved across production deploys.
 
 ## Remaining gaps against the concept
 
@@ -133,7 +136,6 @@ behind a generic “deployed” status.
 | YouTube Music | Production refresh is not configured with a usable provider credential. | [#134](https://github.com/KirDE/festival-radar/issues/134) |
 | Artist provenance | A curated identity override can retain provenance from a different generated identity. | [#135](https://github.com/KirDE/festival-radar/issues/135) |
 | Artist localization | Localized artist links fall back to the unlocalized route, making translated enrichment unreachable. | [#136](https://github.com/KirDE/festival-radar/issues/136) |
-| Analytics retention | The protected prune endpoint works, but the hosted scheduled production run failed; no production-owned scheduled acceptance has passed. | [#137](https://github.com/KirDE/festival-radar/issues/137) |
 | Release portability | The installer still relies on a hidden system npm dependency and only configures one Plesk proxy vhost variant. | [#97](https://github.com/KirDE/festival-radar/issues/97), [#98](https://github.com/KirDE/festival-radar/issues/98) |
 
 Two acceptance areas remain evidence-limited rather than confirmed broken:
