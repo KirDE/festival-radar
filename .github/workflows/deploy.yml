@@ -85,6 +85,7 @@ jobs:
           } > production.env
       - name: Upload and activate release
         run: |
+          ssh production sudo -n /usr/local/libexec/festival-radar/upgrade-deployment-assets "$GITHUB_SHA"
           ssh production 'test "$(id -un)" = festival-radar-deploy && sudo -n /usr/local/libexec/festival-radar/activate-release 0000000000000000000000000000000000000000 2>&1 | grep -Fq "missing regular deployment input"'
           scp release.tar.gz "production:/var/lib/festival-radar-deploy/incoming/$GITHUB_SHA.tar.gz"
           scp production.env "production:/var/lib/festival-radar-deploy/incoming/$GITHUB_SHA.env"
