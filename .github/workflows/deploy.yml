@@ -61,6 +61,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
           APP_URL: ${{ secrets.APP_URL }}
+          ADMIN_EMAILS: ${{ secrets.ADMIN_EMAILS }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
           ANALYTICS_OPERATOR_TOKEN: ${{ secrets.ANALYTICS_OPERATOR_TOKEN }}
           ANALYTICS_RETENTION_TOKEN: ${{ secrets.ANALYTICS_RETENTION_TOKEN }}
@@ -68,7 +69,7 @@ jobs:
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
         run: |
-          for name in DATABASE_URL AUTH_SECRET APP_URL INTERNAL_API_SECRET ANALYTICS_OPERATOR_TOKEN ANALYTICS_RETENTION_TOKEN SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
+          for name in DATABASE_URL AUTH_SECRET APP_URL ADMIN_EMAILS INTERNAL_API_SECRET ANALYTICS_OPERATOR_TOKEN ANALYTICS_RETENTION_TOKEN SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
             test -n "${!name}" || { echo "Missing required production secret: $name" >&2; exit 1; }
           done
           umask 077
@@ -76,10 +77,12 @@ jobs:
             printf 'DATABASE_URL=%q\n' "$DATABASE_URL"
             printf 'AUTH_SECRET=%q\n' "$AUTH_SECRET"
             printf 'APP_URL=%q\n' "$APP_URL"
+            printf 'ADMIN_EMAILS=%q\n' "$ADMIN_EMAILS"
             printf 'INTERNAL_API_SECRET=%q\n' "$INTERNAL_API_SECRET"
             printf 'ANALYTICS_OPERATOR_TOKEN=%q\n' "$ANALYTICS_OPERATOR_TOKEN"
             printf 'ANALYTICS_RETENTION_TOKEN=%q\n' "$ANALYTICS_RETENTION_TOKEN"
             printf 'ANALYTICS_RETENTION_DAYS=%q\n' "$ANALYTICS_RETENTION_DAYS"
+            printf 'ANALYTICS_RETENTION_STATE_FILE=%q\n' '/opt/festival-radar/shared/analytics-retention-state.json'
             printf 'SPOTIFY_CLIENT_ID=%q\n' "$SPOTIFY_CLIENT_ID"
             printf 'SPOTIFY_CLIENT_SECRET=%q\n' "$SPOTIFY_CLIENT_SECRET"
             printf 'NOTIFICATION_SCHEDULER_STATE_FILE=%q\n' '/opt/festival-radar/shared/notification-scheduler-state.json'
