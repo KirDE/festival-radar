@@ -66,6 +66,41 @@ ReadWritePaths=$app_root
 WantedBy=multi-user.target
 UNIT
 
+cat > "/etc/systemd/system/$service-notifications.service" <<UNIT
+[Unit]
+Description=Festival Radar notification dispatcher
+After=$service.service
+Requires=$service.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+EnvironmentFile=$shared/production.env
+Environment=NODE_BINARY=$release/.runtime/node
+ExecStart=$release/scripts/notifications/dispatch-production.sh
+RuntimeDirectory=festival-radar-notifications
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=$shared /run/festival-radar-notifications
+UNIT
+
+cat > "/etc/systemd/system/$service-notifications.timer" <<UNIT
+[Unit]
+Description=Dispatch Festival Radar notifications every ten minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=10min
+AccuracySec=15s
+Persistent=true
+Unit=$service-notifications.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+
 vhost="/var/www/vhosts/system/$domain/conf/vhost.conf"
 install -d -m 0755 "$(dirname "$vhost")"
 cat > "$vhost" <<APACHE
@@ -85,6 +120,7 @@ chown -R www-data:www-data "$release" "$shared"
 systemctl daemon-reload
 systemctl enable "$service"
 systemctl restart "$service"
+systemctl enable --now "$service-notifications.timer"
 bash "$release/scripts/deploy/reconfigure-webserver.sh" "$domain"
 
 healthy=false

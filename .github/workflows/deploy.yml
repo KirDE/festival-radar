@@ -80,6 +80,7 @@ jobs:
             printf 'ANALYTICS_RETENTION_DAYS=%q\n' "$ANALYTICS_RETENTION_DAYS"
             printf 'SPOTIFY_CLIENT_ID=%q\n' "$SPOTIFY_CLIENT_ID"
             printf 'SPOTIFY_CLIENT_SECRET=%q\n' "$SPOTIFY_CLIENT_SECRET"
+            printf 'NOTIFICATION_SCHEDULER_STATE_FILE=%q\n' '/opt/festival-radar/shared/notification-scheduler-state.json'
             printf 'DEPLOYED_COMMIT=%q\n' "$GITHUB_SHA"
           } > production.env
       - name: Upload and activate release
