@@ -156,6 +156,8 @@
   font-weight: 800;
 }
 .viewHeading{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:24px}.viewHeading h2{margin:8px 0 0;font:clamp(32px,5vw,58px)/1 "Archivo Black";text-transform:uppercase;letter-spacing:-.05em}.viewHeading p{max-width:390px;color:#67655f}.monthNav{display:flex;align-items:center;gap:14px}.monthNav button{width:42px;height:42px;border:1px solid var(--ink);background:transparent;cursor:pointer;font-size:20px}.calendarGrid{min-height:170px;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:22px}.calendarGrid>a{display:flex;gap:14px;padding:17px;background:var(--paper)}.calendarGrid time{display:grid;place-items:center;min-width:42px;height:42px;background:var(--acid);font:18px "Archivo Black"}.calendarGrid span{display:flex;flex-direction:column;gap:4px}.calendarGrid small{color:#67655f}.calendarGrid>p{padding:20px;background:var(--paper);grid-column:1/-1}.europeMap{position:relative;min-height:560px;overflow:visible;border:1px solid var(--line);background:linear-gradient(135deg,#cce5ed,#e8f3f5)}.mapLand{position:absolute;inset:9% 15% 8% 18%;display:grid;place-items:center;color:#9a9a85;font:clamp(60px,13vw,170px) "Archivo Black";letter-spacing:-.08em;background:#dbdcc4;clip-path:polygon(23% 8%,45% 14%,55% 2%,73% 22%,92% 34%,81% 56%,91% 82%,64% 91%,51% 73%,36% 94%,24% 65%,2% 55%,14% 36%)}.mapMarker{position:absolute;transform:translate(-50%,-50%);z-index:2}.mapMarker summary{list-style:none;display:grid;place-items:center;width:40px;height:40px;border:3px solid white;border-radius:50%;background:var(--orange);color:white;font-weight:900;cursor:pointer;box-shadow:0 3px 12px #0005}.mapMarker summary::-webkit-details-marker{display:none}.mapMarker summary span{position:absolute;top:42px;color:var(--ink);font-size:10px}.mapMarker>div{position:absolute;left:24px;top:24px;width:235px;max-height:240px;overflow:auto;background:var(--paper);border:2px solid var(--ink);box-shadow:7px 7px 0 #17171244}.mapMarker>div a{display:flex;flex-direction:column;padding:10px 12px;border-bottom:1px solid var(--line)}.mapMarker>div small{color:#67655f}@media(max-width:700px){.plannerPage{padding:24px 18px}.viewHeading{align-items:flex-start;flex-direction:column}.calendarGrid{grid-template-columns:1fr}.europeMap{min-height:440px}.mapMarker>div{position:fixed;left:18px;right:18px;top:auto;bottom:18px;width:auto;z-index:20}}
+
+@media(max-width:700px){.plannerPage{overflow-x:clip}.europeMap{overflow:clip}.mapMarker{transform:none;margin:-20px}.mapMarker>div{box-sizing:border-box;max-width:calc(100vw - 36px)}.filterBar>*{min-width:0}.filterBar .toggle{box-sizing:border-box;flex:1 1 100%}}
 * {
   box-sizing: border-box;
 }
@@ -1107,6 +1109,24 @@ footer {
     padding-left: 20px;
     padding-right: 20px;
   }
+  .siteHeader {
+    height: auto;
+    min-height: 78px;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .siteHeader nav {
+    order: 3;
+    flex: 1 0 100%;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+  }
+  .siteHeader .accountMenu {
+    margin-left: auto;
+  }
   .siteHeader nav a:last-child {
     display: none;
   }
@@ -1209,3 +1229,4 @@ footer {
 /* Account sync and sharing */
 .accountSync{border:2px solid var(--ink);background:#fff}.syncActions{display:flex;flex-wrap:wrap;gap:10px}.accountSync button,.accountSync input{border:1px solid var(--ink);padding:10px 12px;font:700 12px "DM Sans";background:white}.accountSync button{cursor:pointer}.accountSync button:disabled{opacity:.5;cursor:wait}.syncConflict{margin-top:16px;padding:16px;background:#fff0c2;border-left:5px solid var(--orange)}.syncConflict div{display:flex;gap:8px;margin-top:12px}.syncGrid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:24px}.syncGrid>div{display:grid;align-content:start;gap:12px;padding:18px;background:var(--soft)}.syncGrid h3{margin:0}.syncGrid label{display:grid;gap:6px}.shareResult{display:flex;gap:8px;align-items:center}.shareResult a{overflow-wrap:anywhere}.accountMenu{position:relative}.accountPopover{position:absolute;right:0;top:44px;z-index:20;width:min(360px,90vw);padding:20px;background:white;border:2px solid var(--ink);box-shadow:8px 8px 0 rgba(0,0,0,.18)}.accountPopover form,.accountPopover label{display:grid;gap:8px}.accountPopover form{gap:12px}.accountTabs{display:flex;gap:6px;margin-bottom:12px}.accountClose{position:absolute;right:8px;top:8px}.accountHint{font-size:12px}.accountButton{white-space:nowrap}@media(max-width:700px){.syncGrid{grid-template-columns:1fr}.shareResult{align-items:flex-start;flex-direction:column}}
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media(max-width:700px){.filterBar>*{min-width:0}.filterBar .toggle{box-sizing:border-box;flex:1 1 100%}}
