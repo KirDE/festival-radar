@@ -84,7 +84,7 @@ const baseFestivals: Festival[] = [
   festival("bloodstock", "Bloodstock Open Air", "United Kingdom", "GB", "https://www.bloodstock.uk.com/", { city: "Walton-on-Trent", startDate: "2027-08-05", endDate: "2027-08-08", headliners: ["Mercyful Fate", "Electric Callboy", "Motionless In White"], lineup: ["Acid Bath", "Green Lung", "Children of Bodom", "DevilDriver", "Corrosion of Conformity", "Imminence", "Wind Rose", "Sylosis", "Decapitated", "Witch Club Satan", "HammerFall", "Hypocrisy", "The Halo Effect", "Tortured Demon", "Gutalax", "Humanity's Last Breath", "Conan", "Madball", "Gaerea", "Kanonenfieber", "Dethklok", "Dool", "Pig Destroyer", "Fulci"], status: "confirmed" }),
   festival("reading", "Reading Festival", "United Kingdom", "GB", "https://www.readingfestival.com/", { city: "Reading" }),
   festival("leeds", "Leeds Festival", "United Kingdom", "GB", "https://www.leedsfestival.com/", { city: "Leeds" }),
-  festival("2000trees", "2000trees", "United Kingdom", "GB", "https://www.twothousandtreesfestival.co.uk/", { city: "Cheltenham" }),
+  festival("2000trees", "2000trees", "United Kingdom", "GB", "https://2000trees.co.uk/", { city: "Cheltenham" }),
   festival("graspop", "Graspop Metal Meeting", "Belgium", "BE", "https://www.graspop.be/", { city: "Dessel" }),
   festival("rock-werchter", "Rock Werchter", "Belgium", "BE", "https://www.rockwerchter.be/", { city: "Werchter" }),
   festival("alcatraz", "Alcatraz Open Air", "Belgium", "BE", "https://www.alcatraz.be/", { city: "Kortrijk" }),

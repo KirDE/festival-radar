@@ -19,12 +19,19 @@ function tuska(html: string): AdapterResult | undefined {
   return { startDate: `${date[4]}-${pad(date[3])}-${pad(date[1])}`, endDate: `${date[4]}-${pad(date[3])}-${pad(date[2])}`, excerpt: date[0] };
 }
 
+function trees(html: string): AdapterResult | undefined {
+  const date = html.match(/(\d{1,2})(?:st|nd|rd|th)\s*[-–—]\s*(\d{1,2})(?:st|nd|rd|th)\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})/i);
+  if (!date) return undefined;
+  const month = String(new Date(`${date[3]} 1, 2000`).getUTCMonth() + 1).padStart(2, "0");
+  return { startDate: `${date[4]}-${month}-${pad(date[1])}`, endDate: `${date[4]}-${month}-${pad(date[2])}`, excerpt: date[0] };
+}
+
 function leyendas(html: string): AdapterResult | undefined {
   const title = html.match(/<title[^>]*>[\s\S]*?Leyendas del Rock\s+(20\d{2})[\s\S]*?<\/title>/i);
   return title ? { excerpt: title[0].replace(/<[^>]+>/g, " ").trim() } : undefined;
 }
 
-const adapters: Record<string, (html: string) => AdapterResult | undefined> = { "pinkpop": pinkpop, "tuska": tuska, "leyendas-del-rock": leyendas };
+const adapters: Record<string, (html: string) => AdapterResult | undefined> = { "2000trees": trees, "pinkpop": pinkpop, "tuska": tuska, "leyendas-del-rock": leyendas };
 
 export function extractOfficialMarkupCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const candidate: FestivalCandidate = { schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] };
