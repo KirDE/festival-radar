@@ -123,15 +123,19 @@ test("the production deploy smoke uses an existing artist profile", async () => 
   assert.ok(artistProfiles.some(({ slug }) => slug === match[1]), match[1]);
 });
 
-test("every festival has exactly one enabled ingestion source", () => {
+test("every festival has exactly one ingestion source and retired sources fail closed", () => {
   assert.equal(festivalSources.length, festivals.length);
   assert.equal(new Set(festivalSources.map(({ festivalSlug }) => festivalSlug)).size, festivals.length);
   assert.deepEqual(festivalSources.map(({ festivalSlug }) => festivalSlug).sort(), festivals.map(({ slug }) => slug).sort());
   for (const source of festivalSources) {
     assert.match(source.url, /^https:\/\//);
-    assert.equal(source.enabled, true);
     assert.ok(source.strategies.length > 0);
-    assert.ok(["daily", "every_3_days", "weekly"].includes(source.refreshPolicy));
+    if (source.enabled) assert.ok(["daily", "every_3_days", "weekly"].includes(source.refreshPolicy));
+    else {
+      assert.equal(source.refreshPolicy, "archived");
+      assert.deepEqual(source.strategies, ["manual_review"]);
+      assert.ok(source.manualReviewReason);
+    }
   }
 });
 
