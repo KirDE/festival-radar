@@ -38,8 +38,16 @@ test("forced ingestion bypasses adaptive due filtering for full acceptance runs"
 test("deployment requires and installs the internal API secret", async () => {
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
   assert.match(workflow, /INTERNAL_API_SECRET: \$\{\{ secrets\.INTERNAL_API_SECRET \}\}/);
-  assert.match(workflow, /for name in DATABASE_URL AUTH_SECRET APP_URL INTERNAL_API_SECRET/);
+  assert.match(workflow, /for name in DATABASE_URL AUTH_SECRET APP_URL ADMIN_EMAILS INTERNAL_API_SECRET/);
   assert.match(workflow, /printf 'INTERNAL_API_SECRET=%q\\n' "\$INTERNAL_API_SECRET"/);
+});
+
+test("deployment preserves the protected admin allowlist", async () => {
+  const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
+  assert.match(workflow, /ADMIN_EMAILS: \$\{\{ secrets\.ADMIN_EMAILS \}\}/);
+  assert.match(workflow, /for name in DATABASE_URL AUTH_SECRET APP_URL ADMIN_EMAILS INTERNAL_API_SECRET/);
+  assert.match(workflow, /printf 'ADMIN_EMAILS=%q\\n' "\$ADMIN_EMAILS"/);
+  assert.doesNotMatch(workflow, /echo.*ADMIN_EMAILS/);
 });
 
 test("deployment builds and installs the privacy analytics contract", async () => {
