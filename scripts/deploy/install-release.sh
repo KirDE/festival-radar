@@ -30,7 +30,10 @@ tar -xzf "$archive" --strip-components=1 -C "$release"
 test "$(cat "$release/DEPLOYED_COMMIT")" = "$commit"
 
 cd "$release"
-npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+test -x "$release/.runtime/node"
+test -f "$release/.runtime/npm/bin/npm-cli.js"
+"$release/.runtime/node" "$release/.runtime/npm/bin/npm-cli.js" \
+  ci --omit=dev --ignore-scripts --no-audit --no-fund
 set -a
 # shellcheck disable=SC1090
 source "$staged_env"
