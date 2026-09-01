@@ -14,6 +14,6 @@ Sources intentionally configured as `manual_review` run weekly, carry an explici
 
 - Pol'and'Rock: the official page returned HTTP 200 with the documented bot headers.
 - 2000trees: the official page remained HTTP 403 with bot and browser headers. Its official WordPress feed at `https://www.twothousandtreesfestival.co.uk/feed/` returned HTTP 200 and is the explicit alternative official feed for future adapter work. Until that adapter is approved, the normal source remains enabled and degraded health is persisted rather than silently treating it as current.
-- MetalDays: the official page, feed, WordPress API, robots file and sitemaps all returned the same HTTP 403 response with bot and browser headers. No machine-readable official alternative was discoverable. The explicit fallback is manual review of the official site in a browser; automation keeps the source failure visible and escalates after the configured threshold.
+- Tolminator: the official HTTPS homepage publishes the cross-month 2027 date range in stable rendered markup. A festival-specific adapter extracts that range while the generic fallback retains the official ticket link.
 
 Diagnostic and summary artifacts contain no credentials and are retained for 30 days.

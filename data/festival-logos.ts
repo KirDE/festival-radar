@@ -2,7 +2,7 @@
 export const festivalLogoFallbacks = new Set([
   "bloodstock",
   "brutal-assault",
-  "metaldays",
+  "tolminator",
   "pistoia-blues",
   "polandrock",
 ]);

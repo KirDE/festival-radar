@@ -117,7 +117,7 @@ const baseFestivals: Festival[] = [
   festival("copenhell", "Copenhell", "Denmark", "DK", "https://www.copenhell.dk/", { city: "Copenhagen" }),
   festival("roskilde", "Roskilde Festival", "Denmark", "DK", "https://www.roskilde-festival.dk/", { city: "Roskilde" }),
   festival("rockstadt", "Rockstadt Extreme Fest", "Romania", "RO", "https://rockstadtextremefest.ro/", { city: "Râșnov", startDate: "2027-07-26", endDate: "2027-07-30" }),
-  festival("metaldays", "Metaldays", "Slovenia", "SI", "https://www.metaldays.net/"),
+  festival("tolminator", "Tolminator", "Slovenia", "SI", "https://tolminator.com/en/", { city: "Tolmin", startDate: "2027-07-28", endDate: "2027-08-01", ticketsUrl: "https://tolminator.mojekarte.si/en/all.html", status: "partial", ticketStatus: "available", updatedAt: "2026-09-01T15:18:00.000Z" }),
 ];
 
 // Venue/city centres are used for planning distances, not turn-by-turn navigation.
@@ -135,7 +135,7 @@ const festivalLocationData: Record<string, [number, number]> = {
   "alpen-flair": [46.7684, 11.6656], "pistoia-blues": [43.9333, 10.9167], pinkpop: [50.9080, 6.0190], roadburn: [51.5555, 5.0913],
   "dynamo-metal-fest": [51.4416, 5.4697], greenfield: [46.6863, 7.8632], paleo: [46.3833, 6.2396], "sweden-rock": [56.0521, 14.5754],
   tuska: [60.1699, 24.9384], "tons-of-rock": [59.9139, 10.7522], inferno: [59.9139, 10.7522], copenhell: [55.6761, 12.5683],
-  roskilde: [55.6419, 12.0878], rockstadt: [45.5930, 25.4600], metaldays: [46.0569, 14.5058],
+  roskilde: [55.6419, 12.0878], rockstadt: [45.5930, 25.4600], tolminator: [46.1854, 13.7311],
 };
 
 const festivalGenreData: Record<string, string[]> = {
@@ -144,7 +144,7 @@ const festivalGenreData: Record<string, string[]> = {
   frequency: ["rock", "alternative"], polandrock: ["rock", "alternative"], "mad-cool": ["rock", "alternative"], idays: ["rock", "alternative"],
   "rock-in-roma": ["rock", "alternative"], "pistoia-blues": ["rock", "blues"], pinkpop: ["rock", "alternative"], paleo: ["rock", "alternative"], roskilde: ["rock", "alternative"],
   roadburn: ["metal", "doom metal", "experimental"], inferno: ["metal", "black metal"], "brutal-assault": ["metal", "extreme metal"],
-  motocultor: ["metal", "extreme metal"], hellfest: ["rock", "metal", "extreme metal"], metaldays: ["metal", "extreme metal"],
+  motocultor: ["metal", "extreme metal"], hellfest: ["rock", "metal", "extreme metal"], tolminator: ["metal", "extreme metal"],
 };
 
 import publications from "./ingestion-publications.json" with { type: "json" };

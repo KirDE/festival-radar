@@ -21,6 +21,14 @@ test("Tuska official title extracts the published range", async () => {
   assert.equal(result.endDate, "2027-07-04");
 });
 
+test("Tolminator official homepage extracts its cross-month 2027 range", async () => {
+  const result = extractFestivalCandidate(await fixture("tolminator"), getFestivalSource("tolminator"), observedAt);
+  assert.equal(result.startDate, "2027-07-28");
+  assert.equal(result.endDate, "2027-08-01");
+  assert.deepEqual(result.observedEditionYears, [2027]);
+  assert.deepEqual(result.warnings, []);
+});
+
 for (const slug of ["full-force", "motocultor", "leyendas-del-rock", "mad-cool", "firenze-rocks", "pistoia-blues", "dynamo-metal-fest", "copenhell", "rockstadt"]) {
   test(`${slug} is explicit manual-review with a reason and weekly cadence`, async () => {
     const source = getFestivalSource(slug);

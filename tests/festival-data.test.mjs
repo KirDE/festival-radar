@@ -3,11 +3,12 @@ import { access, readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { festivals } from "../data/festivals.ts";
 import { artistProfiles, mergeArtistProfileSources } from "../data/artists.ts";
-import { festivalSources } from "../data/festival-sources.ts";
+import { festivalSources, getFestivalSource } from "../data/festival-sources.ts";
 import { INGESTION_SCHEMA_VERSION } from "../lib/ingestion/types.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
 import { hasAvailableTickets, ticketPresentation } from "../lib/tickets.ts";
 import { festivalLogoFallbacks, festivalLogoPath } from "../data/festival-logos.ts";
+import playlistStatus from "../data/playlist-status.json" with { type: "json" };
 
 test("the seed contains 50 unique festivals", () => {
   assert.equal(festivals.length, 50);
@@ -26,7 +27,33 @@ test("every emitted local festival logo URL exists", async () => {
     await access(new URL(`../public${logoPath}`, import.meta.url));
   }
   assert.deepEqual(fallbackNames.sort(), [...festivalLogoFallbacks].sort());
-  assert.deepEqual(fallbackNames.sort(), ["bloodstock", "brutal-assault", "metaldays", "pistoia-blues", "polandrock"]);
+  assert.deepEqual(fallbackNames.sort(), ["bloodstock", "brutal-assault", "pistoia-blues", "polandrock", "tolminator"]);
+});
+
+test("the defunct MetalDays record is replaced by an evidenced Tolminator 2027 edition", () => {
+  assert.equal(festivals.some(({ slug }) => slug === "metaldays"), false);
+  const replacement = festivals.find(({ slug }) => slug === "tolminator");
+  assert.deepEqual(replacement && {
+    name: replacement.name,
+    countryCode: replacement.countryCode,
+    city: replacement.city,
+    startDate: replacement.startDate,
+    endDate: replacement.endDate,
+    officialUrl: replacement.officialUrl,
+    ticketStatus: replacement.ticketStatus,
+  }, {
+    name: "Tolminator",
+    countryCode: "SI",
+    city: "Tolmin",
+    startDate: "2027-07-28",
+    endDate: "2027-08-01",
+    officialUrl: "https://tolminator.com/en/",
+    ticketStatus: "available",
+  });
+  assert.deepEqual(getFestivalSource("tolminator")?.strategies, ["official_markup", "html_fallback"]);
+  assert.equal(getFestivalSource("metaldays")?.enabled, false);
+  assert.equal(Object.hasOwn(playlistStatus, "metaldays"), false);
+  assert.equal(Object.hasOwn(playlistStatus, "tolminator"), false, "no empty playlist is advertised before a lineup exists");
 });
 
 test("dated editions have valid chronological dates", () => {
@@ -169,9 +196,10 @@ test("the production deploy smoke uses an existing artist profile", async () => 
 });
 
 test("every festival has exactly one ingestion source and retired sources fail closed", () => {
-  assert.equal(festivalSources.length, festivals.length);
-  assert.equal(new Set(festivalSources.map(({ festivalSlug }) => festivalSlug)).size, festivals.length);
-  assert.deepEqual(festivalSources.map(({ festivalSlug }) => festivalSlug).sort(), festivals.map(({ slug }) => slug).sort());
+  const activeSources = festivalSources.filter(({ enabled }) => enabled);
+  assert.equal(activeSources.length, festivals.length);
+  assert.equal(new Set(festivalSources.map(({ festivalSlug }) => festivalSlug)).size, festivalSources.length);
+  assert.deepEqual(activeSources.map(({ festivalSlug }) => festivalSlug).sort(), festivals.map(({ slug }) => slug).sort());
   for (const source of festivalSources) {
     assert.match(source.url, /^https:\/\//);
     assert.ok(source.strategies.length > 0);

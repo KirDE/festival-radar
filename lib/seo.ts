@@ -1,7 +1,7 @@
 import type { Festival } from "@/data/festivals";
 
 export const SITE_ORIGIN = "https://festivals.kir-it.de";
-export const CATALOG_UPDATED_AT = "2026-08-29T10:59:59.000Z";
+export const CATALOG_UPDATED_AT = "2026-09-01T15:18:00.000Z";
 
 export function canonicalPath(path: string) {
   const normalized = path.startsWith("/") ? path : `/${path}`;
