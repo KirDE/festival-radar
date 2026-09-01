@@ -47,17 +47,20 @@ def validate_provider_files(credentials: Path | None, oauth: Path | None) -> lis
 
 def classify_provider_failure(stderr: str) -> str:
     normalized = stderr.casefold()
-    if any(marker in normalized for marker in ('quota', 'ratelimit', 'rate limit', 'too many requests')):
+    if any(marker in normalized for marker in ('quota', 'ratelimit', 'rate limit', 'too many requests', 'dailylimit')):
         return 'quota'
-    if any(marker in normalized for marker in ('invalid_grant', 'unauthorized', 'authentication', 'invalid credentials', 'access token')):
+    if any(marker in normalized for marker in ('invalid_grant', 'unauthorized', 'authentication', 'invalid credentials', 'access token', 'autherror', 'insufficientpermissions')):
         return 'authentication'
-    if any(marker in normalized for marker in ('playlist id', 'playlist not found', 'playlistnotfound', 'persisted playlist id')):
+    if any(marker in normalized for marker in ('playlist id', 'playlist not found', 'playlistnotfound', 'playlist_items_not_accessible', 'playlistitemsnotaccessible', 'persisted playlist id')):
         return 'mapping'
     return 'publishing'
 
 
 def provider_diagnostic(stderr: str) -> str:
     normalized = stderr.casefold()
+    data_api_failure = re.search(r'youtube data api failure: status=(\d{3}) reason=([a-z0-9_]+)', normalized)
+    if data_api_failure:
+        return f'data_api_{data_api_failure.group(1)}_{data_api_failure.group(2)}'
     known_read_back_failures = (
         ('persisted playlist id was not returned', 'read_back_playlist_id'),
         ('persisted metadata does not match', 'read_back_metadata'),

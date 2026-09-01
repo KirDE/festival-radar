@@ -12,6 +12,20 @@ import youtube_music_auto_resume as auto_resume
 
 
 class YouTubeMusicTransferTest(unittest.TestCase):
+    def test_data_api_error_exposes_only_status_and_provider_reason(self):
+        response = mock.Mock(status_code=403)
+
+        with self.assertRaisesRegex(
+            transfer.YouTubeDataApiError,
+            r'^YouTube Data API failure: status=403 reason=playlistitemsnotaccessible$',
+        ):
+            transfer.raise_youtube_data_api_error(response, {
+                'error': {
+                    'message': 'provider-private-message',
+                    'errors': [{'reason': 'playlistItemsNotAccessible'}],
+                },
+            })
+
     def test_search_client_does_not_receive_playlist_oauth(self):
         unauthenticated_client = mock.Mock()
         ytmusic_module = mock.Mock()

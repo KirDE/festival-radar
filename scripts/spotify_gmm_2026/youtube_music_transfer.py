@@ -36,6 +36,22 @@ YOUTUBE_VERSION_HINTS = {
     'rework',
     'sample',
 }
+DATA_API_REASON_PATTERN = re.compile(r'[^a-z0-9]+')
+
+
+class YouTubeDataApiError(RuntimeError):
+    def __init__(self, status_code: int, reason: str = 'unknown'):
+        normalized_reason = DATA_API_REASON_PATTERN.sub('_', str(reason).casefold()).strip('_') or 'unknown'
+        self.status_code = status_code
+        self.reason = normalized_reason
+        super().__init__(f'YouTube Data API failure: status={status_code} reason={normalized_reason}')
+
+
+def raise_youtube_data_api_error(response, data: dict) -> None:
+    error = data.get('error', {}) if isinstance(data, dict) else {}
+    details = error.get('errors', []) if isinstance(error, dict) else []
+    reason = details[0].get('reason') if details and isinstance(details[0], dict) else 'unknown'
+    raise YouTubeDataApiError(response.status_code, reason)
 
 
 def parse_report_tracks(report: dict) -> list[dict]:
@@ -163,8 +179,7 @@ def youtube_data_api_request(method: str, url: str, *, headers: dict[str, str], 
     response = requests.request(method, url, params=params, headers=headers, json=body, timeout=30)
     data = response.json()
     if response.status_code >= 400:
-        error = data.get('error', {})
-        raise RuntimeError(f"YouTube Data API failed: {response.status_code} {error.get('message')}")
+        raise_youtube_data_api_error(response, data)
     return data
 
 
@@ -216,8 +231,7 @@ def list_youtube_playlist_items(credentials_path: Path, oauth_path: Path, playli
         )
         data = response.json()
         if response.status_code >= 400:
-            error = data.get('error', {})
-            raise RuntimeError(f"YouTube Data API failed: {response.status_code} {error.get('message')}")
+            raise_youtube_data_api_error(response, data)
         items.extend(data.get('items', []))
         page_token = data.get('nextPageToken') or ''
         if not page_token:
@@ -233,8 +247,7 @@ def delete_youtube_playlist_item(credentials_path: Path, oauth_path: Path, item_
     )
     if response.status_code not in (200, 204):
         data = response.json()
-        error = data.get('error', {})
-        raise RuntimeError(f"YouTube Data API failed: {response.status_code} {error.get('message')}")
+        raise_youtube_data_api_error(response, data)
 
 
 def add_youtube_playlist_item(credentials_path: Path, oauth_path: Path, playlist_id: str, video_id: str, position: int) -> None:
