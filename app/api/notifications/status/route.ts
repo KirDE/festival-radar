@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NotificationChannel, NotificationFrequency, NotificationStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { error, requireUser } from "@/lib/api";
+import { notificationProviderState } from "@/lib/notification-providers";
 
 const requestSchema = z.object({ channel: z.nativeEnum(NotificationChannel) });
 
@@ -14,9 +15,7 @@ export async function GET() {
   return Response.json({
     subscriptions: subscriptions.map((item) => ({ ...item, endpoint: item.channel === NotificationChannel.EMAIL ? "account email" : item.channel === NotificationChannel.TELEGRAM ? `chat …${item.endpoint.slice(-4)}` : "browser subscription" })),
     recent,
-    providers: {
-      EMAIL: Boolean(process.env.EMAIL_WEBHOOK_URL), TELEGRAM: Boolean(process.env.TELEGRAM_BOT_TOKEN), WEB_PUSH: Boolean(process.env.WEB_PUSH_WEBHOOK_URL),
-    },
+    providers: notificationProviderState(),
     webPushPublicKey: process.env.NEXT_PUBLIC_WEB_PUSH_VAPID_KEY || null,
   });
 }

@@ -23,14 +23,24 @@ if http_status="$(curl --silent --show-error --max-time 240 \
   --write-out '%{http_code}' \
   "${app_url%/}/api/notifications/dispatch/")" && [[ "$http_status" == 2?? ]]; then
   finished_at="$(date -u +%FT%TZ)"
-  "$NODE_BINARY" - "$response_file" "$started_at" "$finished_at" >"$state_tmp" <<'NODE'
-const [file, startedAt, finishedAt] = process.argv.slice(2);
-const result = JSON.parse(require("node:fs").readFileSync(file, "utf8"));
+  "$NODE_BINARY" - "$response_file" "$state_file" "$started_at" "$finished_at" >"$state_tmp" <<'NODE'
+const fs = require("node:fs");
+const [file, stateFile, startedAt, finishedAt] = process.argv.slice(2);
+const result = JSON.parse(fs.readFileSync(file, "utf8"));
+let previous = {};
+try { previous = JSON.parse(fs.readFileSync(stateFile, "utf8")); } catch {}
 const statuses = (result.results || []).reduce((out, item) => {
   out[item.status] = (out[item.status] || 0) + 1;
   return out;
 }, {});
-process.stdout.write(JSON.stringify({ startedAt, finishedAt, ok: true, processed: result.processed, statuses }) + "\n");
+const hadDelivery = (result.results || []).length > 0;
+const state = {
+  startedAt, finishedAt, ok: true, processed: result.processed, statuses,
+  lastDeliveryAt: hadDelivery ? finishedAt : previous.lastDeliveryAt,
+  lastDeliveryStatuses: hadDelivery ? statuses : previous.lastDeliveryStatuses,
+};
+for (const key of ["lastDeliveryAt", "lastDeliveryStatuses"]) if (state[key] === undefined) delete state[key];
+process.stdout.write(JSON.stringify(state) + "\n");
 NODE
   chmod 0640 "$state_tmp"
   mv -f "$state_tmp" "$state_file"

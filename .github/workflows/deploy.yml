@@ -68,6 +68,10 @@ jobs:
           ANALYTICS_RETENTION_DAYS: ${{ vars.ANALYTICS_RETENTION_DAYS || '90' }}
           SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
           SPOTIFY_CLIENT_SECRET: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+          EMAIL_WEBHOOK_URL: ${{ secrets.EMAIL_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          WEB_PUSH_WEBHOOK_URL: ${{ secrets.WEB_PUSH_WEBHOOK_URL }}
+          NEXT_PUBLIC_WEB_PUSH_VAPID_KEY: ${{ secrets.NEXT_PUBLIC_WEB_PUSH_VAPID_KEY }}
         run: |
           for name in DATABASE_URL AUTH_SECRET APP_URL ADMIN_EMAILS INTERNAL_API_SECRET ANALYTICS_OPERATOR_TOKEN ANALYTICS_RETENTION_TOKEN SPOTIFY_CLIENT_ID SPOTIFY_CLIENT_SECRET; do
             test -n "${!name}" || { echo "Missing required production secret: $name" >&2; exit 1; }
@@ -85,6 +89,10 @@ jobs:
             printf 'ANALYTICS_RETENTION_STATE_FILE=%q\n' '/opt/festival-radar/shared/analytics-retention-state.json'
             printf 'SPOTIFY_CLIENT_ID=%q\n' "$SPOTIFY_CLIENT_ID"
             printf 'SPOTIFY_CLIENT_SECRET=%q\n' "$SPOTIFY_CLIENT_SECRET"
+            test -z "$EMAIL_WEBHOOK_URL" || printf 'EMAIL_WEBHOOK_URL=%q\n' "$EMAIL_WEBHOOK_URL"
+            test -z "$TELEGRAM_BOT_TOKEN" || printf 'TELEGRAM_BOT_TOKEN=%q\n' "$TELEGRAM_BOT_TOKEN"
+            test -z "$WEB_PUSH_WEBHOOK_URL" || printf 'WEB_PUSH_WEBHOOK_URL=%q\n' "$WEB_PUSH_WEBHOOK_URL"
+            test -z "$NEXT_PUBLIC_WEB_PUSH_VAPID_KEY" || printf 'NEXT_PUBLIC_WEB_PUSH_VAPID_KEY=%q\n' "$NEXT_PUBLIC_WEB_PUSH_VAPID_KEY"
             printf 'NOTIFICATION_SCHEDULER_STATE_FILE=%q\n' '/opt/festival-radar/shared/notification-scheduler-state.json'
             printf 'DEPLOYED_COMMIT=%q\n' "$GITHUB_SHA"
           } > production.env

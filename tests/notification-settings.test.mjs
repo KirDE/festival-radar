@@ -6,6 +6,7 @@ const component = readFileSync(new URL("../components/NotificationSettings.tsx",
 const preferences = readFileSync(new URL("../app/api/notifications/preferences/route.ts", import.meta.url), "utf8");
 const subscriptions = readFileSync(new URL("../app/api/notifications/subscriptions/route.ts", import.meta.url), "utf8");
 const status = readFileSync(new URL("../app/api/notifications/status/route.ts", import.meta.url), "utf8");
+const providerState = readFileSync(new URL("../lib/notification-providers.ts", import.meta.url), "utf8");
 
 test("settings cover every supported event, channel and frequency", () => {
   for (const value of ["ARTIST_ADDED", "ARTIST_CANCELLED", "FESTIVAL_DATE_MOVED", "TICKETS_ON_SALE", "TICKETS_LOW", "TICKETS_SOLD_OUT", "TIMETABLE_PUBLISHED", "EMAIL", "TELEGRAM", "WEB_PUSH", "IMMEDIATE", "DAILY", "WEEKLY"]) assert.match(component, new RegExp(value));
@@ -16,8 +17,13 @@ test("channel onboarding is permission-aware and endpoints stay redacted", () =>
   assert.match(component, /pushManager\.subscribe/);
   assert.match(component, /pattern="-\?\[0-9\]\+"/);
   assert.match(status, /browser subscription/);
-  assert.match(status, /TELEGRAM: Boolean\(process\.env\.TELEGRAM_BOT_TOKEN\)/);
-  assert.doesNotMatch(status, /TELEGRAM_BOT_TOKEN\s*[,}]/);
+  assert.match(status, /notificationProviderState\(\)/);
+  assert.match(providerState, /TELEGRAM: Boolean\(process\.env\.TELEGRAM_BOT_TOKEN\)/);
+  assert.match(providerState, /WEB_PUSH: Boolean\(process\.env\.WEB_PUSH_WEBHOOK_URL && process\.env\.NEXT_PUBLIC_WEB_PUSH_VAPID_KEY\)/);
+  assert.doesNotMatch(status, /TELEGRAM_BOT_TOKEN/);
+  assert.match(component, /disabled=\{busy \|\| !providers\[channel\]\}/);
+  assert.match(component, /disabled=\{busy \|\| !providers\.TELEGRAM/);
+  assert.match(component, /disabled=\{busy \|\| !providers\.WEB_PUSH \|\| !vapid\}/);
 });
 
 test("user-owned preferences and subscriptions can be disabled and deleted", () => {
