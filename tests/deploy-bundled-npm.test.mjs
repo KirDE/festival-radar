@@ -30,9 +30,19 @@ test("release bundles a working npm that needs no system npm on PATH", async () 
     await mkdir(path.join(temporary, "scripts", "deploy"), { recursive: true });
     await mkdir(path.join(temporary, "scripts", "notifications"), { recursive: true });
     await writeFile(path.join(temporary, ".next", "standalone", "server.js"), "");
-    for (const file of ["package.json", "package-lock.json"]) {
-      await writeFile(path.join(temporary, file), await readFile(file));
-    }
+    await writeFile(
+      path.join(temporary, "package.json"),
+      JSON.stringify({ name: "portable-install-fixture", version: "1.0.0" }),
+    );
+    await writeFile(
+      path.join(temporary, "package-lock.json"),
+      JSON.stringify({
+        name: "portable-install-fixture",
+        version: "1.0.0",
+        lockfileVersion: 3,
+        packages: { "": { name: "portable-install-fixture", version: "1.0.0" } },
+      }),
+    );
     await writeFile(path.join(temporary, "scripts", "ingest-festivals.mjs"), "");
     await writeFile(path.join(temporary, "scripts", "deploy", "reconfigure-webserver.sh"), "#!/bin/sh\n");
     await writeFile(path.join(temporary, "scripts", "analytics", "prune-production.sh"), "#!/bin/sh\n");
@@ -49,6 +59,18 @@ test("release bundles a working npm that needs no system npm on PATH", async () 
       { env: { PATH: "/nonexistent" }, encoding: "utf8" },
     ).trim();
     assert.equal(bundledVersion, (await readFile(path.join(temporary, "app", ".runtime", "NPM_VERSION"), "utf8")).trim());
+    execFileSync(
+      path.join(temporary, "app", ".runtime", "node"),
+      [
+        path.join(temporary, "app", ".runtime", "npm", "bin", "npm-cli.js"),
+        "ci",
+        "--omit=dev",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund",
+      ],
+      { cwd: path.join(temporary, "app"), env: { PATH: "/nonexistent" } },
+    );
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
