@@ -45,27 +45,17 @@ const wacken2026: FestivalEdition = Object.freeze({
   ]),
 });
 
-const wacken2028: FestivalEdition = Object.freeze({
-  slug: "wacken-open-air",
-  name: "Wacken Open Air",
-  country: "Germany",
-  countryCode: "DE",
-  city: "Wacken",
-  dateLabel: "Dates TBA",
-  headliners: Object.freeze([]),
-  lineup: Object.freeze([]),
-  officialUrl: "https://www.wacken.com/en/",
-  status: "tba",
-  ticketStatus: "unknown",
-  updatedAt: "2026-08-30T00:00:00Z",
-  genres: ["metal"],
-  editionYear: 2028,
-  recordState: "tracking",
-  completeness: "tba",
-  provenance: Object.freeze([
-    Object.freeze({ field: "edition", url: "https://www.wacken.com/en/", checkedAt: "2026-08-30T00:00:00Z", note: "Official site checked; no 2028 dates or artists have been published, so this record exposes tracking state only." }),
-  ]),
-});
+const ABSENCE_ONLY_EVIDENCE = /\b(?:no|not|nothing|tba|unannounced|unconfirmed)\b/i;
+
+export function hasEditionSpecificOfficialEvidence(item: FestivalEdition) {
+  const year = String(item.editionYear);
+  return item.provenance.some((source) =>
+    source.field === "edition"
+    && source.url.startsWith("https://")
+    && (source.url.includes(year) || source.note.includes(year))
+    && !ABSENCE_ONLY_EVIDENCE.test(source.note),
+  );
+}
 
 const currentEditions: FestivalEdition[] = festivals.map((item) => ({
   ...item,
@@ -76,7 +66,10 @@ const currentEditions: FestivalEdition[] = festivals.map((item) => ({
 }));
 
 export const archivedEditions = Object.freeze([wacken2026]);
-export const trackedFutureEditions = Object.freeze([wacken2028]);
+// Future editions belong here only after an official, edition-specific artifact
+// explicitly establishes the year. A generic homepage or an absence-of-news
+// check is a research watchlist signal, not evidence for a FestivalEdition.
+export const trackedFutureEditions: readonly FestivalEdition[] = Object.freeze([]);
 export const festivalEditions: readonly FestivalEdition[] = Object.freeze([
   ...archivedEditions,
   ...currentEditions,

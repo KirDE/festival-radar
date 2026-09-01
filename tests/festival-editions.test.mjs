@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { archivedEditions, festivalEditions, getFestivalEdition, getEditionsForYear, trackedFutureEditions } from "../data/editions.ts";
+import { archivedEditions, festivalEditions, getFestivalEdition, getEditionsForYear, hasEditionSpecificOfficialEvidence, trackedFutureEditions } from "../data/editions.ts";
 
 test("festival editions are unique by festival and year", () => {
   const keys = festivalEditions.map(({ slug, editionYear }) => `${slug}:${editionYear}`);
@@ -19,22 +19,26 @@ test("archived editions are immutable provenance-aware snapshots", () => {
   }
 });
 
-test("future records never imply unverified dates or lineups", () => {
-  assert.ok(trackedFutureEditions.length > 0);
+test("future records require positive edition-specific official evidence", () => {
   for (const item of trackedFutureEditions) {
     assert.equal(item.recordState, "tracking");
-    assert.equal(item.status, "tba");
-    assert.equal(item.startDate, undefined);
-    assert.deepEqual(item.headliners, []);
-    assert.deepEqual(item.lineup, []);
-    assert.ok(item.provenance.some(({ note }) => note.includes("no 2028 dates or artists")));
+    assert.equal(hasEditionSpecificOfficialEvidence(item), true);
   }
+
+  const unsupported = {
+    ...archivedEditions[0],
+    editionYear: 2028,
+    recordState: "tracking",
+    provenance: [{ field: "edition", url: "https://www.wacken.com/en/", checkedAt: "2026-08-30T00:00:00Z", note: "Official site checked; no 2028 edition has been announced." }],
+  };
+  assert.equal(hasEditionSpecificOfficialEvidence(unsupported), false);
 });
 
 test("cross-year lookup cannot overwrite the current edition", () => {
   assert.equal(getFestivalEdition("wacken-open-air", 2026)?.recordState, "archived");
   assert.equal(getFestivalEdition("wacken-open-air", 2027)?.recordState, "current");
-  assert.equal(getFestivalEdition("wacken-open-air", 2028)?.recordState, "tracking");
+  assert.equal(getFestivalEdition("wacken-open-air", 2028), undefined);
+  assert.equal(getEditionsForYear(2028).length, 0);
   assert.equal(getEditionsForYear(2026).length, 1);
   assert.equal(getFestivalEdition("wacken-open-air", 2099), undefined);
 });
