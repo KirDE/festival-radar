@@ -51,7 +51,7 @@ test("the defunct MetalDays record is replaced by an evidenced Tolminator 2027 e
     ticketStatus: "available",
   });
   assert.deepEqual(getFestivalSource("tolminator")?.strategies, ["official_markup", "html_fallback"]);
-  assert.equal(getFestivalSource("metaldays"), undefined);
+  assert.equal(getFestivalSource("metaldays")?.enabled, false);
   assert.equal(Object.hasOwn(playlistStatus, "metaldays"), false);
   assert.equal(Object.hasOwn(playlistStatus, "tolminator"), false, "no empty playlist is advertised before a lineup exists");
 });
@@ -196,9 +196,10 @@ test("the production deploy smoke uses an existing artist profile", async () => 
 });
 
 test("every festival has exactly one ingestion source and retired sources fail closed", () => {
-  assert.equal(festivalSources.length, festivals.length);
-  assert.equal(new Set(festivalSources.map(({ festivalSlug }) => festivalSlug)).size, festivals.length);
-  assert.deepEqual(festivalSources.map(({ festivalSlug }) => festivalSlug).sort(), festivals.map(({ slug }) => slug).sort());
+  const activeSources = festivalSources.filter(({ enabled }) => enabled);
+  assert.equal(activeSources.length, festivals.length);
+  assert.equal(new Set(festivalSources.map(({ festivalSlug }) => festivalSlug)).size, festivalSources.length);
+  assert.deepEqual(activeSources.map(({ festivalSlug }) => festivalSlug).sort(), festivals.map(({ slug }) => slug).sort());
   for (const source of festivalSources) {
     assert.match(source.url, /^https:\/\//);
     assert.ok(source.strategies.length > 0);

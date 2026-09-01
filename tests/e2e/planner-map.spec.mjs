@@ -28,7 +28,7 @@ for (const width of [320, 375, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/planner/");
     const markers = page.locator(".mapMarker summary");
-    await expect(markers).toHaveCount(16);
+    await expect(markers).toHaveCount(17);
     await expectNoDocumentOverflow(page);
 
     for (const index of await edgeMarkerIndexes(markers)) {

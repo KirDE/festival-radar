@@ -11,8 +11,8 @@ function source(festivalSlug: string, refreshPolicy: RefreshPolicy, strategies: 
 function manual(festivalSlug: string, reason: string): FestivalSource {
   return { ...source(festivalSlug, "weekly", ["manual_review"]), manualReviewReason: reason };
 }
-function retired(festivalSlug: string, reason: string): FestivalSource {
-  return { ...source(festivalSlug, "archived", ["manual_review"]), enabled: false, manualReviewReason: reason };
+function retired(festivalSlug: string, url: string, reason: string): FestivalSource {
+  return { festivalSlug, url, strategies: ["manual_review"], refreshPolicy: "archived", enabled: false, editionYear: catalogueEditionYear, manualReviewReason: reason };
 }
 
 // Explicit inventory: adding a festival to the catalogue requires adding its source here.
@@ -66,6 +66,7 @@ export const festivalSources: FestivalSource[] = [
   manual("copenhell", "official home page has no stable authoritative date or location marker"),
   source("roskilde", "weekly"),
   manual("rockstadt", "official home page metadata has no authoritative current-edition date range"),
+  retired("metaldays", "https://www.metaldays.net/", "the organizer ended MetalDays in 2024; no 2027 edition exists to monitor"),
   source("tolminator", "every_3_days", ["official_markup", "html_fallback"]),
 ];
 export function getFestivalSource(slug: string) { return festivalSources.find((item) => item.festivalSlug === slug); }
