@@ -28,6 +28,8 @@ class Client {
 
   async request(path, options = {}) {
     const headers = new Headers(options.headers);
+    const method = options.method ?? "GET";
+    if (method !== "GET" && method !== "HEAD" && !headers.has("origin")) headers.set("origin", appUrl);
     if (this.cookies.size) headers.set("cookie", [...this.cookies].map(([key, value]) => `${key}=${value}`).join("; "));
     if (options.body && !headers.has("content-type")) headers.set("content-type", "application/json");
     const response = await fetch(`${appUrl}${path}`, { ...options, headers, redirect: "manual" });
@@ -165,6 +167,8 @@ test("auth, sync, sharing, and Spotify OAuth work against PostgreSQL", async () 
   assert.match(sessionCookie, /Path=\//i);
   assert.match(sessionCookie, /Expires=/i);
   assert.equal((await new Client().json("/api/auth/register", "POST", { email: "first@example.com", password: "correct horse battery staple" })).status, 409);
+  assert.equal((await anonymous.request("/api/auth/logout", { method: "POST", headers: { origin: "https://foreign.example" } })).status, 403);
+  assert.equal((await anonymous.json("/api/auth/me")).status, 200);
   assert.equal((await anonymous.json("/api/auth/logout", "POST")).status, 204);
   assert.equal((await anonymous.json("/api/auth/me")).status, 401);
   assert.equal((await anonymous.json("/api/auth/login", "POST", { email: "first@example.com", password: "wrong" })).status, 401);
@@ -181,6 +185,8 @@ test("auth, sync, sharing, and Spotify OAuth work against PostgreSQL", async () 
   assert.equal(created.status, 201);
   const createdBody = await created.json();
   assert.equal(createdBody.document.revision, 1);
+  assert.equal((await anonymous.request("/api/sync/favorites", { method: "PUT", headers: { origin: "https://foreign.example", "content-type": "application/json" }, body: JSON.stringify({ payload: { festivals: ["forged"] }, revision: 1 }) })).status, 403);
+  assert.equal((await db.syncDocument.findUniqueOrThrow({ where: { id: createdBody.document.id } })).revision, 1);
   const updated = await anonymous.json("/api/sync/favorites", "PUT", { payload: { festivals: ["wacken", "graspop"] }, revision: 1 });
   assert.equal(updated.status, 200);
   assert.equal((await updated.json()).document.revision, 2);

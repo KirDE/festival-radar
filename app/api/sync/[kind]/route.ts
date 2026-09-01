@@ -2,6 +2,7 @@ import { Prisma, SyncKind } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { error, requireUser } from "@/lib/api";
+import { rejectUntrustedOrigin } from "@/lib/request-origin";
 
 const kinds: Record<string, SyncKind> = {
   favorites: SyncKind.FAVORITES, collections: SyncKind.COLLECTIONS,
@@ -19,6 +20,8 @@ export async function GET(_: Request, context: { params: Promise<{ kind: string 
 }
 
 export async function PUT(request: Request, context: { params: Promise<{ kind: string }> }) {
+  const originError = rejectUntrustedOrigin(request);
+  if (originError) return originError;
   const user = await requireUser();
   if (!user) return error("Authentication required.", 401);
   const kind = kinds[(await context.params).kind];

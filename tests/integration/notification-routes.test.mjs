@@ -26,6 +26,8 @@ class Client {
   cookies = new Map();
   async request(path, options = {}) {
     const headers = new Headers(options.headers);
+    const method = options.method ?? "GET";
+    if (method !== "GET" && method !== "HEAD" && !headers.has("origin")) headers.set("origin", appUrl);
     if (this.cookies.size) headers.set("cookie", [...this.cookies].map(([key, value]) => `${key}=${value}`).join("; "));
     if (options.body && !headers.has("content-type")) headers.set("content-type", "application/json");
     const response = await fetch(`${appUrl}${path}`, { ...options, headers, redirect: "manual" });
@@ -102,6 +104,8 @@ test("notification routes and PostgreSQL delivery invariants", async () => {
   assert.equal((await client.json("/api/auth/register", "POST", { email: "notify@example.com", password: "correct horse battery staple" })).status, 201);
   const user = await db.user.findUniqueOrThrow({ where: { email: "notify@example.com" } });
   const subscription = { channel: "EMAIL", endpoint: "notify@example.com", enabled: true };
+  assert.equal((await client.json("/api/notifications/subscriptions", "PUT", subscription, { origin: "https://foreign.example" })).status, 403);
+  assert.equal(await db.notificationSubscription.count({ where: { userId: user.id } }), 0);
   assert.equal((await client.json("/api/notifications/subscriptions", "PUT", subscription)).status, 200);
   assert.equal((await client.json("/api/notifications/subscriptions", "PUT", subscription)).status, 200);
   assert.equal((await client.json("/api/notifications/subscriptions")).status, 200);

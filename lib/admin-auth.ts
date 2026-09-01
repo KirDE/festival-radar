@@ -1,6 +1,7 @@
 import type { UserRole } from "@prisma/client";
 import { currentUser } from "@/lib/auth";
 import { error } from "@/lib/api";
+export { rejectUntrustedOrigin, requestHasTrustedOrigin } from "@/lib/request-origin";
 
 export type AdminActor = { id: string; email: string; role: UserRole };
 export const ADMIN_ROLES: readonly UserRole[] = ["EDITOR", "ADMIN"];
@@ -22,15 +23,4 @@ export async function requireAdminActor(allowed: readonly UserRole[] = ADMIN_ROL
   if (status === 401) return { response: error("Authentication required.", 401), actor: null };
   if (status === 403) return { response: error("Administrator role required.", 403), actor: null };
   return { response: null, actor: actor as AdminActor };
-}
-
-export function requestHasTrustedOrigin(request: Request, configuredAppUrl = process.env.APP_URL) {
-  const origin = request.headers.get("origin");
-  if (!origin) return false;
-  const expected = configuredAppUrl ? new URL(configuredAppUrl).origin : new URL(request.url).origin;
-  return origin === expected;
-}
-
-export function rejectUntrustedOrigin(request: Request) {
-  return requestHasTrustedOrigin(request) ? null : error("Untrusted request origin.", 403);
 }

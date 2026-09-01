@@ -19,7 +19,14 @@ test("administrative mutations require the configured same origin", () => {
   const same = new Request("https://radar.example/api/admin/actions", { headers: { origin: "https://radar.example" } });
   const forged = new Request("https://radar.example/api/admin/actions", { headers: { origin: "https://evil.example" } });
   const missing = new Request("https://radar.example/api/admin/actions");
+  const opaque = new Request("https://radar.example/api/admin/actions", { headers: { origin: "null" } });
+  const malformed = new Request("https://radar.example/api/admin/actions", { headers: { origin: "not-a-url" } });
+  const pathOrigin = new Request("https://radar.example/api/admin/actions", { headers: { origin: "https://radar.example/path" } });
   assert.equal(requestHasTrustedOrigin(same, "https://radar.example"), true);
   assert.equal(requestHasTrustedOrigin(forged, "https://radar.example"), false);
   assert.equal(requestHasTrustedOrigin(missing, "https://radar.example"), false);
+  assert.equal(requestHasTrustedOrigin(opaque, "https://radar.example"), false);
+  assert.equal(requestHasTrustedOrigin(malformed, "https://radar.example"), false);
+  assert.equal(requestHasTrustedOrigin(pathOrigin, "https://radar.example"), false);
+  assert.equal(requestHasTrustedOrigin(same, "not-a-url"), false);
 });

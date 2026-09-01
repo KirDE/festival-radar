@@ -2,10 +2,13 @@ import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { error, requireUser } from "@/lib/api";
+import { rejectUntrustedOrigin } from "@/lib/request-origin";
 
 const input = z.object({ documentId: z.string().min(1), expiresAt: z.iso.datetime().nullable().optional() });
 
 export async function POST(request: Request) {
+  const originError = rejectUntrustedOrigin(request);
+  if (originError) return originError;
   const user = await requireUser();
   if (!user) return error("Authentication required.", 401);
   const parsed = input.safeParse(await request.json().catch(() => null));

@@ -2,10 +2,13 @@ import { Prisma, SyncKind } from "@prisma/client";
 import { db } from "@/lib/db";
 import { error, requireUser } from "@/lib/api";
 import { spotifyAccessToken, spotifyEndpoints } from "@/lib/spotify";
+import { rejectUntrustedOrigin } from "@/lib/request-origin";
 
 type SpotifyPlaylist = { id: string; name: string; external_urls: { spotify: string }; images: Array<{ url: string }>; owner: { id: string; display_name: string | null }; tracks: { total: number } };
 
-export async function POST() {
+export async function POST(request: Request) {
+  const originError = rejectUntrustedOrigin(request);
+  if (originError) return originError;
   const user = await requireUser();
   if (!user) return error("Authentication required.", 401);
   const connection = await db.spotifyConnection.findUnique({ where: { userId: user.id } });
