@@ -45,27 +45,42 @@ const wacken2026: FestivalEdition = Object.freeze({
   ]),
 });
 
-const wacken2028: FestivalEdition = Object.freeze({
-  slug: "wacken-open-air",
-  name: "Wacken Open Air",
-  country: "Germany",
-  countryCode: "DE",
-  city: "Wacken",
-  dateLabel: "Dates TBA",
-  headliners: Object.freeze([]),
-  lineup: Object.freeze([]),
-  officialUrl: "https://www.wacken.com/en/",
-  status: "tba",
-  ticketStatus: "unknown",
-  updatedAt: "2026-08-30T00:00:00Z",
-  genres: ["metal"],
-  editionYear: 2028,
-  recordState: "tracking",
-  completeness: "tba",
-  provenance: Object.freeze([
-    Object.freeze({ field: "edition", url: "https://www.wacken.com/en/", checkedAt: "2026-08-30T00:00:00Z", note: "Official site checked; no 2028 dates or artists have been published, so this record exposes tracking state only." }),
-  ]),
-});
+const ABSENCE_ONLY_EVIDENCE = /\b(?:no|nothing|tba|unannounced|unconfirmed|not\s+(?:yet\s+)?(?:been\s+)?(?:announced|confirmed|published|established))\b/i;
+
+function normalizedHostname(url: URL) {
+  return url.hostname.toLocaleLowerCase().replace(/^www\./, "");
+}
+
+export function hasEditionSpecificOfficialEvidence(item: FestivalEdition) {
+  if (item.recordState !== "tracking") return false;
+
+  let officialSource: URL;
+  try {
+    officialSource = new URL(item.officialUrl);
+  } catch {
+    return false;
+  }
+
+  const yearPattern = new RegExp(`(^|[^0-9])${item.editionYear}([^0-9]|$)`);
+  return item.provenance.some((source) => {
+    if (source.field !== "edition" || ABSENCE_ONLY_EVIDENCE.test(source.note)) return false;
+
+    try {
+      const artifact = new URL(source.url);
+      return artifact.protocol === "https:"
+        && normalizedHostname(artifact) === normalizedHostname(officialSource)
+        // Notes describe evidence; they are not evidence themselves. The durable
+        // official artifact must identify the edition year in its own URL.
+        && yearPattern.test(`${artifact.pathname}${artifact.search}${artifact.hash}`);
+    } catch {
+      return false;
+    }
+  });
+}
+
+export function publishableFutureEditions(items: readonly FestivalEdition[]) {
+  return Object.freeze(items.filter(hasEditionSpecificOfficialEvidence));
+}
 
 const currentEditions: FestivalEdition[] = festivals.map((item) => ({
   ...item,
@@ -76,7 +91,10 @@ const currentEditions: FestivalEdition[] = festivals.map((item) => ({
 }));
 
 export const archivedEditions = Object.freeze([wacken2026]);
-export const trackedFutureEditions = Object.freeze([wacken2028]);
+// Future editions belong here only after an official, edition-specific artifact
+// explicitly establishes the year. A generic homepage or an absence-of-news
+// check is a research watchlist signal, not evidence for a FestivalEdition.
+export const trackedFutureEditions: readonly FestivalEdition[] = publishableFutureEditions([]);
 export const festivalEditions: readonly FestivalEdition[] = Object.freeze([
   ...archivedEditions,
   ...currentEditions,
