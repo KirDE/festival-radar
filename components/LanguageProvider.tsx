@@ -79,6 +79,10 @@ function browserLanguage(): Language {
   return "en";
 }
 
+export function languageDestination(pathname: string, selected: Language) {
+  return pathname === "/admin" || pathname.startsWith("/admin/") ? null : `/${selected}/`;
+}
+
 export function LanguageProvider({ children, initialLanguage }: { children: React.ReactNode; initialLanguage?: Language }) {
   const [language, updateLanguage] = useState<Language>(initialLanguage ?? "en");
   useEffect(() => {
@@ -92,7 +96,16 @@ export function LanguageProvider({ children, initialLanguage }: { children: Reac
     updateLanguage(selected);
     document.documentElement.lang = selected;
   }, [initialLanguage]);
-  const setLanguage = (selected: Language) => { localStorage.setItem("festival-radar-language", selected); window.location.assign(`/${selected}/`); };
+  const setLanguage = (selected: Language) => {
+    localStorage.setItem("festival-radar-language", selected);
+    const destination = languageDestination(window.location.pathname, selected);
+    if (destination) {
+      window.location.assign(destination);
+      return;
+    }
+    updateLanguage(selected);
+    document.documentElement.lang = selected;
+  };
   const value = useMemo(() => ({ language, locale: localeMap[language], setLanguage, t: (key: TranslationKey, values?: TranslationValues) => translate(language, key, values), ta: (key: AdminTranslationKey) => adminTranslations[language][key] }), [language]);
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
 }
