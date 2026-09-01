@@ -3,10 +3,12 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { error, requireUser } from "@/lib/api";
 import { channels, eventTypes, frequencies } from "@/lib/notifications";
+import { rejectUntrustedOrigin } from "@/lib/request-origin";
 const preference = z.object({ festivalId: z.string().min(1).nullable().optional(), eventType: z.enum(eventTypes), channel: z.enum(channels), frequency: z.enum(frequencies), enabled: z.boolean().default(true) });
 const removal = z.object({ id: z.string().min(1) });
 export async function GET() { const user = await requireUser(); if (!user) return error("Authentication required.", 401); return Response.json({ preferences: await db.notificationPreference.findMany({ where: { userId: user.id }, orderBy: { updatedAt: "desc" } }) }); }
 export async function PUT(request: Request) {
+  const originError = rejectUntrustedOrigin(request); if (originError) return originError;
   const user = await requireUser(); if (!user) return error("Authentication required.", 401);
   const parsed = preference.safeParse(await request.json().catch(() => null)); if (!parsed.success) return error("Invalid notification preference.");
   const festivalId = parsed.data.festivalId ?? null;
@@ -21,6 +23,7 @@ export async function PUT(request: Request) {
   return Response.json({ preference: saved });
 }
 export async function DELETE(request: Request) {
+  const originError = rejectUntrustedOrigin(request); if (originError) return originError;
   const user = await requireUser(); if (!user) return error("Authentication required.", 401);
   const parsed = removal.safeParse(await request.json().catch(() => null)); if (!parsed.success) return error("Invalid preference id.");
   const removed = await db.notificationPreference.deleteMany({ where: { id: parsed.data.id, userId: user.id } });

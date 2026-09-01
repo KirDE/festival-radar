@@ -3,6 +3,7 @@ import { NotificationChannel, NotificationFrequency, NotificationStatus } from "
 import { db } from "@/lib/db";
 import { error, requireUser } from "@/lib/api";
 import { notificationProviderState } from "@/lib/notification-providers";
+import { rejectUntrustedOrigin } from "@/lib/request-origin";
 
 const requestSchema = z.object({ channel: z.nativeEnum(NotificationChannel) });
 
@@ -21,6 +22,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const originError = rejectUntrustedOrigin(request); if (originError) return originError;
   const user = await requireUser(); if (!user) return error("Authentication required.", 401);
   const parsed = requestSchema.safeParse(await request.json().catch(() => null)); if (!parsed.success) return error("Invalid channel.");
   if (parsed.data.channel !== NotificationChannel.EMAIL) {

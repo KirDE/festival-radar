@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { currentAdmin } from "@/lib/admin-access";
 import { decideSubmission } from "@/lib/admin-store";
 import { error } from "@/lib/api";
+import { rejectUntrustedOrigin } from "@/lib/request-origin";
 
 export async function POST(request: Request, { params }: { params: Promise<{ reference: string }> }) {
+  const originError = rejectUntrustedOrigin(request);
+  if (originError) return originError;
   const admin = await currentAdmin();
   if (!admin) return error("Forbidden", 403);
   try {
