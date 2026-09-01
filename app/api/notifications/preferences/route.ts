@@ -11,6 +11,7 @@ export async function PUT(request: Request) {
   const originError = rejectUntrustedOrigin(request); if (originError) return originError;
   const user = await requireUser(); if (!user) return error("Authentication required.", 401);
   const parsed = preference.safeParse(await request.json().catch(() => null)); if (!parsed.success) return error("Invalid notification preference.");
+  if (parsed.data.channel === "EMAIL" && parsed.data.enabled && !user.emailVerified) return error("Verify your account email before enabling email notifications.", 409);
   const festivalId = parsed.data.festivalId ?? null;
   const saved = await db.$transaction(async (tx) => {
     const lockKey = [user.id, festivalId ?? "<global>", parsed.data.eventType, parsed.data.channel].join(":");

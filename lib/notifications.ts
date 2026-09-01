@@ -9,9 +9,10 @@ export type DetectedChange = { dedupeKey: string; festivalId: string; type: Noti
 
 export async function recordChange(change: DetectedChange) {
   const event = await db.notificationEvent.upsert({ where: { dedupeKey: change.dedupeKey }, update: {}, create: change });
-  const preferences = await db.notificationPreference.findMany({ where: { enabled: true, eventType: change.type, OR: [{ festivalId: change.festivalId }, { festivalId: null }] } });
+  const preferences = await db.notificationPreference.findMany({ where: { enabled: true, eventType: change.type, OR: [{ festivalId: change.festivalId }, { festivalId: null }] }, include: { user: { select: { emailVerifiedAt: true } } } });
   const effectivePreferences = new Map<string, (typeof preferences)[number]>();
   for (const preference of preferences) {
+    if (preference.channel === NotificationChannel.EMAIL && !preference.user.emailVerifiedAt) continue;
     const key = `${preference.userId}:${preference.channel}`;
     const current = effectivePreferences.get(key);
     if (!current || (current.festivalId === null && preference.festivalId !== null)) effectivePreferences.set(key, preference);
@@ -48,9 +49,10 @@ export async function dispatchDue(frequency?: NotificationFrequency, limit = 100
     SET status = 'CLAIMED', "claimedAt" = NOW(), "claimToken" = ${claimToken}, "updatedAt" = NOW()
     FROM due WHERE delivery.id = due.id
   `;
-  const deliveries = await db.notificationDelivery.findMany({ where: { claimToken, status: NotificationStatus.CLAIMED }, include: { event: true, user: { select: { email: true, notificationSubscriptions: { where: { enabled: true } } } } }, orderBy: { createdAt: "asc" } });
+  const deliveries = await db.notificationDelivery.findMany({ where: { claimToken, status: NotificationStatus.CLAIMED }, include: { event: true, user: { select: { email: true, emailVerifiedAt: true, notificationSubscriptions: { where: { enabled: true } } } } }, orderBy: { createdAt: "asc" } });
   const results: { id: string; status: string }[] = [];
   for (const delivery of deliveries) {
+    if (delivery.channel === NotificationChannel.EMAIL && !delivery.user.emailVerifiedAt) { await db.notificationDelivery.updateMany({ where: { id: delivery.id, claimToken }, data: { status: NotificationStatus.SKIPPED, claimToken: null, claimedAt: null, lastError: "Email address is not verified" } }); results.push({ id: delivery.id, status: "skipped" }); continue; }
     const subscription = delivery.user.notificationSubscriptions.find((item) => item.channel === delivery.channel);
     const endpoint = delivery.channel === NotificationChannel.EMAIL ? delivery.user.email : subscription?.endpoint;
     if (!endpoint) { await db.notificationDelivery.updateMany({ where: { id: delivery.id, claimToken }, data: { status: NotificationStatus.SKIPPED, claimToken: null, claimedAt: null, lastError: "No active channel subscription" } }); results.push({ id: delivery.id, status: "skipped" }); continue; }

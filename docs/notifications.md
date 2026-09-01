@@ -10,6 +10,8 @@ Production systemd owns dispatch scheduling. `festival-radar-notifications.timer
 
 Production requires `APP_URL`, `INTERNAL_API_SECRET`, `DATABASE_URL`, and at least one protected delivery configuration: `EMAIL_WEBHOOK_URL`, `TELEGRAM_BOT_TOKEN`, or the pair `WEB_PUSH_WEBHOOK_URL` plus `NEXT_PUBLIC_WEB_PUSH_VAPID_KEY`. Deploy copies only configured provider values from the protected GitHub production environment into the mode-600 release environment. Missing configuration fails closed with a provider name but never a secret value.
 
+Email is not treated as verified merely because it was entered at registration. An authenticated user requests a single-use, SHA-256-hashed verification token; the raw token is sent only through the configured email provider, expires after 30 minutes, and is deleted after use. Email preferences, tests, event fan-out, and dispatch all fail closed until `emailVerifiedAt` is set. Telegram and web push retain their channel-specific enrollment contracts.
+
 ## Claiming, retries, and observability
 
 Each dispatcher atomically claims due rows with PostgreSQL `FOR UPDATE SKIP LOCKED` and a unique claim token before provider access. This prevents overlapping workers from selecting the same delivery. Email and web-push requests include the delivery ID as `Idempotency-Key` and in the JSON body. Successful rows become `SENT`; failures return to `PENDING` with capped exponential backoff and become `FAILED` after five attempts. Claims abandoned for more than 15 minutes are recoverable by a later run.

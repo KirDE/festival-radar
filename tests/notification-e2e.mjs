@@ -26,7 +26,7 @@ try {
   await db.notificationEvent.deleteMany();
   await db.notificationSubscription.deleteMany();
   await db.notificationPreference.deleteMany();
-  const user = await db.user.create({ data: { email: "staging-notifications@example.test", passwordHash: "not-used" } });
+  const user = await db.user.create({ data: { email: "staging-notifications@example.test", passwordHash: "not-used", emailVerifiedAt: new Date() } });
   await db.notificationPreference.create({ data: { userId: user.id, festivalId: "test-fest:2027", eventType: NotificationEventType.ARTIST_ADDED, channel: NotificationChannel.EMAIL, frequency: NotificationFrequency.IMMEDIATE } });
   const [eventInput] = notificationEventsForChanges(
     { slug: "test-fest", name: "Test Fest", country: "DE", countryCode: "DE", officialUrl: "https://example.test", headliners: [], lineup: [], status: "confirmed", editionYear: 2027 },

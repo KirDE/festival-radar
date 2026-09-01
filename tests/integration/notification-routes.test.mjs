@@ -103,6 +103,34 @@ test("notification routes and PostgreSQL delivery invariants", async () => {
   const client = new Client();
   assert.equal((await client.json("/api/auth/register", "POST", { email: "notify@example.com", password: "correct horse battery staple" })).status, 201);
   const user = await db.user.findUniqueOrThrow({ where: { email: "notify@example.com" } });
+  const unverifiedPreference = { festivalId: null, eventType: "ARTIST_ADDED", channel: "EMAIL", frequency: "IMMEDIATE", enabled: true };
+  assert.equal((await client.json("/api/notifications/preferences", "PUT", unverifiedPreference)).status, 409);
+  assert.equal((await client.json("/api/notifications/status", "POST", { channel: "EMAIL" })).status, 409);
+
+  const unverifiedEvent = await db.notificationEvent.create({ data: { dedupeKey: "unverified-email", festivalId: "notification-test", type: "TIMETABLE_PUBLISHED", title: "Should not send", message: "Unverified", occurredAt: new Date() } });
+  const unverifiedDelivery = await db.notificationDelivery.create({ data: { eventId: unverifiedEvent.id, userId: user.id, channel: "EMAIL", frequency: "IMMEDIATE", nextAttemptAt: new Date() } });
+  await internal("/api/notifications/dispatch", {});
+  assert.equal((await db.notificationDelivery.findUniqueOrThrow({ where: { id: unverifiedDelivery.id } })).status, "SKIPPED");
+  assert.equal(providerCalls.length, 0);
+
+  const verification = await client.json("/api/auth/email-verification/request", "POST", {});
+  assert.equal(verification.status, 202);
+  assert.equal((await client.json("/api/auth/email-verification/request", "POST", {})).status, 429);
+  assert.equal(providerCalls.length, 1);
+  assert.equal(providerCalls[0].body.kind, "email-verification");
+  assert.equal(providerCalls[0].body.to, "notify@example.com");
+  const confirmationUrl = new URL(providerCalls[0].body.text.match(/https?:\/\/\S+/)[0]);
+  const rawToken = confirmationUrl.searchParams.get("token");
+  assert.ok(rawToken);
+  const storedToken = await db.emailVerificationToken.findFirstOrThrow({ where: { userId: user.id } });
+  assert.notEqual(storedToken.tokenHash, rawToken);
+  const confirmationStatuses = await Promise.all([client.request(`${confirmationUrl.pathname}${confirmationUrl.search}`), client.request(`${confirmationUrl.pathname}${confirmationUrl.search}`)]);
+  assert.deepEqual(confirmationStatuses.map((response) => response.status).sort(), [303, 410]);
+  assert.equal((await client.request(`${confirmationUrl.pathname}${confirmationUrl.search}`)).status, 410);
+  assert.equal((await db.user.findUniqueOrThrow({ where: { id: user.id } })).emailVerifiedAt instanceof Date, true);
+  assert.equal((await (await client.json("/api/auth/me")).json()).user.emailVerified, true);
+  providerCalls = [];
+
   const subscription = { channel: "EMAIL", endpoint: "notify@example.com", enabled: true };
   assert.equal((await client.json("/api/notifications/subscriptions", "PUT", subscription, { origin: "https://foreign.example" })).status, 403);
   assert.equal(await db.notificationSubscription.count({ where: { userId: user.id } }), 0);
@@ -124,7 +152,7 @@ test("notification routes and PostgreSQL delivery invariants", async () => {
   assert.equal((await internal("/api/notifications/events", event)).status, 202);
   assert.equal((await internal("/api/notifications/events", event)).status, 202);
   assert.equal(await db.notificationEvent.count({ where: { dedupeKey: event.dedupeKey } }), 1);
-  assert.equal(await db.notificationDelivery.count(), 1);
+  assert.equal(await db.notificationDelivery.count({ where: { event: { dedupeKey: event.dedupeKey } } }), 1);
 
   await client.json("/api/notifications/preferences", "PUT", { festivalId: "festival-b", eventType: "ARTIST_ADDED", channel: "EMAIL", frequency: "DAILY", enabled: true });
   await client.json("/api/notifications/preferences", "PUT", { festivalId: "festival-c", eventType: "ARTIST_ADDED", channel: "EMAIL", frequency: "WEEKLY", enabled: true });

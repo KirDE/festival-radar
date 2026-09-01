@@ -13,5 +13,5 @@ export async function POST(request: Request) {
   if (await db.user.findUnique({ where: { email } })) return error("This email is already registered.", 409);
   const user = await db.user.create({ data: { email, passwordHash: await bcrypt.hash(parsed.data.password, 12) } });
   await createSession(user.id);
-  return Response.json({ user: { id: user.id, email: user.email } }, { status: 201 });
+  return Response.json({ user: { id: user.id, email: user.email, emailVerified: false } }, { status: 201 });
 }

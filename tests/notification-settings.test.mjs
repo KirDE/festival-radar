@@ -21,7 +21,7 @@ test("channel onboarding is permission-aware and endpoints stay redacted", () =>
   assert.match(providerState, /TELEGRAM: Boolean\(process\.env\.TELEGRAM_BOT_TOKEN\)/);
   assert.match(providerState, /WEB_PUSH: Boolean\(process\.env\.WEB_PUSH_WEBHOOK_URL && process\.env\.NEXT_PUBLIC_WEB_PUSH_VAPID_KEY\)/);
   assert.doesNotMatch(status, /TELEGRAM_BOT_TOKEN/);
-  assert.match(component, /disabled=\{busy \|\| !providers\[channel\]\}/);
+  assert.match(component, /disabled=\{busy \|\| !providers\[channel\] \|\| \(channel === "EMAIL" && !emailVerified\)\}/);
   assert.match(component, /disabled=\{busy \|\| !providers\.TELEGRAM/);
   assert.match(component, /disabled=\{busy \|\| !providers\.WEB_PUSH \|\| !vapid\}/);
 });
