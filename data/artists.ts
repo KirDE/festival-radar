@@ -113,14 +113,25 @@ export const artistProfiles: ArtistProfile[] = allArtists.map((name) => {
   const slug = artistSlug(name);
   const generated = generatedProfile(slug);
   const override = curated[slug] || {};
+  const overriddenProvenanceFields = new Set(
+    Object.keys(override).map((field) => field === "identities" ? "identity" : field),
+  );
+  const overriddenIdentitySources = new Set<ArtistSource>([
+    ...(override.identities?.spotify ? ["spotify" as const] : []),
+    ...(override.identities?.musicbrainz ? ["musicbrainz" as const] : []),
+    ...(override.identities?.setlistFm ? ["setlist.fm" as const] : []),
+  ]);
   const entry: Partial<ArtistProfile> = {
     ...generated,
     ...override,
     identities: { ...generated.identities, ...override.identities },
     genres: override.genres || generated.genres,
-    links: [...(generated.links || []), ...(override.links || [])],
+    links: [
+      ...(generated.links || []).filter(({ source }) => !overriddenIdentitySources.has(source)),
+      ...(override.links || []),
+    ],
     provenance: [
-      ...(generated.provenance || []).filter(({ field }) => field !== "identity" || !override.identities?.musicbrainz),
+      ...(generated.provenance || []).filter(({ field }) => !overriddenProvenanceFields.has(field)),
       ...(override.provenance || []),
     ],
   };

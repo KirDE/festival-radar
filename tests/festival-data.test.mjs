@@ -115,6 +115,26 @@ test("resolved identities include provenance and stable provider IDs", () => {
   }
 });
 
+test("curated artist fields never retain provenance from discarded generated values", () => {
+  const electricCallboy = artistProfiles.find(({ slug }) => slug === "electric-callboy");
+  assert.ok(electricCallboy);
+  assert.equal(electricCallboy.origin, "Castrop-Rauxel, Germany");
+  assert.deepEqual(electricCallboy.genres, ["electronicore", "metalcore"]);
+  assert.equal(electricCallboy.identities.musicbrainz, "8e5d91df-ec18-4c9b-8d56-4f4039f03ae8");
+  assert.equal(electricCallboy.provenance.some(({ field }) => field === "origin" || field === "genres"), false);
+  assert.equal(
+    electricCallboy.provenance.some(({ url }) => url.includes("cf075492-d880-4afc-b87b-d6b03e33dacc")),
+    false,
+  );
+  assert.ok(electricCallboy.provenance.some(({ field, url }) =>
+    field === "identity" && url.endsWith("/8e5d91df-ec18-4c9b-8d56-4f4039f03ae8"),
+  ));
+
+  const generatedPartial = artistProfiles.find(({ slug }) => slug !== "electric-callboy" && !artistProfiles.find(({ slug: candidate }) => candidate === slug)?.biography);
+  assert.ok(generatedPartial);
+  assert.ok(generatedPartial.provenance.length > 0);
+});
+
 test("the production deploy smoke uses an existing artist profile", async () => {
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
   const match = workflow.match(/festivals\.kir-it\.de\/artists\/([a-z0-9-]+)\//);
