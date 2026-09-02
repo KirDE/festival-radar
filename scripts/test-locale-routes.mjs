@@ -22,6 +22,11 @@ const plannerExpected = {
   de: { heading: "Dein Plan für 2027", notifications: "Benachrichtigungen", calendar: "Festivalkalender" },
   ru: { heading: "Ваш план на 2027 год", notifications: "Уведомления", calendar: "Календарь фестивалей" },
 };
+const notificationsExpected = {
+  en: "Notification settings",
+  de: "Benachrichtigungen",
+  ru: "Настройки уведомлений",
+};
 try {
   await ready();
   for (const [lang, visible] of Object.entries(expected)) {
@@ -48,6 +53,16 @@ try {
     assert.ok(plannerHtml.includes(plannerExpected[lang].notifications), `${lang} notification navigation is not localized`);
     assert.ok(plannerHtml.includes(plannerExpected[lang].calendar), `${lang} planner calendar is not localized`);
     assert.ok(plannerHtml.includes(`href="/${lang}/planner/"`), `${lang} planner navigation does not preserve locale`);
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const notifications = await fetch(`${origin}/${lang}/notifications/`);
+      assert.equal(notifications.status, 200, `${lang} notifications route failed on request ${attempt + 1}`);
+      const notificationsHtml = await notifications.text();
+      assert.match(notificationsHtml, new RegExp(`<html lang="${lang}"`));
+      assert.ok(notificationsHtml.includes(notificationsExpected[lang]), `${lang} notification heading is not localized`);
+      assert.ok(notificationsHtml.includes(`href="/${lang}/notifications/"`), `${lang} notification navigation does not preserve locale`);
+      assert.ok(notificationsHtml.includes(`rel="canonical" href="https://festivals.kir-it.de/${lang}/notifications/"`), `${lang} notification canonical URL is missing`);
+    }
 
     const enrichedArtist = await fetch(`${origin}/${lang}/artists/electric-callboy/`);
     assert.equal(enrichedArtist.status, 200);
