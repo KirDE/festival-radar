@@ -36,6 +36,19 @@ test("release activation explicitly restarts an already-running service", async 
   assert.doesNotMatch(installer, /systemctl enable --now "\$service"/);
 });
 
+test("release activation configures both Plesk HTTP and HTTPS virtual hosts", async () => {
+  const installer = await readFile("scripts/deploy/install-release.sh", "utf8");
+
+  assert.match(installer, /for vhost in "\$vhost_directory\/vhost\.conf" "\$vhost_directory\/vhost_ssl\.conf"/);
+  assert.match(installer, /ProxyPass \/ http:\/\/127\.0\.0\.1:\$port\//);
+  assert.match(installer, /ProxyPassReverse \/ http:\/\/127\.0\.0\.1:\$port\//);
+  assert.match(installer, /RequestHeader set X-Forwarded-Proto "https" env=HTTPS/);
+  const vhostTemplate = installer.indexOf('cat > "$vhost"');
+  const loopEnd = installer.indexOf("\ndone\n", vhostTemplate);
+  const nginxVhost = installer.indexOf('nginx_vhost="', loopEnd);
+  assert.ok(vhostTemplate >= 0 && loopEnd > vhostTemplate && nginxVhost > loopEnd);
+});
+
 test("release activation stages the new environment and rollback restores the previous one", async () => {
   const installer = await readFile("scripts/deploy/install-release.sh", "utf8");
 

@@ -182,8 +182,9 @@ Unit=$service-analytics-retention.service
 WantedBy=timers.target
 UNIT
 
-vhost="/var/www/vhosts/system/$domain/conf/vhost.conf"
-install -d -m 0755 "$(dirname "$vhost")"
+vhost_directory="/var/www/vhosts/system/$domain/conf"
+install -d -m 0755 "$vhost_directory"
+for vhost in "$vhost_directory/vhost.conf" "$vhost_directory/vhost_ssl.conf"; do
 cat > "$vhost" <<APACHE
 ProxyPreserveHost On
 ProxyPass / http://127.0.0.1:$port/
@@ -198,6 +199,7 @@ RequestHeader set X-Forwarded-Proto "https" env=HTTPS
   </LocationMatch>
 </IfModule>
 APACHE
+done
 
 # Privacy analytics bypasses both nginx and Apache access logs. The exact
 # locations proxy directly to the loopback application and deliberately omit
