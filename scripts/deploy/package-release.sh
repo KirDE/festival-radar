@@ -8,14 +8,7 @@ trap 'rm -rf "$stage"' EXIT
 
 test -f .next/standalone/server.js
 mkdir -p "$stage/app/.next" "$stage/app/.runtime" "$stage/app/scripts/analytics" "$stage/app/scripts/deploy" "$stage/app/scripts/notifications" "$stage/app/scripts/spotify_gmm_2026"
-cp "$(command -v node)" "$stage/app/.runtime/node"
-chmod 0755 "$stage/app/.runtime/node"
-npm_cli="$(readlink -f "$(command -v npm)")"
-npm_root="$(dirname "$(dirname "$npm_cli")")"
-test -f "$npm_root/bin/npm-cli.js"
-cp -a "$npm_root" "$stage/app/.runtime/npm"
-"$stage/app/.runtime/node" "$stage/app/.runtime/npm/bin/npm-cli.js" --version \
-  > "$stage/app/.runtime/NPM_VERSION"
+"$(dirname "$0")/bundle-node-runtime.sh" "$stage/app/.runtime"
 cp -a .next/standalone/. "$stage/app/"
 cp -a .next/static "$stage/app/.next/static"
 cp -a public "$stage/app/public"
