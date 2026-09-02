@@ -1,15 +1,16 @@
 # Festival Radar product status
 
-Last verified: 2026-09-01 (production at `https://festivals.kir-it.de`, exact
-commit `fbf91dd0aad1e494e33ce8c5c5151ecee686995b`).
+Last verified: 2026-09-02 (production at `https://festivals.kir-it.de`, exact
+commit `95d710b579d17b575a441be8d6fa95e6fe65df08`).
 
 This document is the product-function inventory requested at the end of the
 2026 milestone. It describes the deployed behavior, not merely code that has
 passed CI. The gap list is based on production acceptance and regression
 testing of every pull request merged on 2026-08-30, every milestone pull
-request from #73 through #88, and the production remediations through PR #167.
-The later concept-gap pull requests listed below are verified but unmerged;
-none of their changes are described as deployed or production-accepted.
+request from #73 through #88, the production remediations through PR #167, and
+the concept-gap merge and acceptance flow through PR #180. The status below
+separates production-accepted behavior from deployed changes whose acceptance
+is still pending or externally blocked.
 
 ## Original concept
 
@@ -107,9 +108,9 @@ and deploys can be verified and rolled back.
   verified commit.
 - `/api/health/deployment/` returned HTTP 200, the exact commit above and
   `database: ok`.
-- `/api/health/notification-scheduler/` returned HTTP 200 with `ok: true`; the
-  latest run completed successfully and the health age was under two minutes
-  at verification time.
+- `/api/health/notification-scheduler/` reported a successful recent scheduler
+  run with `ok: true`. The endpoint returned HTTP 503 and `deliveryReady:
+  false` because no EMAIL, TELEGRAM or WEB_PUSH delivery provider is configured.
 - Analytics retention is owned by an enabled, active production systemd timer.
   Two consecutive idempotent production runs succeeded, the protected endpoint
   failed closed with JSON 401 for an invalid token, and the non-secret state
@@ -121,38 +122,36 @@ and deploys can be verified and rolled back.
 
 ## Concept-gap remediation status
 
-The gaps below still exist in production at the verified commit. Each linked
-pull request is open, non-draft, mergeable and exact-head CI-green, with no
-reviews, comments or unresolved review threads as of 2026-09-01. This is
-implementation evidence, not deployment evidence: every change remains
-subject to review, merge, deployment and the stated production acceptance.
+All 20 implementation PRs were merged before the verified production commit.
+The merge flow rebased conflicted branches, required exact-head CI, deployed
+each sequentially and recorded issue-specific production acceptance.
 
-| Production gap | Implemented in a verified, unmerged PR | What remains blocked |
-| --- | --- | --- |
-| [#168](https://github.com/KirDE/festival-radar/issues/168): the Admin Console allowlist can grant access to a persisted `USER`. | [PR #170](https://github.com/KirDE/festival-radar/pull/170) at `5ccd6ec2a03286ca022e0a8dfecffe2b5123178c` requires both the allowlist and an `EDITOR`/`ADMIN` role, makes refresh `ADMIN`-only and tests the role matrix. | Review, merge, deploy and full-proxy role acceptance. |
-| [#126](https://github.com/KirDE/festival-radar/issues/126): cookie-authenticated mutations do not consistently reject forged origins. | [PR #143](https://github.com/KirDE/festival-radar/pull/143) at `20517a614b968c3da103b35357929aab5c7e87a3` centralizes an exact same-origin guard across 13 browser mutation routes while preserving bearer-only service boundaries. | Review, merge, deploy and proxy tests proving forged mutations leave sessions and data unchanged. |
-| [#40](https://github.com/KirDE/festival-radar/issues/40): the scheduler is healthy but no production channel can deliver. | [PR #171](https://github.com/KirDE/festival-radar/pull/171) at `b3c411203bf36e00e64c7598f019c975df4f39df` wires optional protected provider settings, separates scheduler/provider/delivery health and blocks unavailable channels in the UI; provider-stub delivery passed. | **External blocker:** no dedicated production notification-provider credential is configured. Real delivery acceptance cannot run until one is supplied; unrelated bot credentials must not be reused. |
-| [#172](https://github.com/KirDE/festival-radar/issues/172): email notification identity is asserted but not verified. | [PR #173](https://github.com/KirDE/festival-radar/pull/173) at `4dcbad65c07c333111fa576c5b46f295226e3618` adds hashed, expiring, single-use verification tokens and fails closed at preference, fan-out and dispatch boundaries. | Review, merge and deploy; end-to-end production acceptance also depends on a configured email provider. |
-| [#169](https://github.com/KirDE/festival-radar/issues/169): proxy access logs retain analytics page-view request metadata. | [PR #174](https://github.com/KirDE/festival-radar/pull/174) at `0409211cc25462a475fe7289922ecb4a798a216f` installs exact HTTP/HTTPS nginx locations that suppress only analytics access logs and forwarded client IPs. | Review, merge, deploy and controlled log-count acceptance for analytics and an ordinary-route control. |
-| [#22](https://github.com/KirDE/festival-radar/issues/22): two catalogue sources were stuck in repeated HTTP 403 failures. | [PR #176](https://github.com/KirDE/festival-radar/pull/176) at `bc2374c5282d7ec35fc1d5512f568d4f67e1aa99` restores 2000trees from its real official source and retires defunct MetalDays from scheduled retries; live official-source extraction passed. | Review, merge, deploy and scheduled-run read-back; the public MetalDays replacement is handled separately by #175. |
-| [#175](https://github.com/KirDE/festival-radar/issues/175): defunct MetalDays is still presented as a speculative 2027 festival. | [PR #177](https://github.com/KirDE/festival-radar/pull/177) at `925f4d67d87919d8a6238931ee5140c6d794fd47` replaces it with officially evidenced Tolminator 2027 across catalogue, source, route, playlist and sitemap data; local route and live-source acceptance passed. | Review, merge, deploy and public route/sitemap acceptance. |
-| [#125](https://github.com/KirDE/festival-radar/issues/125): scheduled data collection still runs in GitHub Actions. | [PR #158](https://github.com/KirDE/festival-radar/pull/158) at `f6d9e7e0cdba47d4adeaf4268eb9dbb30943a650` moves ingestion, identity resolution, playlists and source monitoring to persistent production systemd timers, leaving workflows manual-only. | Review, merge, deploy and timer/provider-secret health acceptance. |
-| [#133](https://github.com/KirDE/festival-radar/issues/133): a valid slug-scoped ingestion run is checked against the full-catalogue contract. | [PR #144](https://github.com/KirDE/festival-radar/pull/144) at `c5d84f8e2a23dfe46add90a31d5df293dfbff042` gives scoped and unscoped runs distinct durable assertions; an exact-head scoped Pinkpop workflow passed. | Review and merge; the implementation is not part of the deployed `main` commit. |
-| [#124](https://github.com/KirDE/festival-radar/issues/124): the mobile map popup is clipped and the planner overflows. | [PR #151](https://github.com/KirDE/festival-radar/pull/151) at `432c06915ae6bb17e89b4b2653e1a249e62064c9` fixes popup containing-block geometry and covers edge markers at 320, 375 and 390 px plus desktop. | Review, merge, deploy and mobile/desktop browser acceptance. |
-| [#128](https://github.com/KirDE/festival-radar/issues/128): localized notification choices submit non-canonical enums and the authenticated view overflows. | [PR #150](https://github.com/KirDE/festival-radar/pull/150) at `8332b94a6a0b10e3db4de1685db9ff19614242c0` separates enum values from labels, localizes the workflow and removes 320–390 px overflow. | Review, merge, deploy and authenticated production persistence/layout acceptance. |
-| [#130](https://github.com/KirDE/festival-radar/issues/130): planner and navigation copy remains partly English on German/Russian routes. | [PR #152](https://github.com/KirDE/festival-radar/pull/152) at `44c9c3ef9866078701c9f562ce3cf6e7d40d641b` localizes navigation, planner controls, statuses and empty states across EN/DE/RU. | Review, merge, deploy and locale-route browser acceptance. |
-| [#131](https://github.com/KirDE/festival-radar/issues/131): first offline use deletes precached resources that lack timestamps. | [PR #145](https://github.com/KirDE/festival-radar/pull/145) at `59edc3e50c0307c19395c2ee67fecc47b337c493` timestamps precache responses and exercises offline payload, manifest and icon reads. | Review, merge, deploy and fresh-profile offline acceptance. |
-| [#132](https://github.com/KirDE/festival-radar/issues/132): Wacken 2028 is published without positive edition-specific evidence. | [PR #146](https://github.com/KirDE/festival-radar/pull/146) at `bb61b28ae535c027986f23e7b6c4ee58f2a2f93b` removes the unsupported edition and rejects generic, wrong-year, off-domain or absence-only evidence. | Review, merge, deploy and archive/route/sitemap acceptance. |
-| [#135](https://github.com/KirDE/festival-radar/issues/135): curated artist values can retain provenance from a discarded generated identity. | [PR #148](https://github.com/KirDE/festival-radar/pull/148) at `9875058680922ee2230cda0124dee40724c3ee5f` discards mismatched field and identity provenance while retaining compatible partial enrichment. | Review, merge, deploy and enriched/partial artist-page acceptance. |
-| [#136](https://github.com/KirDE/festival-radar/issues/136): artist routes lose locale, making translated enrichment unreachable. | [PR #153](https://github.com/KirDE/festival-radar/pull/153) at `ab289d141f32caa195d03914fb69d7d0cfabfd2a` adds locale-aware artist/festival detail routes and same-detail language switching. | Review, merge, deploy and EN/DE/RU browser acceptance for enriched and partial profiles. |
-| [#129](https://github.com/KirDE/festival-radar/issues/129): the Admin Console lacks a persisted playlist editor and real parser-log read-back. | [PR #149](https://github.com/KirDE/festival-radar/pull/149) at `909daaa29e1e8152ea3132dfc7e0974871f71c00` adds playlist CRUD/review persistence and an authenticated endpoint that renders the stored parser log. | Review, merge, deploy and reversible operator-flow acceptance. |
-| [#134](https://github.com/KirDE/festival-radar/issues/134): YouTube Music production refresh fails. | [PR #147](https://github.com/KirDE/festival-radar/pull/147) at `bd91472072bc519cc982c409357319e30faa3056` separates public search from authenticated Data API writes, adds safe phase diagnostics, caps resume writes and fails closed. Code is complete and exact-head CI is green. | **External blocker:** live refresh currently returns `403 quotaExceeded`. Successful write/read-back acceptance must wait for the YouTube Data API daily quota reset or a quota increase. |
-| [#97](https://github.com/KirDE/festival-radar/issues/97): the release installer assumes system npm. | [PR #141](https://github.com/KirDE/festival-radar/pull/141) at `91f203b2628640682c976f60d3074b7c634a387c` bundles pinned npm with Node 22 and proves installation with system npm absent. | Review, merge, deploy and installer acceptance on the production host. |
-| [#98](https://github.com/KirDE/festival-radar/issues/98): deployment configures only one Plesk proxy vhost variant. | [PR #142](https://github.com/KirDE/festival-radar/pull/142) at `d60929c3be04da092cb5fec6bed381aaae2a7d2f` generates equivalent HTTP and HTTPS Plesk proxy includes from one template. | Review, merge, deploy and external HTTPS/deployment-marker acceptance. |
+| Issue and merged implementation | Production status |
+| --- | --- |
+| [#168](https://github.com/KirDE/festival-radar/issues/168) / [PR #170](https://github.com/KirDE/festival-radar/pull/170): database roles on real Admin Console routes | Deployed; full-proxy role acceptance remains pending. |
+| [#126](https://github.com/KirDE/festival-radar/issues/126) / [PR #143](https://github.com/KirDE/festival-radar/pull/143): trusted origins on authenticated mutations | Accepted in production. |
+| [#40](https://github.com/KirDE/festival-radar/issues/40) / [PR #171](https://github.com/KirDE/festival-radar/pull/171): production notification provider readiness | Deployed and fails closed correctly. **External blocker:** no dedicated production delivery-provider credential is configured, so real delivery is not accepted. |
+| [#172](https://github.com/KirDE/festival-radar/issues/172) / [PR #173](https://github.com/KirDE/festival-radar/pull/173): email verification before delivery | API enforcement is accepted. Localized UI acceptance failed because the notification route is forced to English and the EN/DE/RU-prefixed routes return 404. |
+| [#169](https://github.com/KirDE/festival-radar/issues/169) / [PR #174](https://github.com/KirDE/festival-radar/pull/174): suppress analytics ingestion access logs | Deployed; controlled production log-count acceptance remains pending. |
+| [#22](https://github.com/KirDE/festival-radar/issues/22) / [PR #176](https://github.com/KirDE/festival-radar/pull/176): recover persistent source HTTP 403 failures | Accepted in production. |
+| [#175](https://github.com/KirDE/festival-radar/issues/175) / [PR #177](https://github.com/KirDE/festival-radar/pull/177): replace defunct MetalDays with Tolminator 2027 | Accepted by catalogue, route, sitemap and official-source checks. |
+| [#125](https://github.com/KirDE/festival-radar/issues/125) / [PR #158](https://github.com/KirDE/festival-radar/pull/158), repaired by [PR #179](https://github.com/KirDE/festival-radar/pull/179): production-owned collection schedulers | Accepted with all four production systemd timers enabled and GitHub collection workflows manual-only. |
+| [#133](https://github.com/KirDE/festival-radar/issues/133) / [PR #144](https://github.com/KirDE/festival-radar/pull/144): scoped ingestion acceptance | Accepted in production. |
+| [#124](https://github.com/KirDE/festival-radar/issues/124) / [PR #151](https://github.com/KirDE/festival-radar/pull/151): mobile map popup and overflow | Accepted at 320, 375 and 390 px. |
+| [#128](https://github.com/KirDE/festival-radar/issues/128) / [PR #150](https://github.com/KirDE/festival-radar/pull/150): canonical notification enums and mobile layout | Accepted with authenticated persistence and 320–390 px layout checks. |
+| [#130](https://github.com/KirDE/festival-radar/issues/130) / [PR #152](https://github.com/KirDE/festival-radar/pull/152): localized planner and navigation | Accepted across EN, DE and RU routes. |
+| [#131](https://github.com/KirDE/festival-radar/issues/131) / [PR #145](https://github.com/KirDE/festival-radar/pull/145): first-fetch offline payload | Accepted in a fresh browser context with networking disabled after install. |
+| [#132](https://github.com/KirDE/festival-radar/issues/132) / [PR #146](https://github.com/KirDE/festival-radar/pull/146): edition-specific future evidence | Accepted for Wacken 2026/2027, unsupported 2028 and sitemap behavior. |
+| [#135](https://github.com/KirDE/festival-radar/issues/135) / [PR #148](https://github.com/KirDE/festival-radar/pull/148): curated artist provenance | Accepted on the production Electric Callboy profile. |
+| [#136](https://github.com/KirDE/festival-radar/issues/136) / [PR #153](https://github.com/KirDE/festival-radar/pull/153): localized artist routes | Accepted across EN, DE and RU navigation, reload and language switching. |
+| [#129](https://github.com/KirDE/festival-radar/issues/129) / [PR #149](https://github.com/KirDE/festival-radar/pull/149): playlist editor and real parser-log UI | Accepted through reversible authenticated production CRUD and parser-log read-back. |
+| [#134](https://github.com/KirDE/festival-radar/issues/134) / [PR #147](https://github.com/KirDE/festival-radar/pull/147): YouTube Music production refresh | Spotify succeeded and YouTube failed closed before publishing. **External blocker:** the YouTube Data API returned `403 quotaExceeded`; successful write/read-back awaits quota reset or increase. |
+| [#97](https://github.com/KirDE/festival-radar/issues/97) / [PR #141](https://github.com/KirDE/festival-radar/pull/141), repaired by [PR #180](https://github.com/KirDE/festival-radar/pull/180): remove system npm dependency | Accepted through standalone packaging, upload, activation and external production verification. |
+| [#98](https://github.com/KirDE/festival-radar/issues/98) / [PR #142](https://github.com/KirDE/festival-radar/pull/142): configure both Plesk vhosts | Accepted at the exact deployed commit: HTTP redirects to HTTPS and both paths render the application. |
 
-All 20 implementation PRs remain unmerged. Issue
-[#159](https://github.com/KirDE/festival-radar/issues/159) tracks this inventory
-refresh itself and does not change that production boundary.
+Issue [#159](https://github.com/KirDE/festival-radar/issues/159) tracks this
+inventory refresh. The table records the remaining acceptance gaps without
+claiming that merge or deployment alone resolved them.
 
 Two acceptance areas remain evidence-limited rather than confirmed broken:
 
