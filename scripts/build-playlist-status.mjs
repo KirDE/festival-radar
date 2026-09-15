@@ -5,7 +5,9 @@ const reportDir = process.argv[2] || "outputs/festival_playlists";
 const outputFile = process.argv[3] || "data/playlist-status.json";
 const youtubeReportDir = process.argv[4] || "outputs/youtube_music";
 
-const status = {};
+const status = process.env.PLAYLIST_STATUS_MERGE === "1"
+  ? JSON.parse(await readFile(outputFile, "utf8").catch(() => "{}"))
+  : {};
 for (const filename of await readdir(reportDir).catch(() => [])) {
   if (!filename.endsWith(".json") || filename.endsWith("_summary.json")) continue;
   const key = filename.slice(0, -5);

@@ -18,6 +18,8 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -131,3 +133,39 @@ jobs:
             sleep 5
           done
           exit 1
+      - name: Detect canonical lineup changes
+        id: lineup
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- data/festivals.ts data/ingestion-publications.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          if git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- data/festivals.ts; then
+            git show "$BEFORE_SHA:data/ingestion-publications.json" > /tmp/previous-publications.json
+            node scripts/changed-publication-lineups.mjs /tmp/previous-publications.json data/ingestion-publications.json > /tmp/festival-slugs
+            echo "festival_slugs=$(cat /tmp/festival-slugs)" >> "$GITHUB_OUTPUT"
+          else
+            echo "festival_slugs=" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Refresh playlists after canonical lineup changes
+        if: steps.lineup.outputs.changed == 'true'
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          FESTIVAL_SLUGS: ${{ steps.lineup.outputs.festival_slugs }}
+        run: |
+          if test -n "$FESTIVAL_SLUGS"; then
+            jq -n --arg festivals "$FESTIVAL_SLUGS" '{festivals: ($festivals | split(","))}' > playlist-request.json
+          else
+            printf '{"festivals":null}\n' > playlist-request.json
+          fi
+          curl --fail-with-body --silent --show-error --max-time 2650 \
+            -H "authorization: Bearer $INTERNAL_API_SECRET" \
+            -H "content-type: application/json" \
+            --data-binary @playlist-request.json \
+            "${APP_URL%/}/api/playlists/run/" | tee playlist-response.json
+          jq -e '([.status[] | .tracks > 0] | all)' playlist-response.json

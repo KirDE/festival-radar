@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -37,4 +37,21 @@ test("builds public status for any normalized festival report", async () => {
       updatedAt: "2026-08-29T20:00:00Z",
     },
   });
+});
+
+test("scoped refresh merges status without removing other festivals", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "playlist-status-merge-"));
+  const reports = path.join(directory, "reports");
+  const youtube = path.join(directory, "youtube");
+  const output = path.join(directory, "status.json");
+  await mkdir(reports);
+  await mkdir(youtube);
+  await writeFile(output, JSON.stringify({ existing: { spotifyUrl: "https://open.spotify.com/playlist/existing", artists: 1, tracks: 5 } }));
+  await writeFile(path.join(reports, "changed.json"), JSON.stringify({ slug: "changed", playlist_url: "https://open.spotify.com/playlist/changed", artists_count: 2, track_count: 10 }));
+  const result = spawnSync(process.execPath, ["scripts/build-playlist-status.mjs", reports, output, youtube], { encoding: "utf8", env: { ...process.env, PLAYLIST_STATUS_MERGE: "1" } });
+  assert.equal(result.status, 0, result.stderr);
+  const status = JSON.parse(await readFile(output, "utf8"));
+  assert.equal(status.existing.tracks, 5);
+  assert.equal(status.changed.tracks, 10);
+  await rm(directory, { recursive: true, force: true });
 });
