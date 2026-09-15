@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { artistProfiles } from "../data/artists.ts";
+import { allArtists } from "../data/festivals.ts";
 import { classify, dueArtists, dueEnrichment, freshState } from "../scripts/resolve-artist-identities.mjs";
 
 test("every catalog artist has an explicit identity state and no search provenance", () => {
-  assert.equal(artistProfiles.length, 119);
+  assert.equal(artistProfiles.length, allArtists.length);
   for (const artist of artistProfiles) {
     assert.match(artist.identityState, /^(linked|ambiguous|unresolved|retryable)$/);
     assert.equal(artist.links.some((link) => /\/search[/?]/.test(link.url)), false);

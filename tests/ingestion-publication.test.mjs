@@ -18,19 +18,19 @@ function run(dir, slug, publish = false) {
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
 }
-const safe = '<meta name="festival:city" content="Nürburg"><script type="application/ld+json">{"@type":"MusicEvent","startDate":"2027-06-04","endDate":"2027-06-06","performer":[{"name":"blink-182"},{"name":"New Safe Band"}]}</script>';
+const safe = '<meta name="festival:city" content="Ballenstedt"><script type="application/ld+json">{"@type":"MusicEvent","startDate":"2027-07-07","endDate":"2027-07-10","performer":[{"name":"New Safe Band"}]}</script>';
 
 test("dry-run is observable and leaves overlay unchanged", async () => {
-  const dir = await setup(safe); const summary = run(dir, "rock-am-ring");
+  const dir = await setup(safe); const summary = run(dir, "rockharz");
   assert.equal(summary.dryRun, true); assert.equal(summary.published, 0);
   assert.deepEqual(JSON.parse(await readFile(path.join(dir, "publications.json"), "utf8")).festivals, {});
 });
 test("safe publication is durable, auditable and idempotent", async () => {
-  const dir = await setup(safe); assert.equal(run(dir, "rock-am-ring", true).published, 1);
-  assert.ok(JSON.parse(await readFile(path.join(dir, "publications.json"), "utf8")).festivals["rock-am-ring"].lineup.includes("New Safe Band"));
+  const dir = await setup(safe); assert.equal(run(dir, "rockharz", true).published, 1);
+  assert.ok(JSON.parse(await readFile(path.join(dir, "publications.json"), "utf8")).festivals.rockharz.lineup.includes("New Safe Band"));
   const record = JSON.parse((await readFile(path.join(dir, "history.jsonl"), "utf8")).trim());
-  assert.equal(record.sourceUrl, "https://www.rock-am-ring.com/"); assert.equal(record.outcome, "published");
-  assert.equal(run(dir, "rock-am-ring", true).published, 0);
+  assert.equal(record.sourceUrl, "https://www.rockharz-festival.com/"); assert.equal(record.outcome, "published");
+  assert.equal(run(dir, "rockharz", true).published, 0);
 });
 test("review-required removal is never published", async () => {
   const dir = await setup('<script type="application/ld+json">{"@type":"MusicEvent","startDate":"2027-07-28","endDate":"2027-07-31","performer":[{"name":"Electric Callboy"}]}</script>');
@@ -43,7 +43,7 @@ test("policy-accepted source failure is reported as PARTIAL without failing down
   const output = path.join(dir, "partial-output");
   const result = spawnSync(process.execPath, [
     "scripts/ingest-festivals.mjs",
-    "--slug=rock-am-ring",
+    "--slug=rockharz",
     `--fixture=${path.join(dir, "missing-fixture.html")}`,
     `--publications=${path.join(dir, "publications.json")}`,
     `--history=${path.join(dir, "history.jsonl")}`,
@@ -64,7 +64,7 @@ test("source failures above the explicit policy threshold remain fatal", async (
   const dir = await setup(safe);
   const result = spawnSync(process.execPath, [
     "scripts/ingest-festivals.mjs",
-    "--slug=rock-am-ring",
+    "--slug=rockharz",
     `--fixture=${path.join(dir, "missing-fixture.html")}`,
     `--publications=${path.join(dir, "publications.json")}`,
     `--history=${path.join(dir, "history.jsonl")}`,

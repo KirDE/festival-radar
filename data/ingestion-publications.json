@@ -1,1 +1,69 @@
-{"schemaVersion":1,"festivals":{}}
+{
+  "schemaVersion": 1,
+  "festivals": {
+    "rock-im-park": {
+      "headliners": [
+        "blink-182",
+        "Turnstile",
+        "Die Toten Hosen",
+        "Faith No More",
+        "Parkway Drive",
+        "Bring Me The Horizon",
+        "Evanescence",
+        "Falling In Reverse",
+        "Billy Talent"
+      ],
+      "lineup": [
+        "Bad Religion",
+        "Bullet For My Valentine",
+        "I Prevail",
+        "Nothing But Thieves",
+        "Orbit Culture",
+        "Ski Aggu",
+        "Amon Amarth",
+        "Arch Enemy",
+        "Imminence",
+        "Lorna Shore",
+        "Motionless In White",
+        "Beartooth",
+        "Donots",
+        "Poppy",
+        "Simple Plan",
+        "Trailerpark",
+        "The Prodigy"
+      ]
+    },
+    "rock-am-ring": {
+      "headliners": [
+        "blink-182",
+        "Falling In Reverse",
+        "Billy Talent",
+        "Turnstile",
+        "Die Toten Hosen",
+        "Faith No More",
+        "Parkway Drive",
+        "Bring Me The Horizon",
+        "Evanescence"
+      ],
+      "lineup": [
+        "Beartooth",
+        "Donots",
+        "Poppy",
+        "Simple Plan",
+        "Trailerpark",
+        "The Prodigy",
+        "Bad Religion",
+        "Bullet For My Valentine",
+        "I Prevail",
+        "Nothing But Thieves",
+        "Orbit Culture",
+        "Ski Aggu",
+        "Amon Amarth",
+        "Arch Enemy",
+        "Imminence",
+        "Lorna Shore",
+        "Motionless In White"
+      ]
+    }
+  }
+}
