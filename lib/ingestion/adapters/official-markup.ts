@@ -1,10 +1,70 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { startDate?: string; endDate?: string; city?: string; excerpt: string };
+type AdapterResult = { startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; excerpt: string };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
+
+function decode(value: string): string {
+  return value
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([\da-f]+);/gi, (_, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function attribute(tag: string, name: string): string | undefined {
+  const match = tag.match(new RegExp(`${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i"));
+  return match ? decode(match[1] ?? match[2] ?? "") : undefined;
+}
+
+function ringAndPark(html: string): AdapterResult | undefined {
+  const date = html.match(/\b(\d{1,2})\s*\.?\s*(?:[-–—]|bis|to)\s*(\d{1,2})\s*\.?\s+(juni|june)\s+(20\d{2})\b/i);
+  if (!date) return undefined;
+
+  const headliners: string[] = [];
+  const lineup: string[] = [];
+  let excerpt = date[0];
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = attribute(match[1], "href");
+    if (!href) continue;
+    let pathname: string;
+    try {
+      pathname = new URL(href, "https://festival.invalid/").pathname;
+    } catch {
+      continue;
+    }
+    if (!/(?:^|\/)line-up\/[^/]+\/?$/i.test(pathname)) continue;
+
+    const text = decode(match[2].replace(/<[^>]+>/g, " "));
+    const image = match[2].match(/<img\b[^>]*>/i)?.[0];
+    const imageName = image ? attribute(image, "title") ?? attribute(image, "alt")?.replace(/^Logo\s+/i, "") : undefined;
+    const name = (text || imageName || "").trim();
+    if (!name) continue;
+
+    const dayStart = html.lastIndexOf('<article class="lineup-day"', match.index);
+    const context = html.slice(dayStart < 0 ? 0 : dayStart, match.index);
+    const labels = [...context.matchAll(/\baria-label\s*=\s*(?:"([^"]+)"|'([^']+)')/gi)];
+    const group = labels.at(-1)?.[1] ?? labels.at(-1)?.[2] ?? "";
+    const target = /^headliner$/i.test(group) ? headliners : lineup;
+    if (![...headliners, ...lineup].some((existing) => existing.localeCompare(name, undefined, { sensitivity: "base" }) === 0)) target.push(name);
+    if (excerpt === date[0]) excerpt = match[0].slice(0, 500);
+  }
+  if (headliners.length + lineup.length === 0) return undefined;
+  return {
+    startDate: `${date[4]}-06-${pad(date[1])}`,
+    endDate: `${date[4]}-06-${pad(date[2])}`,
+    headliners,
+    lineup,
+    excerpt,
+  };
+}
 
 function pinkpop(html: string): AdapterResult | undefined {
   const date = html.match(/(\d{1,2})\s*[•·]\s*(\d{1,2})\s*[•·]\s*(\d{1,2})\s+(januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december)\s+(20\d{2})/i);
@@ -37,7 +97,15 @@ function leyendas(html: string): AdapterResult | undefined {
   return title ? { excerpt: title[0].replace(/<[^>]+>/g, " ").trim() } : undefined;
 }
 
-const adapters: Record<string, (html: string) => AdapterResult | undefined> = { "2000trees": trees, "pinkpop": pinkpop, "tuska": tuska, "tolminator": tolminator, "leyendas-del-rock": leyendas };
+const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
+  "2000trees": trees,
+  "pinkpop": pinkpop,
+  "rock-am-ring": ringAndPark,
+  "rock-im-park": ringAndPark,
+  "tuska": tuska,
+  "tolminator": tolminator,
+  "leyendas-del-rock": leyendas,
+};
 
 export function extractOfficialMarkupCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const candidate: FestivalCandidate = { schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] };
@@ -47,9 +115,9 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     return candidate;
   }
   if (result.startDate) candidate.observedEditionYears.push(Number(result.startDate.slice(0, 4)));
-  for (const field of ["startDate", "endDate", "city"] as const) {
+  for (const field of ["startDate", "endDate", "city", "headliners", "lineup"] as const) {
     const value = result[field];
-    if (!value) continue;
+    if (!value || (Array.isArray(value) && value.length === 0)) continue;
     Object.assign(candidate, { [field]: value });
     candidate.evidence.push({ field: field as FieldEvidence["field"], sourceUrl: source.url, observedAt: fetchedAt, excerpt: result.excerpt.slice(0, 500) });
   }

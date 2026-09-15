@@ -17,8 +17,8 @@ function retired(festivalSlug: string, url: string, reason: string): FestivalSou
 
 // Explicit inventory: adding a festival to the catalogue requires adding its source here.
 export const festivalSources: FestivalSource[] = [
-  source("rock-am-ring", "daily"),
-  source("rock-im-park", "daily"),
+  source("rock-am-ring", "daily", ["official_markup"]),
+  source("rock-im-park", "daily", ["official_markup"]),
   source("wacken-open-air", "daily"),
   source("summer-breeze", "daily"),
   source("rockharz", "every_3_days"),

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-30T06:44:13.435Z",
+  "generatedAt": "2026-09-15T13:25:09.000Z",
   "source": "musicbrainz",
   "profiles": {
     "abbie-falls": {
@@ -2780,6 +2780,116 @@
       "slug": "wolfheart",
       "reason": "source_unavailable",
       "error": "https://musicbrainz.org/ws/2/artist/?query=artist%3AWolfheart&fmt=json&limit=10: HTTP 503"
+    },
+    {
+      "name": "Amon Amarth",
+      "slug": "amon-amarth",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Arch Enemy",
+      "slug": "arch-enemy",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Bad Religion",
+      "slug": "bad-religion",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Beartooth",
+      "slug": "beartooth",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Billy Talent",
+      "slug": "billy-talent",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Bring Me The Horizon",
+      "slug": "bring-me-the-horizon",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Bullet For My Valentine",
+      "slug": "bullet-for-my-valentine",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Die Toten Hosen",
+      "slug": "die-toten-hosen",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Donots",
+      "slug": "donots",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Evanescence",
+      "slug": "evanescence",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Faith No More",
+      "slug": "faith-no-more",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Falling In Reverse",
+      "slug": "falling-in-reverse",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "I Prevail",
+      "slug": "i-prevail",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Nothing But Thieves",
+      "slug": "nothing-but-thieves",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Orbit Culture",
+      "slug": "orbit-culture",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Parkway Drive",
+      "slug": "parkway-drive",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Poppy",
+      "slug": "poppy",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Simple Plan",
+      "slug": "simple-plan",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Ski Aggu",
+      "slug": "ski-aggu",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "The Prodigy",
+      "slug": "the-prodigy",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Trailerpark",
+      "slug": "trailerpark",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Turnstile",
+      "slug": "turnstile",
+      "reason": "pending_identity_resolution"
     }
   ]
 }
