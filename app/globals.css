@@ -1190,6 +1190,23 @@ footer {
   .lineupGrid {
     grid-template-columns: 1fr;
   }
+  .planningSection {
+    min-width: 0;
+  }
+  .recommendations {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 100%;
+  }
+  .recommendations h3,
+  .recommendations a {
+    min-width: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-wrap: anywhere;
+  }
+  .recommendations a:last-child {
+    border-bottom: 0;
+  }
   .sourceNote {
     display: block;
   }
