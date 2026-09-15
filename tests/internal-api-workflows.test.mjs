@@ -18,6 +18,21 @@ for (const workflowName of ["notifications", "ingestion"]) {
   });
 }
 
+test("published ingestion lineups trigger a scoped production playlist refresh", async () => {
+  const workflow = await readFile(".github/workflows/ingestion.yml", "utf8");
+  assert.match(workflow, /select-published-festivals\.mjs outputs\/ingestion-response\.json/);
+  assert.match(workflow, /\/api\/playlists\/run\//);
+  assert.match(workflow, /No published lineup changes; playlist refresh skipped/);
+});
+
+test("deploy refreshes playlists when canonical lineup files change", async () => {
+  const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
+  assert.match(workflow, /data\/festivals\.ts data\/ingestion-publications\.json/);
+  assert.match(workflow, /changed-publication-lineups\.mjs/);
+  assert.match(workflow, /steps\.lineup\.outputs\.changed == 'true'/);
+  assert.match(workflow, /\/api\/playlists\/run\//);
+});
+
 test("notification scheduler posts to the canonical non-redirecting endpoint", async () => {
   const workflow = await readFile(".github/workflows/notifications.yml", "utf8");
   assert.match(workflow, /"\$\{APP_URL%\/\}\/api\/notifications\/dispatch\/"/);
@@ -144,6 +159,14 @@ test("production ingestion route fails closed and invokes the persistent runner"
   assert.match(route, /cause\.code === 2/);
   assert.match(route, /persisted\.attempts\.length !== summary\.attempted/);
   assert.match(route, /lastSuccessfulCheck/);
+});
+
+test("production playlist refresh route is protected and invokes the collection runner", async () => {
+  const route = await readFile("app/api/playlists/run/route.ts", "utf8");
+  assert.match(route, /!process\.env\.INTERNAL_API_SECRET/);
+  assert.match(route, /request\.headers\.get\("authorization"\) !== `Bearer \$\{process\.env\.INTERNAL_API_SECRET\}`/);
+  assert.match(route, /run-collection-job\.sh", "playlists"/);
+  assert.match(route, /Playlist status read-back is incomplete/);
 });
 
 test("standalone release contains the production-local ingestion runner", async () => {

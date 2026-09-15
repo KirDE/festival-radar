@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 job="${1:?usage: run-collection-job.sh JOB}"
+scope="${2:-}"
 app_root="${APP_ROOT:-/opt/festival-radar}"
 app_url="${COLLECTION_APP_URL:-http://127.0.0.1:${PORT:-3100}}"
 umask 027
@@ -22,8 +23,11 @@ case "$job" in
     "$current/.runtime/node" scripts/check-festival-sources.mjs > "$output/latest.json.tmp"
     mv -f "$output/latest.json.tmp" "$output/latest.json" ;;
   playlists)
+    exec 9>"$output/refresh.lock"
+    flock -w 60 9
     "$current/.runtime/node" scripts/export-playlist-catalog.mjs
-    "${PLAYLIST_PYTHON:-python3}" scripts/spotify_gmm_2026/festival_playlists.py
+    FESTIVALS="$scope" "${PLAYLIST_PYTHON:-python3}" scripts/spotify_gmm_2026/festival_playlists.py
+    if [[ -n "$scope" ]]; then export PLAYLIST_STATUS_MERGE=1; else export PLAYLIST_STATUS_MERGE=0; fi
     "$current/.runtime/node" scripts/build-playlist-status.mjs
     cp data/playlist-status.json "$output/playlist-status.json.tmp"
     mv -f "$output/playlist-status.json.tmp" "$output/playlist-status.json" ;;

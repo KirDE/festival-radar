@@ -40,6 +40,25 @@ jobs:
             "${APP_URL%/}/api/ingestion/run/" | tee outputs/ingestion-response.json
           jq -e --arg festival "$FESTIVAL" --argjson force "$FORCE" \
             -f scripts/validate-ingestion-response.jq outputs/ingestion-response.json
+      - name: Refresh playlists for published lineups
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+        run: |
+          festival_slugs="$(node scripts/select-published-festivals.mjs outputs/ingestion-response.json)"
+          if test -z "$festival_slugs"; then
+            echo "No published lineup changes; playlist refresh skipped."
+            exit 0
+          fi
+          jq -n --arg festivals "$festival_slugs" '{festivals: ($festivals | split(","))}' > outputs/playlist-request.json
+          curl --fail-with-body --silent --show-error --max-time 2650 \
+            -H "authorization: Bearer $INTERNAL_API_SECRET" \
+            -H "content-type: application/json" \
+            --data-binary @outputs/playlist-request.json \
+            "${APP_URL%/}/api/playlists/run/" | tee outputs/playlist-response.json
+          jq -e --arg festivals "$festival_slugs" \
+            '($festivals | split(",") | sort) == (.festivals | sort) and ([.status[] | .tracks > 0] | all)' \
+            outputs/playlist-response.json
       - name: Retain review and diagnostic artifacts
         if: always()
         uses: actions/upload-artifact@v4

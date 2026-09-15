@@ -29,6 +29,7 @@ test("bearer-authenticated production services keep their explicit non-browser b
   for (const route of [
     "app/api/analytics/prune/route.ts",
     "app/api/ingestion/run/route.ts",
+    "app/api/playlists/run/route.ts",
     "app/api/notifications/dispatch/route.ts",
     "app/api/notifications/events/route.ts",
   ]) {
