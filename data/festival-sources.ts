@@ -23,7 +23,7 @@ export const festivalSources: FestivalSource[] = [
   source("summer-breeze", "daily"),
   source("rockharz", "every_3_days"),
   source("hurricane", "every_3_days"),
-  source("southside", "every_3_days"),
+  source("southside", "daily", ["official_markup"]),
   manual("full-force", "official home page exposes a stale 2024 Event and no trustworthy current-edition dates"),
   source("hellfest", "every_3_days"),
   source("rock-en-seine", "weekly"),

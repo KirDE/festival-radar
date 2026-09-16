@@ -66,6 +66,61 @@ function ringAndPark(html: string): AdapterResult | undefined {
   };
 }
 
+function southsideArtistName(value: string): string {
+  if (value !== value.toLocaleUpperCase()) return value;
+  const smallWords = new Set(["and", "de", "of", "the"]);
+  return value.split(/\s+/).map((word, index) => {
+    if (word === "MGK" || word === "I") return word;
+    return word.split("-").map((part) => {
+      const lower = part.toLocaleLowerCase();
+      return index > 0 && smallWords.has(lower) ? lower : part ? `${part[0].toLocaleUpperCase()}${part.slice(1).toLocaleLowerCase()}` : part;
+    }).join("-");
+  }).join(" ");
+}
+
+function southside(html: string): AdapterResult | undefined {
+  const edition = html.match(/\bLine-Up\s+(20\d{2})\b/i);
+  const date = html.match(/\b(\d{1,2})\s*\.\s*(?:[-–—]\s*)?(\d{1,2})\s*\.\s+Juni\s+(20\d{2})\b/i);
+  if (!edition || !date || edition[1] !== date[3]) return undefined;
+
+  const headliners: string[] = [];
+  const lineup: string[] = [];
+  let excerpt = edition[0];
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = attribute(match[1], "href");
+    if (!href) continue;
+    let pathname: string;
+    try {
+      pathname = new URL(href, "https://festival.invalid/").pathname;
+    } catch {
+      continue;
+    }
+    if (!/^\/line-up\/act\/[^/]+\/?$/i.test(pathname)) continue;
+
+    const blockStart = html.lastIndexOf("<lineup-block", match.index);
+    const blockEnd = html.lastIndexOf("</lineup-block>", match.index);
+    if (blockStart < 0 || blockStart < blockEnd) continue;
+    const blockTagEnd = html.indexOf(">", blockStart);
+    if (blockTagEnd < blockStart || blockTagEnd > match.index) continue;
+    const blockTag = html.slice(blockStart, blockTagEnd + 1);
+
+    const rawName = decode(match[2].replace(/<[^>]+>/g, " "));
+    const name = southsideArtistName(rawName);
+    if (!name || [...headliners, ...lineup].some((existing) => existing.localeCompare(name, undefined, { sensitivity: "base" }) === 0)) continue;
+    const target = /block--size-XXL\b/i.test(blockTag) ? headliners : lineup;
+    target.push(name);
+    if (excerpt === edition[0]) excerpt = `${edition[0]} ${match[0]}`;
+  }
+  if (headliners.length === 0 || lineup.length === 0) return undefined;
+  return {
+    startDate: `${date[3]}-06-${pad(date[1])}`,
+    endDate: `${date[3]}-06-${pad(date[2])}`,
+    headliners,
+    lineup,
+    excerpt,
+  };
+}
+
 function pinkpop(html: string): AdapterResult | undefined {
   const date = html.match(/(\d{1,2})\s*[•·]\s*(\d{1,2})\s*[•·]\s*(\d{1,2})\s+(januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december)\s+(20\d{2})/i);
   if (!date) return undefined;
@@ -102,6 +157,7 @@ const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
   "pinkpop": pinkpop,
   "rock-am-ring": ringAndPark,
   "rock-im-park": ringAndPark,
+  "southside": southside,
   "tuska": tuska,
   "tolminator": tolminator,
   "leyendas-del-rock": leyendas,
