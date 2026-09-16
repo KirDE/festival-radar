@@ -2890,6 +2890,81 @@
       "name": "Turnstile",
       "slug": "turnstile",
       "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Angine de Poitrine",
+      "slug": "angine-de-poitrine",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Apsilon",
+      "slug": "apsilon",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Deine Cousine",
+      "slug": "deine-cousine",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Dropkick Murphys",
+      "slug": "dropkick-murphys",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Feine Sahne Fischfilet",
+      "slug": "feine-sahne-fischfilet",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Giant Rooks",
+      "slug": "giant-rooks",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Ikkimel",
+      "slug": "ikkimel",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Mehnersmoos",
+      "slug": "mehnersmoos",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "MGK",
+      "slug": "mgk",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Muse",
+      "slug": "muse",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Paula Hartmann",
+      "slug": "paula-hartmann",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Phoebe Bridgers",
+      "slug": "phoebe-bridgers",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Pierce the Veil",
+      "slug": "pierce-the-veil",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Sofia Isella",
+      "slug": "sofia-isella",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "The Interrupters",
+      "slug": "the-interrupters",
+      "reason": "pending_identity_resolution"
     }
   ]
 }
