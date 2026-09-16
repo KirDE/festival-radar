@@ -64,13 +64,19 @@ class TrackFilterTest(unittest.TestCase):
             with patch.dict(os.environ, {'FESTIVAL_SEASON': '2026'}):
                 with self.assertRaisesRegex(RuntimeError, 'no playlists mutated'):
                     playlists.load_canonical_festivals(path)
+
     def test_import_without_setlist_key_for_offline_analysis(self):
         module_path = Path(__file__).resolve().parents[1] / 'scripts' / 'spotify_gmm_2026' / 'festival_playlists.py'
+        module_name = 'festival_playlists_no_key'
 
         with patch.dict(os.environ, {}, clear=True):
-            spec = importlib.util.spec_from_file_location('festival_playlists_no_key', module_path)
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
             module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            sys.modules[module_name] = module
+            try:
+                spec.loader.exec_module(module)
+            finally:
+                sys.modules.pop(module_name, None)
 
         self.assertIsNone(module.SETLIST_API_KEY)
         self.assertNotIn('x-api-key', module.SETLIST_HEADERS)
