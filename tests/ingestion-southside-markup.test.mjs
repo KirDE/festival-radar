@@ -18,23 +18,25 @@ const markup = `
   </lineup-block>
   <a href="/news/not-an-artist">Not an artist</a>`;
 
-test("southside extracts the verified 2027 lineup from official act links", () => {
-  const source = getFestivalSource("southside");
-  assert.deepEqual(source?.strategies, ["official_markup"]);
-  assert.equal(source?.refreshPolicy, "daily");
-  const candidate = extractFestivalCandidate(markup, source, "2026-09-16T10:13:00Z");
-  assert.equal(candidate.startDate, "2027-06-18");
-  assert.equal(candidate.endDate, "2027-06-20");
-  assert.deepEqual(candidate.observedEditionYears, [2027]);
-  assert.deepEqual(candidate.headliners, ["Muse", "MGK", "Phoebe Bridgers"]);
-  assert.deepEqual(candidate.lineup, ["Pierce the Veil", "I Prevail", "Feine Sahne Fischfilet"]);
-  assert.deepEqual(candidate.warnings, []);
-  assert.deepEqual(candidate.evidence.map(({ field }) => field), ["startDate", "endDate", "headliners", "lineup"]);
-});
+for (const slug of ["hurricane", "southside"]) {
+  test(`${slug} extracts the verified 2027 lineup from official FKP act links`, () => {
+    const source = getFestivalSource(slug);
+    assert.deepEqual(source?.strategies, ["official_markup"]);
+    assert.equal(source?.refreshPolicy, "daily");
+    const candidate = extractFestivalCandidate(markup, source, "2026-09-16T10:13:00Z");
+    assert.equal(candidate.startDate, "2027-06-18");
+    assert.equal(candidate.endDate, "2027-06-20");
+    assert.deepEqual(candidate.observedEditionYears, [2027]);
+    assert.deepEqual(candidate.headliners, ["Muse", "MGK", "Phoebe Bridgers"]);
+    assert.deepEqual(candidate.lineup, ["Pierce the Veil", "I Prevail", "Feine Sahne Fischfilet"]);
+    assert.deepEqual(candidate.warnings, []);
+    assert.deepEqual(candidate.evidence.map(({ field }) => field), ["startDate", "endDate", "headliners", "lineup"]);
+  });
 
-test("southside fails closed without an edition-matched heading and tiered act links", () => {
-  const source = getFestivalSource("southside");
-  const candidate = extractFestivalCandidate(markup.replace("Line-Up 2027", "Line-Up 2026"), source, "2026-09-16T10:13:00Z");
-  assert.deepEqual(candidate.evidence, []);
-  assert.match(candidate.warnings[0], /found no trustworthy fields/);
-});
+  test(`${slug} fails closed without an edition-matched heading and tiered act links`, () => {
+    const source = getFestivalSource(slug);
+    const candidate = extractFestivalCandidate(markup.replace("Line-Up 2027", "Line-Up 2026"), source, "2026-09-16T10:13:00Z");
+    assert.deepEqual(candidate.evidence, []);
+    assert.match(candidate.warnings[0], /found no trustworthy fields/);
+  });
+}
