@@ -66,7 +66,7 @@ function ringAndPark(html: string): AdapterResult | undefined {
   };
 }
 
-function southsideArtistName(value: string): string {
+function fkpArtistName(value: string): string {
   if (value !== value.toLocaleUpperCase()) return value;
   const smallWords = new Set(["and", "de", "of", "the"]);
   return value.split(/\s+/).map((word, index) => {
@@ -78,7 +78,7 @@ function southsideArtistName(value: string): string {
   }).join(" ");
 }
 
-function southside(html: string): AdapterResult | undefined {
+function fkpLineup(html: string): AdapterResult | undefined {
   const edition = html.match(/\bLine-Up\s+(20\d{2})\b/i);
   const date = html.match(/\b(\d{1,2})\s*\.\s*(?:[-–—]\s*)?(\d{1,2})\s*\.\s+Juni\s+(20\d{2})\b/i);
   if (!edition || !date || edition[1] !== date[3]) return undefined;
@@ -105,7 +105,7 @@ function southside(html: string): AdapterResult | undefined {
     const blockTag = html.slice(blockStart, blockTagEnd + 1);
 
     const rawName = decode(match[2].replace(/<[^>]+>/g, " "));
-    const name = southsideArtistName(rawName);
+    const name = fkpArtistName(rawName);
     if (!name || [...headliners, ...lineup].some((existing) => existing.localeCompare(name, undefined, { sensitivity: "base" }) === 0)) continue;
     const target = /block--size-XXL\b/i.test(blockTag) ? headliners : lineup;
     target.push(name);
@@ -154,10 +154,11 @@ function leyendas(html: string): AdapterResult | undefined {
 
 const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
   "2000trees": trees,
+  "hurricane": fkpLineup,
   "pinkpop": pinkpop,
   "rock-am-ring": ringAndPark,
   "rock-im-park": ringAndPark,
-  "southside": southside,
+  "southside": fkpLineup,
   "tuska": tuska,
   "tolminator": tolminator,
   "leyendas-del-rock": leyendas,
