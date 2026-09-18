@@ -9,6 +9,7 @@ import { lineupOverlap } from "@/lib/planning";
 import { useLocalPlanner } from "./LocalPlanner";
 import { hasAvailableTickets } from "@/lib/tickets";
 import { distanceKm, festivalGenres, festivalMatchesDiscoveryFilters, type Coordinates } from "@/lib/festival-discovery";
+import { announcedArtists, hasAnnouncedLineup, lineupPreviewArtists } from "@/lib/festival-lineup";
 
 const origins: Record<string, { label: string; coordinates: Coordinates }> = {
   berlin: { label: "Berlin, Germany", coordinates: { latitude: 52.5200, longitude: 13.4050 } },
@@ -46,7 +47,7 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
   const originCoordinates = origins[origin]?.coordinates;
   const visible = useMemo(() => festivals.filter((item) => {
     const haystack = [item.name, item.country, item.city, ...item.headliners, ...item.lineup].join(" ").toLowerCase();
-    return haystack.includes(query.toLowerCase()) && (country === "all" || item.countryCode === country) && (!announcedOnly || item.headliners.length > 0) && (month === "all" || item.startDate?.slice(5, 7) === month) && (!ticketsOnly || hasAvailableTickets(item)) && festivalMatchesDiscoveryFilters(item, { genre: genre === "all" ? undefined : genre, origin: originCoordinates, maxDistanceKm: maxDistance === "all" ? undefined : Number(maxDistance) });
+    return haystack.includes(query.toLowerCase()) && (country === "all" || item.countryCode === country) && (!announcedOnly || hasAnnouncedLineup(item)) && (month === "all" || item.startDate?.slice(5, 7) === month) && (!ticketsOnly || hasAvailableTickets(item)) && festivalMatchesDiscoveryFilters(item, { genre: genre === "all" ? undefined : genre, origin: originCoordinates, maxDistanceKm: maxDistance === "all" ? undefined : Number(maxDistance) });
   }).sort((a, b) => (a.startDate || "9999").localeCompare(b.startDate || "9999")), [festivals, query, country, announcedOnly, month, ticketsOnly, genre, originCoordinates, maxDistance]);
   const compared = festivals.filter((item) => selected.includes(item.slug));
   const overlap = lineupOverlap(compared);
@@ -81,13 +82,13 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
     <p className="srOnly" role="status" aria-live="polite" aria-atomic="true">{comparisonStatus}</p>
     {compared.length > 0 && <div className="compareTray"><div className="compareHeading"><strong>{t("compare")} ({compared.length}/3)</strong>{compared.map((item) => <button aria-label={t("removeFestivalComparison", { festival: item.name })} onClick={() => toggleSelected(item)} key={item.slug}>{item.name} <span aria-hidden="true">×</span></button>)}</div>{compared.length < 2 ? <p className="compareHint">{t("comparisonInstructions")}</p> : <div className="comparisonScroll" tabIndex={0}><table className="comparisonTable"><thead><tr><th scope="col">{t("planningDetail")}</th>{compared.map((item) => <th scope="col" key={item.slug}><Link href={`/festivals/${item.slug}/`}>{item.name}</Link></th>)}</tr></thead><tbody><tr><th scope="row">{t("dates")}</th>{compared.map((item) => <td key={item.slug}>{formatDates(item, locale, t("datesTba"))} · 2027</td>)}</tr><tr><th scope="row">{t("locationDistance", { origin: origins[origin].label })}</th>{compared.map((item) => <td key={item.slug}>{item.city || item.country}{item.coordinates ? ` · ${distanceKm(originCoordinates, item.coordinates).toLocaleString(locale)} km` : ` · ${t("distanceUnavailable")}`}</td>)}</tr><tr><th scope="row">{t("tickets")}</th>{compared.map((item) => <td key={item.slug}>{item.ticketsUrl ? <a href={item.ticketsUrl} rel="noreferrer" target="_blank">{t("officialTickets")}</a> : item.ticketStatus === "unavailable" ? t("unavailable") : t("availabilityNotConfirmed")}</td>)}</tr><tr><th scope="row">{t("lineupOverlap")}</th><td colSpan={compared.length}>{overlap.length ? <><strong>{t("sharedActs", { count: overlap.length })}</strong><br/>{overlap.join(", ")}</> : t("noLineupOverlap")}</td></tr></tbody></table></div>}</div>}
     <div className="resultMeta"><span>{visible.length} {t("festivals")}</span><span>{t("lastReview")}</span></div>
-    <div className="festivalGrid">{visible.map((item) => { const isSelected = selected.includes(item.slug); return <article className="festivalCard" key={item.slug}><button type="button" className={`compareButton ${isSelected ? "active" : ""}`} aria-pressed={isSelected} aria-label={t("compareFestival", { festival: item.name })} onClick={() => toggleSelected(item)} disabled={!isSelected && selected.length >= 3}><span aria-hidden="true">{isSelected ? "✓ " : "+ "}</span>{t("compare")}</button><Link href={`/festivals/${item.slug}/`}>
+    <div className="festivalGrid">{visible.map((item) => { const isSelected = selected.includes(item.slug); const previewArtists = lineupPreviewArtists(item); const artistCount = announcedArtists(item).length; return <article className="festivalCard" key={item.slug}><button type="button" className={`compareButton ${isSelected ? "active" : ""}`} aria-pressed={isSelected} aria-label={t("compareFestival", { festival: item.name })} onClick={() => toggleSelected(item)} disabled={!isSelected && selected.length >= 3}><span aria-hidden="true">{isSelected ? "✓ " : "+ "}</span>{t("compare")}</button><Link href={`/festivals/${item.slug}/`}>
       <div className="cardTop"><FestivalLogo slug={item.slug} name={item.name}/><span className={`status ${item.status}`}>{t(item.status === "tba" ? "tba" : item.status)}</span></div>
       <div className="date">{formatDates(item, locale, t("datesTba"))} · 2027</div>
       <h2>{item.name}</h2>
       <div className="location">{item.countryCode} · {item.city || displayNames.of(item.countryCode) || item.country}</div>
-      <div className="artists">{item.headliners.length ? item.headliners.slice(0, 4).map((artist) => <span key={artist}>{artist}</span>) : <span className="muted">{t("lineupNotAnnounced")}</span>}</div>
-      <div className="cardFoot"><span>{item.headliners.length + item.lineup.length ? `${item.headliners.length + item.lineup.length} ${t("announcedActs")}` : t("followUpdates")}</span><b>{t("explore")} →</b></div>
+      <div className="artists">{previewArtists.length ? previewArtists.slice(0, 4).map((artist) => <span key={artist}>{artist}</span>) : <span className="muted">{t("lineupNotAnnounced")}</span>}</div>
+      <div className="cardFoot"><span>{artistCount ? `${artistCount} ${t("announcedActs")}` : t("followUpdates")}</span><b>{t("explore")} →</b></div>
     </Link></article>; })}</div>
     {!visible.length && <div className="empty"><strong>{t("noMatches")}</strong><p>{t("noDiscoveryMatches")}</p></div>}
   </section>;
