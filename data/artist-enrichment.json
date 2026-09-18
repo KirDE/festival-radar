@@ -2965,6 +2965,51 @@
       "name": "The Interrupters",
       "slug": "the-interrupters",
       "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Alienare",
+      "slug": "alienare",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Assemblage 23",
+      "slug": "assemblage-23",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Das Ich",
+      "slug": "das-ich",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Diary of Dreams",
+      "slug": "diary-of-dreams",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Frozen Plasma",
+      "slug": "frozen-plasma",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Schandmaul",
+      "slug": "schandmaul",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "Suicide Commando",
+      "slug": "suicide-commando",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "The Sisters of Mercy",
+      "slug": "the-sisters-of-mercy",
+      "reason": "pending_identity_resolution"
+    },
+    {
+      "name": "VNV Nation",
+      "slug": "vnv-nation",
+      "reason": "pending_identity_resolution"
     }
   ]
 }

@@ -10,9 +10,9 @@ import { hasAvailableTickets, ticketPresentation } from "../lib/tickets.ts";
 import { festivalLogoFallbacks, festivalLogoPath } from "../data/festival-logos.ts";
 import playlistStatus from "../data/playlist-status.json" with { type: "json" };
 
-test("the seed contains 50 unique festivals", () => {
-  assert.equal(festivals.length, 50);
-  assert.equal(new Set(festivals.map(({ slug }) => slug)).size, 50);
+test("the seed contains 51 unique festivals", () => {
+  assert.equal(festivals.length, 51);
+  assert.equal(new Set(festivals.map(({ slug }) => slug)).size, 51);
 });
 
 test("every emitted local festival logo URL exists", async () => {
@@ -54,6 +54,40 @@ test("the defunct MetalDays record is replaced by an evidenced Tolminator 2027 e
   assert.equal(getFestivalSource("metaldays")?.enabled, false);
   assert.equal(Object.hasOwn(playlistStatus, "metaldays"), false);
   assert.equal(Object.hasOwn(playlistStatus, "tolminator"), false, "no empty playlist is advertised before a lineup exists");
+});
+
+test("M'era Luna is a complete monitored 2027 festival entry", () => {
+  const item = festivals.find(({ slug }) => slug === "mera-luna");
+  assert.deepEqual(item && {
+    name: item.name,
+    countryCode: item.countryCode,
+    city: item.city,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    officialUrl: item.officialUrl,
+    ticketsUrl: item.ticketsUrl,
+    ticketStatus: item.ticketStatus,
+    status: item.status,
+    lineup: item.lineup,
+    genres: item.genres,
+    coordinates: item.coordinates,
+  }, {
+    name: "M'era Luna Festival",
+    countryCode: "DE",
+    city: "Hildesheim",
+    startDate: "2027-08-07",
+    endDate: "2027-08-08",
+    officialUrl: "https://meraluna.de/",
+    ticketsUrl: "https://www.ticket-onlineshop.com/ols/meraluna/de",
+    ticketStatus: "available",
+    status: "partial",
+    lineup: ["VNV Nation", "The Sisters of Mercy", "Feuerschwanz", "Schandmaul", "Suicide Commando", "Diary of Dreams", "Assemblage 23", "Frozen Plasma", "Das Ich", "Alienare"],
+    genres: ["gothic", "industrial", "darkwave"],
+    coordinates: { latitude: 52.1791, longitude: 9.9452 },
+  });
+  assert.deepEqual(getFestivalSource("mera-luna")?.strategies, ["official_markup"]);
+  assert.equal(getFestivalSource("mera-luna")?.refreshPolicy, "daily");
+  assert.equal(Object.hasOwn(playlistStatus, "mera-luna"), false, "playlist appears only after a verified provider refresh");
 });
 
 test("dated editions have valid chronological dates", () => {

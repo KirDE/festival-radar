@@ -73,6 +73,7 @@ const baseFestivals: Festival[] = [
   festival("wacken-open-air", "Wacken Open Air", "Germany", "DE", "https://www.wacken.com/", { city: "Wacken", startDate: "2027-07-28", endDate: "2027-07-31", headliners: ["Electric Callboy", "Five Finger Death Punch", "Helloween", "Heaven Shall Burn", "Jinjer", "Knocked Loose"], lineup: ["Avatar", "Beast in Black", "Belphegor", "Between Two Worlds", "Blue Medusa", "Carnifex", "Cavalera Conspiracy", "Children of Bodom", "Creeper", "Crypta", "Dark Tranquillity", "Dethklok", "DragonForce", "Edguy", "Feuerschwanz", "Gaerea", "Halestorm", "HammerFall", "Heaven's Gate", "Hiraes", "Imminence", "John 5", "John Bush", "Kanonenfieber", "Make Them Suffer", "Malevolence", "Metal Church", "Mittel Alta", "Napalm Death", "Overkill", "Seven Blood", "Shadow of Intent", "Sylosis", "Tailgunner", "The Browning", "The New Roses", "Towards the Sinister", "Tyketto", "U.D.O.", "Victorious", "Witch Club Satan"], status: "confirmed" }),
   festival("summer-breeze", "Summer Breeze Open Air", "Germany", "DE", "https://www.summer-breeze.de/", { city: "Dinkelsbühl", startDate: "2027-08-18", endDate: "2027-08-21", headliners: ["Electric Callboy", "Halestorm", "Helloween", "HammerFall", "Lord of the Lost", "Saltatio Mortis", "Children of Bodom", "Eluveitie"], lineup: ["Wind Rose", "Edguy", "H-Blockx", "Clawfinger", "Kataklysm", "Mono Inc.", "Warkings", "Dark Funeral", "Gloryhammer", "Finntroll", "Atreyu", "Shadow of Intent", "Emil Bulls", "Equilibrium", "John Bush", "Carnifex", "The Browning", "Gaerea", "Long Distance Calling", "Make Them Suffer", "Mittel Alta", "Any Given Day", "Gutalax", "Blue Medusa", "Insomnium", "Combichrist", "PeelingFlesh", "Anaal Nathrakh", "Fleshgod Apocalypse", "Primal Fear", "Nasty", "Burning Witches", "Kupfergold", "End of Green", "Wolfheart", "Legion of the Damned", "Ellende", "Angelus Apatrida", "Abbie Falls", "Samurai Pizza Cats", "Necrotted", "Left to Suffer", "Evil Invaders", "Hiraes", "Lavina", "Asenblut", "ACCVSED", "Spitting Glass", "Ahab", "Sunborn", "The Night Eternal", "Defiance HC", "Regarde Les Hommes Tomber", "Capacopter"], status: "confirmed" }),
   festival("rockharz", "Rockharz Open Air", "Germany", "DE", "https://www.rockharz-festival.com/", { city: "Ballenstedt", startDate: "2027-07-07", endDate: "2027-07-10" }),
+  festival("mera-luna", "M'era Luna Festival", "Germany", "DE", "https://meraluna.de/", { city: "Hildesheim", startDate: "2027-08-07", endDate: "2027-08-08", ticketsUrl: "https://www.ticket-onlineshop.com/ols/meraluna/de", status: "partial", ticketStatus: "available", updatedAt: "2026-09-18T16:30:00.000Z" }),
   festival("hurricane", "Hurricane Festival", "Germany", "DE", "https://hurricane.de/", { city: "Scheeßel", startDate: "2027-06-18", endDate: "2027-06-20" }),
   festival("southside", "Southside Festival", "Germany", "DE", "https://southside.de/", { city: "Neuhausen ob Eck", startDate: "2027-06-18", endDate: "2027-06-20" }),
   festival("full-force", "Full Force", "Germany", "DE", "https://full-force.de/", { city: "Ferropolis" }),
@@ -124,7 +125,7 @@ const baseFestivals: Festival[] = [
 // Coordinates are decimal WGS84 and are maintained with the canonical festival record.
 const festivalLocationData: Record<string, [number, number]> = {
   "rock-am-ring": [50.3356, 6.9475], "rock-im-park": [49.4268, 11.1257], "wacken-open-air": [54.0206, 9.3750],
-  "summer-breeze": [49.0690, 10.3190], rockharz: [51.7204, 11.2327], hurricane: [53.1667, 9.4833], southside: [47.9667, 8.9333],
+  "summer-breeze": [49.0690, 10.3190], rockharz: [51.7204, 11.2327], "mera-luna": [52.1791, 9.9452], hurricane: [53.1667, 9.4833], southside: [47.9667, 8.9333],
   "full-force": [51.7580, 12.4480], hellfest: [47.0879, -1.2827], "rock-en-seine": [48.8374, 2.2140], motocultor: [48.2759, -3.5733],
   eurockeennes: [47.6847, 6.8074], download: [52.8298, -1.3747], bloodstock: [52.7585, -1.6866], reading: [51.4543, -0.9781],
   leeds: [53.8008, -1.5491], "2000trees": [51.8994, -2.0783], graspop: [51.2382, 5.1146], "rock-werchter": [50.9716, 4.6947],
@@ -139,6 +140,7 @@ const festivalLocationData: Record<string, [number, number]> = {
 };
 
 const festivalGenreData: Record<string, string[]> = {
+  "mera-luna": ["gothic", "industrial", "darkwave"],
   hurricane: ["rock", "alternative"], southside: ["rock", "alternative"], "rock-en-seine": ["rock", "alternative"], eurockeennes: ["rock", "alternative"],
   reading: ["rock", "alternative"], leeds: ["rock", "alternative"], "2000trees": ["rock", "alternative"], "rock-werchter": ["rock", "alternative"],
   frequency: ["rock", "alternative"], polandrock: ["rock", "alternative"], "mad-cool": ["rock", "alternative"], idays: ["rock", "alternative"],
