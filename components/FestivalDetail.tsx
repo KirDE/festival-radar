@@ -9,6 +9,7 @@ import { PlanningTools } from "./PlanningTools";
 import playlistStatus from "@/data/playlist-status.json";
 import type { PlaylistStatus } from "@/data/festivals";
 import { ticketPresentation } from "@/lib/tickets";
+import { announcedArtists, hasAnnouncedLineup } from "@/lib/festival-lineup";
 import {
   FavoriteButton,
   useLocalPlanner,
@@ -36,6 +37,8 @@ export function FestivalDetail({ item }: { item: Festival }) {
     item.slug
   ];
   const playlistUrl = playlist?.spotifyUrl || item.playlistUrl;
+  const artistCount = announcedArtists(item).length;
+  const hasArtists = hasAnnouncedLineup(item);
   return (
     <div className="detailPage">
       <Link className="back" href={`/${language}/`}>
@@ -126,10 +129,10 @@ export function FestivalDetail({ item }: { item: Festival }) {
             <h2>{t("lineup2027")}</h2>
           </div>
           <span>
-            {item.headliners.length + item.lineup.length} {t("announced")}
+            {artistCount} {t("announced")}
           </span>
         </div>
-        {item.headliners.length ? (
+        {item.headliners.length > 0 && (
           <>
             <h3>{t("headliners")}</h3>
             <div className="headlinerGrid">
@@ -141,7 +144,8 @@ export function FestivalDetail({ item }: { item: Festival }) {
               ))}
             </div>
           </>
-        ) : (
+        )}
+        {!hasArtists && (
           <div className="lineupEmpty">
             <strong>{t("noArtists")}</strong>
             <span>{t("noArtistsText")}</span>
@@ -149,7 +153,7 @@ export function FestivalDetail({ item }: { item: Festival }) {
         )}
         {item.lineup.length > 0 && (
           <>
-            <h3>{t("alsoAnnounced")}</h3>
+            <h3>{t(item.headliners.length > 0 ? "alsoAnnounced" : "announcedActs")}</h3>
             <div className="lineupGrid">
               {item.lineup.map((artist) => (
                 <Link href={`/${language}/artists/${artistSlug(artist)}/`} key={artist}>
