@@ -144,11 +144,13 @@ jobs:
             exit 0
           fi
           echo "changed=true" >> "$GITHUB_OUTPUT"
-          if git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- data/festivals.ts; then
+          if ! git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- data/ingestion-publications.json; then
             git show "$BEFORE_SHA:data/ingestion-publications.json" > /tmp/previous-publications.json
             node scripts/changed-publication-lineups.mjs /tmp/previous-publications.json data/ingestion-publications.json > /tmp/festival-slugs
             echo "festival_slugs=$(cat /tmp/festival-slugs)" >> "$GITHUB_OUTPUT"
           else
+            # A direct festivals.ts lineup edit has no structured before/after
+            # publication data, so retain the safe full-catalogue fallback.
             echo "festival_slugs=" >> "$GITHUB_OUTPUT"
           fi
       - name: Refresh playlists after canonical lineup changes

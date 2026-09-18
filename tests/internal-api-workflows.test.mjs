@@ -29,6 +29,7 @@ test("deploy refreshes playlists when canonical lineup files change", async () =
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
   assert.match(workflow, /data\/festivals\.ts data\/ingestion-publications\.json/);
   assert.match(workflow, /changed-publication-lineups\.mjs/);
+  assert.match(workflow, /if ! git diff --quiet "\$BEFORE_SHA" "\$GITHUB_SHA" -- data\/ingestion-publications\.json; then[\s\S]*changed-publication-lineups\.mjs/);
   assert.match(workflow, /steps\.lineup\.outputs\.changed == 'true'/);
   assert.match(workflow, /\/api\/playlists\/run\//);
 });
