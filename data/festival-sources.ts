@@ -22,6 +22,7 @@ export const festivalSources: FestivalSource[] = [
   source("wacken-open-air", "daily"),
   source("summer-breeze", "daily"),
   source("rockharz", "every_3_days"),
+  source("mera-luna", "daily", ["official_markup"]),
   source("hurricane", "daily", ["official_markup"]),
   source("southside", "daily", ["official_markup"]),
   manual("full-force", "official home page exposes a stale 2024 Event and no trustworthy current-edition dates"),

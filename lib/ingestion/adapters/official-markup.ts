@@ -70,12 +70,50 @@ function fkpArtistName(value: string): string {
   if (value !== value.toLocaleUpperCase()) return value;
   const smallWords = new Set(["and", "de", "of", "the"]);
   return value.split(/\s+/).map((word, index) => {
-    if (word === "MGK" || word === "I") return word;
+    if (["I", "MGK", "VNV"].includes(word)) return word;
     return word.split("-").map((part) => {
       const lower = part.toLocaleLowerCase();
       return index > 0 && smallWords.has(lower) ? lower : part ? `${part[0].toLocaleUpperCase()}${part.slice(1).toLocaleLowerCase()}` : part;
     }).join("-");
   }).join(" ");
+}
+
+function meraLuna(html: string): AdapterResult | undefined {
+  const edition = html.match(/\bLine-Up\s+(20\d{2})\b/i);
+  if (!edition) return undefined;
+  const date = [...html.matchAll(/\b(\d{1,2})\s*\.\s*(?:&amp;|&|[-–—])\s*(\d{1,2})\s*\.\s+August\s+(20\d{2})\b/gi)]
+    .find((candidate) => candidate[3] === edition[1]);
+  if (!date) return undefined;
+
+  const lineup: string[] = [];
+  let excerpt = edition[0];
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = attribute(match[1], "href");
+    if (!href) continue;
+    let pathname: string;
+    try {
+      pathname = new URL(href, "https://festival.invalid/").pathname;
+    } catch {
+      continue;
+    }
+    if (!/^\/line-up\/act\/[^/]+\/?$/i.test(pathname)) continue;
+
+    const blockStart = html.lastIndexOf("<lineup-block", match.index);
+    const blockEnd = html.lastIndexOf("</lineup-block>", match.index);
+    if (blockStart < 0 || blockStart < blockEnd) continue;
+
+    const name = fkpArtistName(decode(match[2].replace(/<[^>]+>/g, " ")));
+    if (!name || lineup.some((existing) => existing.localeCompare(name, undefined, { sensitivity: "base" }) === 0)) continue;
+    lineup.push(name);
+    if (excerpt === edition[0]) excerpt = `${edition[0]} ${match[0]}`;
+  }
+  if (lineup.length === 0) return undefined;
+  return {
+    startDate: `${date[3]}-08-${pad(date[1])}`,
+    endDate: `${date[3]}-08-${pad(date[2])}`,
+    lineup,
+    excerpt,
+  };
 }
 
 function fkpLineup(html: string): AdapterResult | undefined {
@@ -155,6 +193,7 @@ function leyendas(html: string): AdapterResult | undefined {
 const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
   "2000trees": trees,
   "hurricane": fkpLineup,
+  "mera-luna": meraLuna,
   "pinkpop": pinkpop,
   "rock-am-ring": ringAndPark,
   "rock-im-park": ringAndPark,
