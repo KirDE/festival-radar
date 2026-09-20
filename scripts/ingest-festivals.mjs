@@ -9,6 +9,7 @@ import { evaluateCandidate } from "../lib/ingestion/policy.ts";
 import { dueFestivalSources } from "../lib/ingestion/schedule.ts";
 import { notificationEventsForChanges } from "../lib/ingestion/notification-events.ts";
 import { db } from "../lib/db.ts";
+import { publishIngestionResult } from "../lib/catalog/publication.ts";
 import { createIngestionRun, finishIngestionRun, ingestionQueries, persistAttempt } from "../lib/ingestion/repository.ts";
 import { applyPublication, historyRecord } from "../lib/ingestion/publication.ts";
 
@@ -42,7 +43,7 @@ if (!Number.isInteger(maxFetchErrors) || maxFetchErrors < 0) throw new Error(`In
 await mkdir(outputDirectory, { recursive: true });
 const trigger = process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL";
 const run = persistenceEnabled ? await createIngestionRun(db, { trigger, sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length }) : null;
-const summary = { schemaVersion: 1, ingestionRunId: run?.id ?? null, generatedAt: new Date().toISOString(), dryRun: !publish, totalSources: selected.length, attempted: 0, processed: 0, changed: 0, publishable: 0, published: 0, reviewRequired: 0, fetchErrors: 0, escalatedFailures: 0, notificationEvents: 0, maxFetchErrors, failureThreshold, status: "RUNNING", results: [] };
+const summary = { schemaVersion: 1, ingestionRunId: run?.id ?? null, generatedAt: new Date().toISOString(), dryRun: !publish, totalSources: selected.length, attempted: 0, processed: 0, changed: 0, publishable: 0, published: 0, playlistRefreshRequested: 0, reviewRequired: 0, fetchErrors: 0, escalatedFailures: 0, notificationEvents: 0, maxFetchErrors, failureThreshold, status: "RUNNING", results: [] };
 let publicationStore = JSON.parse(await readFile(publicationsPath, "utf8"));
 const history = [];
 
@@ -77,18 +78,24 @@ for (const source of selected) {
   const result = evaluateCandidate(current, candidate);
   const status = result.reviewReasons.length ? "review" : result.publishable ? "publishable" : "unchanged";
   const artifact = { status, source: { ...source, httpStatus: response?.status ?? null, finalUrl: response?.url ?? source.url }, result };
-  if (run) await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, finalUrl: response?.url ?? source.url, httpStatus: response?.status ?? null, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), result });
+  const attempt = run ? await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, finalUrl: response?.url ?? source.url, httpStatus: response?.status ?? null, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), result }) : null;
   await writeFile(path.join(outputDirectory, `${source.festivalSlug}.json`), `${JSON.stringify(artifact, null, 2)}\n`);
   summary.processed += 1;
   if (result.changes.length) summary.changed += 1;
   if (result.publishable) summary.publishable += 1;
   if (result.reviewReasons.length) summary.reviewRequired += 1;
   let outcome = result.changes.length ? (result.reviewReasons.length ? "review_required" : "dry_run") : "unchanged";
+  let catalogPublication = null;
   if (publish && result.publishable && !result.reviewReasons.length) {
     const nextStore = applyPublication(publicationStore, current, result);
-    if (JSON.stringify(nextStore) !== JSON.stringify(publicationStore)) {
-      publicationStore = nextStore;
+    catalogPublication = attempt
+      ? await publishIngestionResult(db, { attemptId: attempt.id, result, sourceCommit: process.env.GITHUB_SHA || "local" })
+      : null;
+    const fileChanged = JSON.stringify(nextStore) !== JSON.stringify(publicationStore);
+    if (fileChanged) publicationStore = nextStore;
+    if (catalogPublication || (!persistenceEnabled && fileChanged)) {
       summary.published += 1;
+      if (catalogPublication?.playlistRefreshRequested) summary.playlistRefreshRequested += 1;
       outcome = "published";
       if (notificationDeliveryEnabled) {
         const events = notificationEventsForChanges(current, result.changes, fetchedAt);
@@ -103,7 +110,7 @@ for (const source of selected) {
   }
   history.push(historyRecord(result, outcome));
   const lastExtraction = persistenceEnabled ? await ingestionQueries.lastSuccessfulExtraction(db, source.festivalSlug) : null;
-  summary.results.push({ festivalSlug: source.festivalSlug, status, outcome, extractionPath: source.strategies, manualReviewReason: source.manualReviewReason ?? null, evidenceFields: candidate.evidence.map(({ field }) => field), lastSuccessfulExtraction: lastExtraction?.observedAt.toISOString() ?? (candidate.evidence.length ? fetchedAt : null), changes: result.changes.length, reviewReasons: result.reviewReasons });
+  summary.results.push({ festivalSlug: source.festivalSlug, status, outcome, catalogPublicationId: catalogPublication?.id ?? null, playlistRefreshRequested: catalogPublication?.playlistRefreshRequested ?? false, catalogFields: catalogPublication?.fields ?? [], extractionPath: source.strategies, manualReviewReason: source.manualReviewReason ?? null, evidenceFields: candidate.evidence.map(({ field }) => field), lastSuccessfulExtraction: lastExtraction?.observedAt.toISOString() ?? (candidate.evidence.length ? fetchedAt : null), changes: result.changes.length, reviewReasons: result.reviewReasons });
 }
 
 if (run) await finishIngestionRun(db, run.id);

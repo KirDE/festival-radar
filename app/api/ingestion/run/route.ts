@@ -47,6 +47,9 @@ export async function POST(request: Request) {
       include: { attempts: { include: { candidate: { include: { evidence: true, diffs: true } } } } },
     });
     if (!persisted || persisted.attempts.length !== summary.attempted) throw new Error("Durable ingestion read-back mismatch");
+    const publicationIds = summary.results.map((result: { catalogPublicationId?: string | null }) => result.catalogPublicationId).filter((id: unknown): id is string => typeof id === "string");
+    const catalogPublications = publicationIds.length ? await db.catalogPublication.findMany({ where: { id: { in: publicationIds }, source: "INGESTION" }, include: { playlistRefresh: true } }) : [];
+    if (publicationIds.length !== summary.published || catalogPublications.length !== publicationIds.length) throw new Error("Catalog publication read-back mismatch");
     const successfulAttempt = persisted.attempts.find((attempt) => attempt.candidate);
     const failedAttempt = persisted.attempts.find((attempt) => attempt.status === "FAILED");
     const sourceState = successfulAttempt ? await db.ingestionSourceState.findUnique({ where: { festivalSlug: successfulAttempt.festivalSlug } }) : null;
@@ -59,6 +62,8 @@ export async function POST(request: Request) {
         candidates: persisted.attempts.filter((attempt) => attempt.candidate).length,
         evidence: persisted.attempts.reduce((total, attempt) => total + (attempt.candidate?.evidence.length ?? 0), 0),
         diffs: persisted.attempts.reduce((total, attempt) => total + (attempt.candidate?.diffs.length ?? 0), 0),
+        publications: catalogPublications.length,
+        playlistRefreshRequests: catalogPublications.filter(({ playlistRefresh }) => playlistRefresh).length,
         hasPersistedFailure: Boolean(failedAttempt),
         lastSuccessfulCheck: sourceState?.lastSuccessfulCheck?.toISOString() ?? null,
       },

@@ -29,7 +29,9 @@ const instant = (value: Date | null) => value?.toISOString();
 const lower = <T extends string>(value: T) => value.toLocaleLowerCase() as Lowercase<T>;
 
 export class DatabaseCatalogRepository implements CatalogRepository {
-  constructor(private readonly client: PrismaClient) {}
+  private readonly client: PrismaClient;
+
+  constructor(client: PrismaClient) { this.client = client; }
 
   async read(): Promise<CatalogSnapshot> {
     const [editionRows, artistRows] = await Promise.all([

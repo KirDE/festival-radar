@@ -157,6 +157,18 @@ enum ArtistIdentityState {
   RETRYABLE
 }
 
+enum CatalogPublicationSource {
+  INGESTION
+  ADMIN
+}
+
+enum CatalogPlaylistRefreshStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
 model User {
   id                        String                     @id @default(cuid())
   email                     String                     @unique
@@ -741,6 +753,40 @@ model IngestionDiff {
   candidate      IngestionCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   @@index([candidateId, createdAt])
+}
+
+model CatalogPublication {
+  id              String                   @id @default(cuid())
+  source          CatalogPublicationSource
+  sourceId        String                   @unique
+  festivalSlug    String
+  editionYear     Int
+  actorLabel      String
+  fields          String[]
+  lineupChanged   Boolean                  @default(false)
+  evidence        Json?
+  createdAt       DateTime                 @default(now())
+  playlistRefresh CatalogPlaylistRefresh?
+
+  @@index([festivalSlug, createdAt])
+  @@index([source, createdAt])
+}
+
+model CatalogPlaylistRefresh {
+  id            String                       @id @default(cuid())
+  publicationId String                       @unique
+  festivalSlug  String
+  status        CatalogPlaylistRefreshStatus @default(PENDING)
+  attempts      Int                          @default(0)
+  lastError     String?
+  requestedAt   DateTime                     @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  updatedAt     DateTime                     @updatedAt
+  publication   CatalogPublication           @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+
+  @@index([status, requestedAt])
+  @@index([festivalSlug, status])
 }
 
 model AnalyticsDaily {
