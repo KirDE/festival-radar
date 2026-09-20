@@ -21,3 +21,22 @@ The command prints a machine-readable parity report and exits non-zero if counts
 ## Rollback
 
 Phase 1 does not change the runtime read path. If backfill fails, production keeps using the repository catalogue. Fix the conflict and rerun the idempotent command; do not drop or truncate shared database tables.
+
+## Phase 2: read path and kill switch
+
+All public catalogue consumers read through `lib/catalog/repository.ts`. The
+default remains deliberately file-backed until a target database has passed
+`catalog:backfill` and `catalog:verify`:
+
+```bash
+CATALOG_READ_MODE=files
+```
+
+After parity succeeds, enable PostgreSQL reads with:
+
+```bash
+CATALOG_READ_MODE=database
+```
+
+Database errors fail closed by default. During the temporary migration window,
+`CATALOG_DATABASE_FALLBACK_ENABLED=true` explicitly permits the repository

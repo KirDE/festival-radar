@@ -125,7 +125,7 @@ export async function backfillCatalog(client: PrismaClient, seed: CatalogSeed) {
   await client.$transaction(async (db) => {
     await assertNoDatabaseConflicts(db, seed);
     const festivalIds = new Map<string, string>();
-    for (const item of seed.festivals) {
+    for (const [catalogOrder, item] of seed.festivals.entries()) {
       const row = await db.festival.upsert({
         where: { slug: item.slug },
         create: {
@@ -138,6 +138,7 @@ export async function backfillCatalog(client: PrismaClient, seed: CatalogSeed) {
           latitude: item.coordinates?.latitude,
           longitude: item.coordinates?.longitude,
           genres: item.genres,
+          catalogOrder,
         },
         update: {
           name: item.name,
@@ -148,6 +149,7 @@ export async function backfillCatalog(client: PrismaClient, seed: CatalogSeed) {
           latitude: item.coordinates?.latitude,
           longitude: item.coordinates?.longitude,
           genres: item.genres,
+          catalogOrder,
         },
         select: { id: true },
       });
@@ -197,12 +199,12 @@ export async function backfillCatalog(client: PrismaClient, seed: CatalogSeed) {
       await db.artistProvenance.deleteMany({ where: { artistId: row.id } });
       const identities = Object.entries(item.identities)
         .filter((entry): entry is [string, string] => Boolean(entry[1]))
-        .map(([provider, externalId]) => ({ artistId: row.id, provider, externalId }));
+        .map(([provider, externalId], position) => ({ artistId: row.id, provider, externalId, position }));
       if (identities.length) await db.artistIdentity.createMany({ data: identities });
-      if (item.links.length) await db.artistLink.createMany({ data: item.links.map((link) => ({ artistId: row.id, ...link })) });
+      if (item.links.length) await db.artistLink.createMany({ data: item.links.map((link, position) => ({ artistId: row.id, position, ...link })) });
       if (item.provenance.length) {
         await db.artistProvenance.createMany({
-          data: item.provenance.map((source) => ({ ...source, artistId: row.id, checkedAt: new Date(`${source.checkedAt}T00:00:00.000Z`) })),
+          data: item.provenance.map((source, position) => ({ ...source, artistId: row.id, position, checkedAt: new Date(`${source.checkedAt}T00:00:00.000Z`) })),
         });
       }
     }
@@ -365,7 +367,7 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
   ]);
 
   const festivalBySlug = new Map(databaseFestivals.map((item) => [item.slug, item]));
-  for (const item of seed.festivals) {
+  for (const [catalogOrder, item] of seed.festivals.entries()) {
     const row = festivalBySlug.get(item.slug);
     if (!row) { mismatches.push(`${item.slug}: missing festival`); continue; }
     compareRecord(mismatches, `festival ${item.slug}`, {
@@ -377,6 +379,7 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
       latitude: item.coordinates?.latitude ?? null,
       longitude: item.coordinates?.longitude ?? null,
       genres: [...item.genres],
+      catalogOrder,
     }, {
       name: row.name,
       country: row.country,
@@ -386,6 +389,7 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
       latitude: row.latitude,
       longitude: row.longitude,
       genres: row.genres,
+      catalogOrder: row.catalogOrder,
     });
   }
 

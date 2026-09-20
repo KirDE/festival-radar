@@ -2,18 +2,20 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { Language } from "@/components/LanguageProvider";
 import { ArtistDetail } from "@/components/ArtistDetail";
-import { artistProfiles, getArtistProfile } from "@/data/artists";
-import { festivals, supportedLanguages } from "@/data/festivals";
+import { supportedLanguages } from "@/data/festivals";
+import { getCatalog } from "@/lib/catalog/repository";
 
 export const dynamicParams = false;
 
-export function generateStaticParams() {
-  return supportedLanguages.flatMap((lang) => artistProfiles.map(({ slug }) => ({ lang, slug })));
+export async function generateStaticParams() {
+  const { artists } = await getCatalog();
+  return supportedLanguages.flatMap((lang) => artists.map(({ slug }) => ({ lang, slug })));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ lang: string; slug: string }> }): Promise<Metadata> {
   const { lang, slug } = await params;
-  const artist = getArtistProfile(slug);
+  const { artists } = await getCatalog();
+  const artist = artists.find((item) => item.slug === slug);
   if (!artist || !supportedLanguages.includes(lang as Language)) return {};
   return {
     title: artist.name,
@@ -32,7 +34,8 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
 export default async function LocalizedArtistPage({ params }: { params: Promise<{ lang: string; slug: string }> }) {
   const { lang, slug } = await params;
   if (!supportedLanguages.includes(lang as Language)) notFound();
-  const artist = getArtistProfile(slug);
+  const { artists, festivals } = await getCatalog();
+  const artist = artists.find((item) => item.slug === slug);
   if (!artist) notFound();
   const appearances = festivals.filter((festival) => [...festival.headliners, ...festival.lineup].includes(artist.name));
   return <ArtistDetail artist={artist} appearances={appearances} />;

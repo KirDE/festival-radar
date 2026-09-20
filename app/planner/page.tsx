@@ -1,6 +1,7 @@
 import { PlannerPage } from "@/components/PlannerPage";
-import { festivals } from "@/data/festivals";
+import { getCatalog } from "@/lib/catalog/repository";
 export const metadata = { title: "My festival plan" };
-export default function Planner() {
+export default async function Planner() {
+  const { festivals } = await getCatalog();
   return <PlannerPage festivals={festivals} />;
 }

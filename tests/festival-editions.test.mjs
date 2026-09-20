@@ -65,13 +65,13 @@ test("future edition provenance fails closed", () => {
   assert.deepEqual(publishableFutureEditions(unsupported), []);
 });
 
-test("cross-year lookup cannot overwrite the current edition", () => {
+test("cross-year lookup cannot overwrite the current edition", async () => {
   assert.equal(getFestivalEdition("wacken-open-air", 2026)?.recordState, "archived");
   assert.equal(getFestivalEdition("wacken-open-air", 2027)?.recordState, "current");
   assert.equal(getFestivalEdition("wacken-open-air", 2028), undefined);
   assert.equal(getEditionsForYear(2028).length, 0);
-  assert.equal(generateStaticParams().some(({ year }) => year === "2028"), false);
-  assert.equal(sitemap().some(({ url }) => url.includes("/2028/")), false);
+  assert.equal((await generateStaticParams()).some(({ year }) => year === "2028"), false);
+  assert.equal((await sitemap()).some(({ url }) => url.includes("/2028/")), false);
   assert.equal(getEditionsForYear(2026).length, 1);
   assert.equal(getFestivalEdition("wacken-open-air", 2099), undefined);
 });
