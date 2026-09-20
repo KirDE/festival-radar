@@ -14,7 +14,10 @@ async function setup(html) {
 function run(dir, slug, publish = false) {
   const args = ["scripts/ingest-festivals.mjs", `--slug=${slug}`, `--fixture=${path.join(dir, "fixture.html")}`, `--publications=${path.join(dir, "publications.json")}`, `--history=${path.join(dir, "history.jsonl")}`, `--output=${path.join(dir, `out-${Date.now()}`)}`];
   if (publish) args.push("--publish");
-  const result = spawnSync(process.execPath, args, { encoding: "utf8" });
+  const result = spawnSync(process.execPath, args, {
+    encoding: "utf8",
+    env: { ...process.env, DATABASE_URL: "" },
+  });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
 }
@@ -49,7 +52,7 @@ test("policy-accepted source failure is reported as PARTIAL without failing down
     `--history=${path.join(dir, "history.jsonl")}`,
     `--output=${output}`,
     "--max-fetch-errors=1",
-  ], { encoding: "utf8" });
+  ], { encoding: "utf8", env: { ...process.env, DATABASE_URL: "" } });
   assert.equal(result.status, 0, result.stderr);
   const summary = JSON.parse(result.stdout);
   assert.equal(summary.status, "PARTIAL");
@@ -70,7 +73,7 @@ test("source failures above the explicit policy threshold remain fatal", async (
     `--history=${path.join(dir, "history.jsonl")}`,
     `--output=${path.join(dir, "failed-output")}`,
     "--max-fetch-errors=0",
-  ], { encoding: "utf8" });
+  ], { encoding: "utf8", env: { ...process.env, DATABASE_URL: "" } });
   assert.equal(result.status, 2, result.stderr);
   const summary = JSON.parse(result.stdout);
   assert.equal(summary.status, "FAILED");
