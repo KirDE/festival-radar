@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { FestivalEdition } from "@/data/editions";
 import { getCatalog } from "@/lib/catalog/repository";
+export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Festival archives and future editions", description: "Browse provenance-aware Festival Radar editions.", alternates: { canonical: "/archive/" } };
 

@@ -2,11 +2,8 @@ import { notFound } from "next/navigation";
 import { ArtistDetail } from "@/components/ArtistDetail";
 import { getCatalog } from "@/lib/catalog/repository";
 
-export const dynamicParams = false;
-export async function generateStaticParams() {
-  const { artists } = await getCatalog();
-  return artists.map(({ slug }) => ({ slug }));
-}
+export const dynamic = "force-dynamic";
+export const dynamicParams = true;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { artists } = await getCatalog();

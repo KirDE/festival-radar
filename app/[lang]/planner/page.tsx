@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { PlannerPage } from "@/components/PlannerPage";
 import { supportedLanguages } from "@/data/festivals";
 import { getCatalog } from "@/lib/catalog/repository";
+
+export const dynamic = "force-dynamic";
 import type { Language } from "@/components/LanguageProvider";
 
 const titles: Record<Language, string> = { en: "My festival plan", de: "Mein Festivalplan", ru: "Мой фестивальный план" };

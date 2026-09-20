@@ -104,6 +104,7 @@ jobs:
             printf 'SPOTIFY_REFRESH_TOKEN=%q\n' "$SPOTIFY_REFRESH_TOKEN"
             printf 'SETLIST_API_KEY=%q\n' "$SETLIST_API_KEY"
             printf 'NOTIFICATION_SCHEDULER_STATE_FILE=%q\n' '/opt/festival-radar/shared/notification-scheduler-state.json'
+            printf 'CATALOG_READ_MODE=%q\n' 'database'
             printf 'DEPLOYED_COMMIT=%q\n' "$GITHUB_SHA"
           } > production.env
       - name: Upload and activate release
@@ -122,6 +123,7 @@ jobs:
               --max-time 20 https://festivals.kir-it.de/api/auth/me/)" || true
             if grep --fixed-strings --quiet "\"commit\":\"$GITHUB_SHA\"" <<<"$marker" \
               && grep --fixed-strings --quiet '"database":"ok"' <<<"$marker" \
+              && grep --fixed-strings --quiet '"catalog":"database"' <<<"$marker" \
               && test "$auth_status" = 401 \
               && grep --quiet 'application/json' <(curl --silent --head https://festivals.kir-it.de/api/auth/me/) \
               && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/ | grep --quiet 'Festival Radar' \

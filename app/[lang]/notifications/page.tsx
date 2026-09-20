@@ -4,6 +4,8 @@ import { supportedLanguages } from "@/data/festivals";
 import { getCatalog } from "@/lib/catalog/repository";
 import type { Language } from "@/components/LanguageProvider";
 
+export const dynamic = "force-dynamic";
+
 const titles: Record<Language, string> = {
   en: "Notification settings",
   de: "Benachrichtigungen",
