@@ -23,7 +23,9 @@ test("artist enrichment labels are complete when switching every supported langu
 test("artist routes and links preserve every supported locale", () => {
   assert.match(provider, /languageDestination\(window\.location\.pathname, selected\)/);
   assert.match(provider, /languagePath\(pathname, selected\)/);
-  assert.match(providerRoute, /supportedLanguages\.flatMap/);
+  assert.match(providerRoute, /export const dynamic = "force-dynamic"/);
+  assert.match(providerRoute, /export const dynamicParams = true/);
+  assert.doesNotMatch(providerRoute, /generateStaticParams/);
   assert.match(providerRoute, /canonical: `\/\$\{lang\}\/artists\/\$\{artist\.slug\}\//);
   assert.match(artistDetail, /href=\{`\/\$\{language\}\//);
 });
