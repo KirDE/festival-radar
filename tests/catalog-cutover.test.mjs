@@ -28,6 +28,7 @@ test("production catalogue code has no file mode or runtime overlay writes", asy
   const repository = await readFile("lib/catalog/repository.ts", "utf8");
   const ingestion = await readFile("scripts/ingest-festivals.mjs", "utf8");
   const deploy = await readFile(".github/workflows/deploy.yml", "utf8");
+  const ingestionWorkflow = await readFile(".github/workflows/ingestion.yml", "utf8");
   const playlistWorkflow = await readFile(".github/workflows/playlists.yml", "utf8");
   const qualityWorkflow = await readFile(".github/workflows/quality.yml", "utf8");
 
@@ -35,6 +36,8 @@ test("production catalogue code has no file mode or runtime overlay writes", asy
   assert.match(ingestion, /publish && !persistenceEnabled/);
   assert.match(ingestion, /!persistenceEnabled && history\.length/);
   assert.doesNotMatch(deploy, /ingestion-publications|changed-publication-lineups/);
+  assert.match(ingestionWorkflow, /permissions:\s+contents: read/);
+  assert.doesNotMatch(ingestionWorkflow, /contents: write|pull-requests: write|create-pull-request/);
   assert.doesNotMatch(playlistWorkflow, /create-pull-request|data\/playlist-status\.json/);
   assert.match(qualityWorkflow, /test:catalog-db[\s\S]*catalog:backfill[\s\S]*test:integration/);
   assert.match(qualityWorkflow, /test:admin:integration[\s\S]*prisma migrate reset --force[\s\S]*catalog:backfill[\s\S]*test:admin:e2e/);
