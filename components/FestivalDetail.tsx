@@ -6,7 +6,6 @@ import { artistSlug, festivals } from "@/data/festivals";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
 import { PlanningTools } from "./PlanningTools";
-import playlistStatus from "@/data/playlist-status.json";
 import type { PlaylistStatus } from "@/data/festivals";
 import { ticketPresentation } from "@/lib/tickets";
 import { announcedArtists, hasAnnouncedLineup } from "@/lib/festival-lineup";
@@ -16,7 +15,7 @@ import {
   type Attendance,
 } from "./LocalPlanner";
 
-export function FestivalDetail({ item }: { item: Festival }) {
+export function FestivalDetail({ item, playlist }: { item: Festival; playlist?: PlaylistStatus }) {
   const { language, locale, t } = useLanguage();
   const planner = useLocalPlanner();
   const displayNames = new Intl.DisplayNames([locale], { type: "region" });
@@ -33,9 +32,6 @@ export function FestivalDetail({ item }: { item: Festival }) {
     item.status === "tba"
       ? t("datesLineupTba")
       : t(item.status === "confirmed" ? "confirmedLineup" : "partialLineup");
-  const playlist = (playlistStatus as Record<string, PlaylistStatus>)[
-    item.slug
-  ];
   const playlistUrl = playlist?.spotifyUrl || item.playlistUrl;
   const artistCount = announcedArtists(item).length;
   const hasArtists = hasAnnouncedLineup(item);

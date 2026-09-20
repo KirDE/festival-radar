@@ -240,6 +240,7 @@ model Festival {
   latitude    Float?
   longitude   Float?
   genres      String[]
+  catalogOrder Int               @default(0)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   editions    FestivalEdition[]
@@ -304,6 +305,7 @@ model ArtistIdentity {
   artistId   String
   provider   String
   externalId String
+  position   Int      @default(0)
   artist     Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@unique([artistId, provider])
@@ -317,6 +319,7 @@ model ArtistLink {
   url      String
   source   String
   verified Boolean @default(false)
+  position Int     @default(0)
   artist   Artist  @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@unique([artistId, url])
@@ -329,6 +332,7 @@ model ArtistProvenance {
   source    String
   url       String
   checkedAt DateTime
+  position  Int      @default(0)
   artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@index([artistId, field])

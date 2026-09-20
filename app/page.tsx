@@ -1,6 +1,7 @@
 import { HomeContent } from "@/components/HomeContent";
-import { festivals } from "@/data/festivals";
+import { getCatalog } from "@/lib/catalog/repository";
 
-export default function Home() {
+export default async function Home() {
+  const { festivals } = await getCatalog();
   return <HomeContent festivals={festivals} />;
 }
