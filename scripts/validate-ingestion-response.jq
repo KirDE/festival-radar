@@ -1,6 +1,8 @@
 .runId
 and (.summary.attempted > 0)
 and (.readBack.attempts == .summary.attempted)
+and (.readBack.publications == (.summary.published // 0))
+and (.readBack.playlistRefreshRequests == (.summary.playlistRefreshRequested // 0))
 and (.summary.status == "COMPLETED" or .summary.status == "PARTIAL")
 and (
   if $festival != "" then

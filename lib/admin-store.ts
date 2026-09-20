@@ -2,6 +2,7 @@ import { AdminChangeStatus, AdminDraftStatus, AdminResourceKind, AdminRunStatus,
 import { festivals } from "@/data/festivals";
 import { getFestivalSource } from "@/data/festival-sources";
 import { db } from "@/lib/db";
+import { publishAdminFestivalChange } from "@/lib/catalog/publication";
 import { extractFestivalCandidate } from "@/lib/ingestion/extract";
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -101,6 +102,14 @@ export async function decideChange(id: string, decision: "approve" | "reject", a
     const status = decision === "approve" ? AdminChangeStatus.APPROVED : AdminChangeStatus.REJECTED;
     const updated = await tx.adminChange.updateMany({ where: { id, status: AdminChangeStatus.PENDING }, data: { status, decidedById: actor.id, decidedAt: new Date() } });
     if (updated.count !== 1) throw new Error("Change was decided concurrently");
+    const catalogFestival = change.resourceKind === AdminResourceKind.FESTIVAL
+      ? true
+      : change.resourceKind === AdminResourceKind.LINK
+        ? Boolean(await tx.festival.findUnique({ where: { slug: change.resourceKey }, select: { id: true } }))
+        : false;
+    const catalogPublication = decision === "approve" && catalogFestival
+      ? await publishAdminFestivalChange(tx, { change, actorLabel: actor.email })
+      : null;
     if (decision === "approve") {
       const existing = resource?.values && typeof resource.values === "object" && !Array.isArray(resource.values) ? resource.values as Record<string, unknown> : {};
       await tx.adminResourceState.upsert({ where: { resourceKind_resourceKey: { resourceKind: change.resourceKind, resourceKey: change.resourceKey } }, create: { resourceKind: change.resourceKind, resourceKey: change.resourceKey, revision: currentRevision + 1, values: json({ ...existing, [change.field]: change.afterValue }) }, update: { revision: { increment: 1 }, values: json({ ...existing, [change.field]: change.afterValue }) } });
@@ -110,8 +119,9 @@ export async function decideChange(id: string, decision: "approve" | "reject", a
       const pending = await tx.adminChange.count({ where: { draftId: change.draftId, status: AdminChangeStatus.PENDING, NOT: { id } } });
       if (!pending) await tx.adminDraft.update({ where: { id: change.draftId }, data: { status: decision === "approve" ? AdminDraftStatus.APPLIED : AdminDraftStatus.REJECTED } });
     }
-    await tx.adminAuditEntry.create({ data: { actorId: actor.id, actorLabel: actor.email, action: decision === "approve" ? "CHANGE_APPROVED" : "CHANGE_REJECTED", resourceKind: change.resourceKind, resourceKey: change.resourceKey, beforeValue: json(change.beforeValue), afterValue: json(change.afterValue), evidence: json(change.sourceEvidence), metadata: json({ changeId: change.id, field: change.field }) } });
-    return tx.adminChange.findUniqueOrThrow({ where: { id } });
+    await tx.adminAuditEntry.create({ data: { actorId: actor.id, actorLabel: actor.email, action: decision === "approve" ? "CHANGE_APPROVED" : "CHANGE_REJECTED", resourceKind: change.resourceKind, resourceKey: change.resourceKey, beforeValue: json(change.beforeValue), afterValue: json(change.afterValue), evidence: json(change.sourceEvidence), metadata: json({ changeId: change.id, field: change.field, catalogPublicationId: catalogPublication?.id ?? null, playlistRefreshRequested: catalogPublication?.playlistRefreshRequested ?? false }) } });
+    const decided = await tx.adminChange.findUniqueOrThrow({ where: { id } });
+    return { ...decided, catalogPublicationId: catalogPublication?.id ?? null, playlistRefreshRequested: catalogPublication?.playlistRefreshRequested ?? false };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

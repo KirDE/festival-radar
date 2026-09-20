@@ -70,20 +70,21 @@ test("ingestion workflow validates scoped and full-catalogue responses independe
   const scoped = {
     runId: "scoped-run",
     summary: {
-      status: "COMPLETED", totalSources: 1, attempted: 1,
+      status: "COMPLETED", totalSources: 1, attempted: 1, published: 0, playlistRefreshRequested: 0,
       results: [{ festivalSlug: "pinkpop", extractionPath: ["official_markup"], evidenceFields: ["startDate"] }],
     },
-    readBack: { attempts: 1, candidates: 1, evidence: 1, diffs: 0, hasPersistedFailure: false, lastSuccessfulCheck: "2026-08-31T16:34:00Z" },
+    readBack: { attempts: 1, candidates: 1, evidence: 1, diffs: 0, publications: 0, playlistRefreshRequests: 0, hasPersistedFailure: false, lastSuccessfulCheck: "2026-08-31T16:34:00Z" },
   };
   assert.equal(await validate(scoped, "pinkpop"), "true");
   await assert.rejects(validate({ ...scoped, summary: { ...scoped.summary, results: [{ ...scoped.summary.results[0], extractionPath: [] }] } }, "pinkpop"));
 
   const full = {
     runId: "full-run",
-    summary: { status: "PARTIAL", totalSources: 50, attempted: 50, results: [] },
-    readBack: { attempts: 50, candidates: 48, evidence: 55, diffs: 108, hasPersistedFailure: true, lastSuccessfulCheck: "2026-08-31T10:46:50Z" },
+    summary: { status: "PARTIAL", totalSources: 50, attempted: 50, published: 0, playlistRefreshRequested: 0, results: [] },
+    readBack: { attempts: 50, candidates: 48, evidence: 55, diffs: 108, publications: 0, playlistRefreshRequests: 0, hasPersistedFailure: true, lastSuccessfulCheck: "2026-08-31T10:46:50Z" },
   };
   assert.equal(await validate(full, ""), "true");
+  await assert.rejects(validate({ ...scoped, summary: { ...scoped.summary, published: 1 } }, "pinkpop"));
   await assert.rejects(validate({ ...full, readBack: { ...full.readBack, diffs: 0 } }, ""));
 });
 

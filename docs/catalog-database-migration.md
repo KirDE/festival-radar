@@ -40,3 +40,29 @@ CATALOG_READ_MODE=database
 
 Database errors fail closed by default. During the temporary migration window,
 `CATALOG_DATABASE_FALLBACK_ENABLED=true` explicitly permits the repository
+files as an operator-selected emergency fallback.
+
+## Phase 3: transactional publication
+
+Production ingestion persists its candidate, evidence, and field-level diff
+before publication. A publishable candidate then updates the normalized
+festival, edition, artist, and lineup rows in one serializable transaction. The
+same transaction marks the candidate published, appends an immutable
+`CatalogPublication` snapshot, and enqueues a `CatalogPlaylistRefresh` when a
+lineup or headliner changed. Review-required diffs, edition mismatches, stale
+before-values, artist-slug collisions, and ambiguous billing all abort without
+partial catalogue writes.
+
+Approved festival and festival-link changes from the admin console use the same
+catalogue transaction. The existing append-only admin audit entry records the
+catalogue publication ID and whether a playlist refresh was requested.
+
+The playlist worker exports its input from PostgreSQL whenever `DATABASE_URL`
+is available. Successful provider read-back updates `FestivalPlaylist` and
+marks matching refresh requests succeeded in one transaction; a failed refresh
+leaves a durable failed request for retry.
+
+During this phase the runtime publication overlay is still updated after a
+successful database commit so the explicit `CATALOG_READ_MODE=files` kill
+switch remains usable. PostgreSQL publication is the authoritative commit; the
+file overlay is transitional and is removed in phase 5.

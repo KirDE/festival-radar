@@ -1,6 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { festivals } from "../data/festivals.ts";
+import { readCatalog } from "../lib/catalog/repository.ts";
+
+const snapshot = await readCatalog({ environment: { ...process.env, CATALOG_READ_MODE: process.env.DATABASE_URL ? "database" : "files" } });
+const festivals = snapshot.festivals.map((festival) => ({ ...festival, playlistUrl: snapshot.playlists[festival.slug]?.spotifyUrl }));
 
 const output = process.argv[2] || "tmp/festival-playlist-catalog.json";
 const years = [...new Set(festivals.map((festival) => festival.editionYear).filter(Number.isInteger))];
