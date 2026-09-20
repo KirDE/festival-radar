@@ -16,7 +16,6 @@ env_file="$shared/production.env"
 staged_env="$shared/.production.env.$commit.tmp"
 previous_env="$shared/.production.env.$commit.previous"
 had_previous_env=false
-catalog_cutover=false
 
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid commit" >&2; exit 2; }
 [[ "$app_root" == /opt/festival-radar ]] || { echo "unsupported APP_ROOT" >&2; exit 2; }
@@ -40,16 +39,8 @@ set -a
 source "$staged_env"
 set +a
 export DEPLOYED_COMMIT="$commit" PORT="$port" HOSTNAME=127.0.0.1
-if [[ "${CATALOG_READ_MODE:-}" == database ]] \
-  && { [[ ! -f "$env_file" ]] || ! grep -Fxq 'CATALOG_READ_MODE=database' "$env_file"; }; then
-  catalog_cutover=true
-fi
 "$release/.runtime/node" node_modules/prisma/build/index.js generate
 "$release/.runtime/node" node_modules/prisma/build/index.js migrate deploy
-if [[ "$catalog_cutover" == true ]]; then
-  "$release/.runtime/node" --experimental-strip-types scripts/backfill-catalog.ts
-  "$release/.runtime/node" --experimental-strip-types scripts/backfill-catalog.ts --verify-only
-fi
 
 cat > "/etc/systemd/system/$service.service" <<UNIT
 [Unit]
@@ -98,7 +89,7 @@ ExecStart=$app_root/current/scripts/deploy/run-collection-job.sh %i
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=$shared $app_root/current/data
+ReadWritePaths=$shared
 TimeoutStartSec=2700
 UNIT
 

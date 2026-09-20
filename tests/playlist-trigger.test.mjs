@@ -36,9 +36,3 @@ test("rejects inconsistent ingestion publication counts", async () => {
   const response = { summary: { published: 1, playlistRefreshRequested: 1, results: [] } };
   await assert.rejects(runScript("scripts/select-published-festivals.mjs", response), /playlist refresh count mismatch/);
 });
-
-test("detects only publication lineup and headliner changes", async () => {
-  const before = { festivals: { a: { lineup: ["One"], ticketsUrl: "old" }, b: { headliners: ["Two"] } } };
-  const after = { festivals: { a: { lineup: ["One"], ticketsUrl: "new" }, b: { headliners: ["Two", "Three"] }, c: { lineup: ["Four"] } } };
-  assert.equal(await runScript("scripts/changed-publication-lineups.mjs", before, after), "b,c");
-});

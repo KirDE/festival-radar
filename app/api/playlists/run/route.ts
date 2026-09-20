@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
@@ -43,7 +42,7 @@ export async function POST(request: Request) {
       timeout: 2_650_000,
       maxBuffer: 10 * 1024 * 1024,
     });
-    const status = JSON.parse(await readFile(path.join(process.cwd(), "data/playlist-status.json"), "utf8"));
+    const status = JSON.parse(await readFile("/opt/festival-radar/shared/collection-jobs/playlists/playlist-status.json", "utf8"));
     const refreshed = Object.fromEntries(
       (festivals.length ? festivals : Object.keys(status)).map((slug) => [slug, status[slug] ?? null]),
     );

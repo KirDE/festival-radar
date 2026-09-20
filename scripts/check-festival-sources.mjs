@@ -1,4 +1,7 @@
-import { festivals } from "../data/festivals.ts";
+import { readCatalog } from "../lib/catalog/repository.ts";
+import { festivals as fixtureFestivals } from "../data/festivals.ts";
+
+const festivals = process.env.DATABASE_URL ? (await readCatalog()).festivals : fixtureFestivals;
 
 const failures = [];
 for (let index = 0; index < festivals.length; index += 5) {

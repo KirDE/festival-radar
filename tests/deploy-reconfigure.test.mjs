@@ -14,22 +14,17 @@ test("release packaging includes the helper required by the installer", async ()
   assert.match(packager, /cp scripts\/deploy\/reconfigure-webserver\.sh/);
   assert.match(packager, /app\/scripts\/deploy\/reconfigure-webserver\.sh/);
   assert.match(installer, /scripts\/deploy\/reconfigure-webserver\.sh/);
-  assert.match(packager, /cp scripts\/backfill-catalog\.ts/);
-  assert.match(packager, /app\/scripts\/backfill-catalog\.ts/);
 });
 
-test("first database cutover backfills and verifies before activating the release", async () => {
+test("completed catalogue cutover no longer ships or reruns repository backfill", async () => {
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
   const installer = await readFile("scripts/deploy/install-release.sh", "utf8");
+  const packager = await readFile("scripts/deploy/package-release.sh", "utf8");
 
-  assert.match(workflow, /printf 'CATALOG_READ_MODE=%q\\n' 'database'/);
+  assert.doesNotMatch(workflow, /CATALOG_READ_MODE/);
   assert.doesNotMatch(workflow, /CATALOG_DATABASE_FALLBACK_ENABLED/);
-  assert.match(installer, /grep -Fxq 'CATALOG_READ_MODE=database'/);
-  const migration = installer.indexOf("migrate deploy");
-  const backfill = installer.indexOf("scripts/backfill-catalog.ts\n");
-  const verify = installer.indexOf("scripts/backfill-catalog.ts --verify-only");
-  const activate = installer.indexOf('mv -f "$staged_env" "$env_file"');
-  assert.ok(migration >= 0 && backfill > migration && verify > backfill && activate > verify);
+  assert.doesNotMatch(installer, /backfill-catalog|catalog_cutover/);
+  assert.doesNotMatch(packager, /backfill-catalog/);
 });
 
 test("the generated Apache vhost bypasses ModSecurity only for logout", async () => {

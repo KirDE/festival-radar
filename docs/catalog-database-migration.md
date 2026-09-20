@@ -81,3 +81,17 @@ ingestion and admin publications become visible without a deploy. The
 deployment health response reports `catalog: "database"` and live catalogue
 counts; deployment verification requires that marker in addition to the exact
 commit and database health.
+
+## Phase 5: runtime overlay removal
+
+PostgreSQL is now the only runtime catalogue repository. File read mode, file
+fallback, process-lifetime snapshots, and the one-time cutover environment flag
+have been removed. The TypeScript and JSON catalogue files remain deterministic
+seed/parity fixtures; production ingestion, admin reads, source monitoring,
+identity selection, playlist export, and playlist status publication read or
+write PostgreSQL instead.
+
+Production ingestion no longer mutates `data/ingestion-publications.json` or
+`data/ingestion-history.jsonl`. Playlist refreshes use a protected production
+API and a shared transient read-back artifact before status is committed to the
+database. Deploys no longer infer playlist work from Git diffs.

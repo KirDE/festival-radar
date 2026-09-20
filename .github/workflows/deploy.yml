@@ -104,7 +104,6 @@ jobs:
             printf 'SPOTIFY_REFRESH_TOKEN=%q\n' "$SPOTIFY_REFRESH_TOKEN"
             printf 'SETLIST_API_KEY=%q\n' "$SETLIST_API_KEY"
             printf 'NOTIFICATION_SCHEDULER_STATE_FILE=%q\n' '/opt/festival-radar/shared/notification-scheduler-state.json'
-            printf 'CATALOG_READ_MODE=%q\n' 'database'
             printf 'DEPLOYED_COMMIT=%q\n' "$GITHUB_SHA"
           } > production.env
       - name: Upload and activate release
@@ -135,41 +134,3 @@ jobs:
             sleep 5
           done
           exit 1
-      - name: Detect canonical lineup changes
-        id: lineup
-        if: github.event_name == 'push'
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          if git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- data/festivals.ts data/ingestion-publications.json; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-          if ! git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- data/ingestion-publications.json; then
-            git show "$BEFORE_SHA:data/ingestion-publications.json" > /tmp/previous-publications.json
-            node scripts/changed-publication-lineups.mjs /tmp/previous-publications.json data/ingestion-publications.json > /tmp/festival-slugs
-            echo "festival_slugs=$(cat /tmp/festival-slugs)" >> "$GITHUB_OUTPUT"
-          else
-            # A direct festivals.ts lineup edit has no structured before/after
-            # publication data, so retain the safe full-catalogue fallback.
-            echo "festival_slugs=" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Refresh playlists after canonical lineup changes
-        if: steps.lineup.outputs.changed == 'true'
-        env:
-          APP_URL: ${{ secrets.APP_URL }}
-          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
-          FESTIVAL_SLUGS: ${{ steps.lineup.outputs.festival_slugs }}
-        run: |
-          if test -n "$FESTIVAL_SLUGS"; then
-            jq -n --arg festivals "$FESTIVAL_SLUGS" '{festivals: ($festivals | split(","))}' > playlist-request.json
-          else
-            printf '{"festivals":null}\n' > playlist-request.json
-          fi
-          curl --fail-with-body --silent --show-error --max-time 2650 \
-            -H "authorization: Bearer $INTERNAL_API_SECRET" \
-            -H "content-type: application/json" \
-            --data-binary @playlist-request.json \
-            "${APP_URL%/}/api/playlists/run/" | tee playlist-response.json
-          jq -e '([.status[] | .tracks > 0] | all)' playlist-response.json

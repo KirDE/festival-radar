@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { allArtists } from "../data/festivals.ts";
+import { readCatalog } from "../lib/catalog/repository.ts";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const normalize = (value) => value.normalize("NFKD").replace(/[’']/g, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
@@ -79,9 +80,9 @@ async function enrich(candidate) {
   return { ...candidate, aliases: (detail.aliases || []).map((alias) => alias.name), spotifyUrls: (detail.relations || []).map((relation) => relation.url?.resource).filter((url) => /^https:\/\/open\.spotify\.com\/artist\/[A-Za-z0-9]{22}\/?$/.test(url || "")) };
 }
 
-export async function run({ statePath, credentialsPath, limit = 20, now = Date.now() }) {
+export async function run({ statePath, credentialsPath, names = allArtists, limit = 20, now = Date.now() }) {
   let state;
-  try { state = JSON.parse(await readFile(statePath, "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; state = freshState(); }
+  try { state = JSON.parse(await readFile(statePath, "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; state = freshState(names); }
   const token = await spotifyToken(credentialsPath);
   for (const artist of dueArtists(state, now, limit)) {
     artist.base.attempts += 1;
@@ -123,6 +124,7 @@ export async function run({ statePath, credentialsPath, limit = 20, now = Date.n
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const statePath = process.env.IDENTITY_STATE_PATH || process.argv[2] || "outputs/artist-identities/state.json";
   const credentialsPath = process.env.SPOTIFY_CREDENTIALS_PATH;
-  const state = await run({ statePath, credentialsPath, limit: Number(process.env.IDENTITY_BATCH_SIZE || 20) });
+  const names = process.env.DATABASE_URL ? (await readCatalog()).artists.map(({ name }) => name) : allArtists;
+  const state = await run({ statePath, credentialsPath, names, limit: Number(process.env.IDENTITY_BATCH_SIZE || 20) });
   console.log(JSON.stringify({ statePath, updatedAt: state.updatedAt, counts: Object.values(state.artists).reduce((counts, artist) => ({ ...counts, [artist.status]: (counts[artist.status] || 0) + 1 }), {}) }));
 }

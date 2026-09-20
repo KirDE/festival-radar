@@ -85,9 +85,9 @@ Store the resulting connection string as the protected `DATABASE_URL` secret.
 The bootstrap is idempotent; subsequent schema updates are applied by the
 checked-in Prisma migrations.
 
-Festival seed data lives in `data/festivals.ts`. Official source availability
-and the setlist.fm API are checked automatically every three days by GitHub
-Actions.
+The production catalogue lives in PostgreSQL. Repository files under `data/`
+are deterministic seed, parity, and test fixtures only. Production collection
+jobs resolve their catalogue input from the database.
 
 The staged PostgreSQL catalogue migration is tracked in
 [issue #195](https://github.com/KirDE/festival-radar/issues/195). Its additive
@@ -103,16 +103,13 @@ Both commands print a machine-readable parity report. See
 the cutover and rollback contract.
 
 Festival ingestion runs daily and selects sources according to their adaptive
-daily, three-day, weekly, or archived cadence. Run one source with
-`npm run ingest -- --slug=wacken-open-air`; add `--due` to select only sources
-whose last successful check is older than its configured interval. Scheduled
-runs publish policy-approved additive changes into
-`data/ingestion-publications.json` through an automatically generated pull
-request. Every observation is appended to `data/ingestion-history.jsonl` with
-source URL, fetch time, old/new values and outcome. Destructive, ambiguous and
-date changes are recorded as `review_required` and never auto-published. Dry
-runs record evidence without changing the overlay. Roll back by reverting the
-generated PR (or its overlay/history entries) in a new PR.
+daily, three-day, weekly, or archived cadence. Run one fixture-backed source
+locally with `npm run ingest -- --slug=wacken-open-air`; add `--due` to select
+only sources whose last successful check is older than its configured interval.
+Production runs persist candidates, evidence, diffs, publications, and playlist
+refresh requests transactionally in PostgreSQL. Destructive, ambiguous, and
+date changes remain `review_required` and never auto-publish. Repository JSON
+publication/history files are retained only for deterministic local fixtures.
 
 Stage schedules use a separate provenance-aware reviewed import because official
 running orders are often published later and change rapidly. See
