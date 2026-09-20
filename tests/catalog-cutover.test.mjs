@@ -37,4 +37,5 @@ test("production catalogue code has no file mode or runtime overlay writes", asy
   assert.doesNotMatch(deploy, /ingestion-publications|changed-publication-lineups/);
   assert.doesNotMatch(playlistWorkflow, /create-pull-request|data\/playlist-status\.json/);
   assert.match(qualityWorkflow, /test:catalog-db[\s\S]*catalog:backfill[\s\S]*test:integration/);
+  assert.match(qualityWorkflow, /test:admin:integration[\s\S]*prisma migrate reset --force[\s\S]*catalog:backfill[\s\S]*test:admin:e2e/);
 });
