@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 
 const execute = promisify(execFile);
 
-for (const workflowName of ["notifications", "ingestion"]) {
+for (const workflowName of ["notifications", "ingestion", "playlists"]) {
   test(`${workflowName} uses production-scoped internal API credentials`, async () => {
     const workflow = await readFile(`.github/workflows/${workflowName}.yml`, "utf8");
     assert.match(workflow, /jobs:[\s\S]*?environment: production/);
@@ -25,13 +25,12 @@ test("published ingestion lineups trigger a scoped production playlist refresh",
   assert.match(workflow, /No published lineup changes; playlist refresh skipped/);
 });
 
-test("deploy refreshes playlists when canonical lineup files change", async () => {
+test("deploy no longer derives playlist work from repository catalogue diffs", async () => {
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
-  assert.match(workflow, /data\/festivals\.ts data\/ingestion-publications\.json/);
-  assert.match(workflow, /changed-publication-lineups\.mjs/);
-  assert.match(workflow, /if ! git diff --quiet "\$BEFORE_SHA" "\$GITHUB_SHA" -- data\/ingestion-publications\.json; then[\s\S]*changed-publication-lineups\.mjs/);
-  assert.match(workflow, /steps\.lineup\.outputs\.changed == 'true'/);
-  assert.match(workflow, /\/api\/playlists\/run\//);
+  const playlists = await readFile(".github/workflows/playlists.yml", "utf8");
+  assert.doesNotMatch(workflow, /ingestion-publications|changed-publication-lineups|steps\.lineup/);
+  assert.match(playlists, /\/api\/playlists\/run\//);
+  assert.doesNotMatch(playlists, /create-pull-request|data\/playlist-status\.json/);
 });
 
 test("notification scheduler posts to the canonical non-redirecting endpoint", async () => {

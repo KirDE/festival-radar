@@ -23,3 +23,18 @@ test("festival details receive related catalogue data from the database snapshot
   assert.match(source, /festivals: Festival\[\]/);
   assert.match(source, /artistSlugs: Readonly<Record<string, string>>/);
 });
+
+test("production catalogue code has no file mode or runtime overlay writes", async () => {
+  const repository = await readFile("lib/catalog/repository.ts", "utf8");
+  const ingestion = await readFile("scripts/ingest-festivals.mjs", "utf8");
+  const deploy = await readFile(".github/workflows/deploy.yml", "utf8");
+  const playlistWorkflow = await readFile(".github/workflows/playlists.yml", "utf8");
+  const qualityWorkflow = await readFile(".github/workflows/quality.yml", "utf8");
+
+  assert.doesNotMatch(repository, /FileCatalogRepository|CATALOG_READ_MODE|CATALOG_DATABASE_FALLBACK_ENABLED/);
+  assert.match(ingestion, /publish && !persistenceEnabled/);
+  assert.match(ingestion, /!persistenceEnabled && history\.length/);
+  assert.doesNotMatch(deploy, /ingestion-publications|changed-publication-lineups/);
+  assert.doesNotMatch(playlistWorkflow, /create-pull-request|data\/playlist-status\.json/);
+  assert.match(qualityWorkflow, /test:catalog-db[\s\S]*catalog:backfill[\s\S]*test:integration/);
+});

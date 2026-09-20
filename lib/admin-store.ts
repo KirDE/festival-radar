@@ -1,8 +1,8 @@
 import { AdminChangeStatus, AdminDraftStatus, AdminResourceKind, AdminRunStatus, Prisma } from "@prisma/client";
-import { festivals } from "@/data/festivals";
 import { getFestivalSource } from "@/data/festival-sources";
 import { db } from "@/lib/db";
 import { publishAdminFestivalChange } from "@/lib/catalog/publication";
+import { readCatalog } from "@/lib/catalog/repository";
 import { extractFestivalCandidate } from "@/lib/ingestion/extract";
 
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -126,7 +126,8 @@ export async function decideChange(id: string, decision: "approve" | "reject", a
 }
 
 export async function refreshFestival(slug: string, actor: { id: string; email: string }) {
-  const source = getFestivalSource(slug); const festival = festivals.find((item) => item.slug === slug);
+  const source = getFestivalSource(slug);
+  const festival = (await readCatalog()).festivals.find((item) => item.slug === slug);
   if (!source || !festival || !source.enabled) throw new Error("Festival source is not configured");
   const sourceUrl = process.env.NODE_ENV !== "production" && process.env.ADMIN_TEST_SOURCE_URL ? process.env.ADMIN_TEST_SOURCE_URL : source.url;
   const run = await db.adminParserRun.create({ data: { festivalSlug: slug, sourceId: sourceUrl, adapter: source.strategies.join(","), requestedById: actor.id, log: json([{ at: new Date().toISOString(), message: "Fetch started" }]) } });

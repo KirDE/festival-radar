@@ -10,6 +10,7 @@ import { dueFestivalSources } from "../lib/ingestion/schedule.ts";
 import { notificationEventsForChanges } from "../lib/ingestion/notification-events.ts";
 import { db } from "../lib/db.ts";
 import { publishIngestionResult } from "../lib/catalog/publication.ts";
+import { readCatalog } from "../lib/catalog/repository.ts";
 import { createIngestionRun, finishIngestionRun, ingestionQueries, persistAttempt } from "../lib/ingestion/repository.ts";
 import { applyPublication, historyRecord } from "../lib/ingestion/publication.ts";
 
@@ -27,6 +28,7 @@ const failureThresholdArg = process.argv.find((value) => value.startsWith("--fai
 const failureThreshold = Number(failureThresholdArg);
 if (!Number.isInteger(failureThreshold) || failureThreshold < 1) throw new Error(`Invalid consecutive failure threshold: ${failureThresholdArg}`);
 const persistenceEnabled = Boolean(process.env.DATABASE_URL);
+const runtimeFestivals = persistenceEnabled ? (await readCatalog({ database: db })).festivals : festivals;
 const dueOnly = args.has("--due") && !force;
 const persistedStates = dueOnly && persistenceEnabled ? await ingestionQueries.sourceStates(db) : [];
 const lastSuccessfulChecks = new Map(persistedStates.map((state) => [state.festivalSlug, state.lastSuccessfulCheck?.toISOString()]));
@@ -44,12 +46,12 @@ await mkdir(outputDirectory, { recursive: true });
 const trigger = process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL";
 const run = persistenceEnabled ? await createIngestionRun(db, { trigger, sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length }) : null;
 const summary = { schemaVersion: 1, ingestionRunId: run?.id ?? null, generatedAt: new Date().toISOString(), dryRun: !publish, totalSources: selected.length, attempted: 0, processed: 0, changed: 0, publishable: 0, published: 0, playlistRefreshRequested: 0, reviewRequired: 0, fetchErrors: 0, escalatedFailures: 0, notificationEvents: 0, maxFetchErrors, failureThreshold, status: "RUNNING", results: [] };
-let publicationStore = JSON.parse(await readFile(publicationsPath, "utf8"));
+let publicationStore = persistenceEnabled ? null : JSON.parse(await readFile(publicationsPath, "utf8"));
 const history = [];
 
 for (const source of selected) {
   summary.attempted += 1;
-  const current = festivals.find(({ slug }) => slug === source.festivalSlug);
+  const current = runtimeFestivals.find(({ slug }) => slug === source.festivalSlug);
   if (!current) throw new Error(`No current festival for ${source.festivalSlug}`);
   const fetchedAt = new Date().toISOString();
   const startedAt = new Date();
@@ -87,12 +89,15 @@ for (const source of selected) {
   let outcome = result.changes.length ? (result.reviewReasons.length ? "review_required" : "dry_run") : "unchanged";
   let catalogPublication = null;
   if (publish && result.publishable && !result.reviewReasons.length) {
-    const nextStore = applyPublication(publicationStore, current, result);
     catalogPublication = attempt
       ? await publishIngestionResult(db, { attemptId: attempt.id, result, sourceCommit: process.env.GITHUB_SHA || "local" })
       : null;
-    const fileChanged = JSON.stringify(nextStore) !== JSON.stringify(publicationStore);
-    if (fileChanged) publicationStore = nextStore;
+    let fileChanged = false;
+    if (!persistenceEnabled) {
+      const nextStore = applyPublication(publicationStore, current, result);
+      fileChanged = JSON.stringify(nextStore) !== JSON.stringify(publicationStore);
+      if (fileChanged) publicationStore = nextStore;
+    }
     if (catalogPublication || (!persistenceEnabled && fileChanged)) {
       summary.published += 1;
       if (catalogPublication?.playlistRefreshRequested) summary.playlistRefreshRequested += 1;
@@ -115,8 +120,8 @@ for (const source of selected) {
 
 if (run) await finishIngestionRun(db, run.id);
 summary.status = summary.fetchErrors === 0 ? "COMPLETED" : summary.fetchErrors <= maxFetchErrors && summary.escalatedFailures === 0 ? "PARTIAL" : "FAILED";
-if (publish) await writeFile(publicationsPath, `${JSON.stringify(publicationStore, null, 2)}\n`);
-if (history.length) await appendFile(historyPath, `${history.map((record) => JSON.stringify(record)).join("\n")}\n`);
+if (publish && !persistenceEnabled) await writeFile(publicationsPath, `${JSON.stringify(publicationStore, null, 2)}\n`);
+if (!persistenceEnabled && history.length) await appendFile(historyPath, `${history.map((record) => JSON.stringify(record)).join("\n")}\n`);
 await writeFile(path.join(outputDirectory, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
 console.log(JSON.stringify(summary));
 if (summary.status === "FAILED") process.exitCode = 2;

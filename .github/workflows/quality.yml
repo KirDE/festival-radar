@@ -39,6 +39,7 @@ jobs:
       - run: npm run prisma:generate
       - run: npx prisma migrate deploy
       - run: npm run test:catalog-db
+      - run: npm run catalog:backfill
       - run: npm run test:integration
       - run: npm run test:admin:integration
       - run: npx playwright install --with-deps chromium

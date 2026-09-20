@@ -1,8 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
-import { artistProfiles, type ArtistProfile } from "../../data/artists.ts";
-import { festivalEditions, type FestivalEdition } from "../../data/editions.ts";
-import { festivals, type Festival, type PlaylistStatus } from "../../data/festivals.ts";
-import playlistStatusJson from "../../data/playlist-status.json" with { type: "json" };
+import type { ArtistProfile } from "../../data/artists.ts";
+import type { FestivalEdition } from "../../data/editions.ts";
+import type { Festival, PlaylistStatus } from "../../data/festivals.ts";
 
 export type CatalogSnapshot = Readonly<{
   festivals: Festival[];
@@ -10,19 +9,7 @@ export type CatalogSnapshot = Readonly<{
   artists: ArtistProfile[];
   playlists: Readonly<Record<string, PlaylistStatus>>;
 }>;
-export type CatalogReadMode = "files" | "database";
 export interface CatalogRepository { read(): Promise<CatalogSnapshot>; }
-
-const fileSnapshot: CatalogSnapshot = Object.freeze({
-  festivals,
-  editions: festivalEditions,
-  artists: artistProfiles,
-  playlists: playlistStatusJson as Record<string, PlaylistStatus>,
-});
-
-export class FileCatalogRepository implements CatalogRepository {
-  async read() { return fileSnapshot; }
-}
 
 const dateOnly = (value: Date | null) => value?.toISOString().slice(0, 10);
 const instant = (value: Date | null) => value?.toISOString();
@@ -135,26 +122,9 @@ export class DatabaseCatalogRepository implements CatalogRepository {
   }
 }
 
-export function catalogReadMode(environment: NodeJS.ProcessEnv = process.env): CatalogReadMode {
-  const value = environment.CATALOG_READ_MODE ?? "files";
-  if (value !== "files" && value !== "database") throw new Error(`Invalid CATALOG_READ_MODE: ${value}`);
-  return value;
-}
-
-export async function readCatalog(options: {
-  environment?: NodeJS.ProcessEnv; database?: PrismaClient; fileRepository?: CatalogRepository;
-} = {}): Promise<CatalogSnapshot> {
-  const environment = options.environment ?? process.env;
-  const files = options.fileRepository ?? new FileCatalogRepository();
-  if (catalogReadMode(environment) === "files") return files.read();
-  try {
-    const database = options.database ?? (await import("../db.ts")).db;
-    return await new DatabaseCatalogRepository(database).read();
-  } catch (error) {
-    if (environment.CATALOG_DATABASE_FALLBACK_ENABLED !== "true") throw error;
-    console.warn("Database catalogue read failed; using explicit file fallback.");
-    return files.read();
-  }
+export async function readCatalog(options: { database?: PrismaClient } = {}): Promise<CatalogSnapshot> {
+  const database = options.database ?? (await import("../db.ts")).db;
+  return new DatabaseCatalogRepository(database).read();
 }
 
 export function getCatalog() {

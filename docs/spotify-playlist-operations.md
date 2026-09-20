@@ -1,11 +1,10 @@
 # Spotify playlist operations
 
-The `Refresh festival playlists` workflow runs at 04:17 UTC every Tuesday and
-Friday and can also be dispatched manually. It uses a dedicated Spotify OAuth
-client with only `playlist-modify-private` and `playlist-modify-public` scopes.
-The workflow writes playlist contents in Spotify, validates the generated
-metadata, and proposes changes to `data/playlist-status.json` for review. It
-does not deploy metadata directly.
+The `Refresh festival playlists` workflow is manually dispatchable and calls
+the protected production API. Production exports the committed PostgreSQL
+catalogue, refreshes provider playlists, validates provider read-back, and
+commits verified playlist metadata to PostgreSQL transactionally. Repository
+status JSON is a seed/test fixture and is never mutated by production.
 
 ## Credentials and rotation
 
@@ -42,10 +41,8 @@ retrying.
   manual runs. Workflow concurrency already serializes refreshes.
 - Upstream/setlist failures: retry after the provider recovers and verify that
   no incomplete status PR is merged.
-- PR creation failure: preserve the generated branch and open the proposed
-  status PR manually. The playlist refresh may still have completed, so verify
-  Spotify and the generated JSON before retrying the full workflow.
+- Database status update failure: inspect the durable playlist refresh request,
+  provider read-back artifact, and application log before retrying.
 
-Before merging any status update, run the repository quality checks and review
-the JSON diff. After deployment, open each affected festival page and confirm
-the Spotify link and artist/track counts match the merged metadata.
+After a refresh, open each affected festival page and confirm the Spotify link
+and artist/track counts match the production API response.
