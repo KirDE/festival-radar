@@ -60,3 +60,16 @@ test("read mode is an explicit kill switch and fallback is opt-in", async () => 
     console.warn = warning;
   }
 });
+
+test("database reads do not retain a process-lifetime catalogue snapshot", async () => {
+  const before = await readCatalog({ environment: { NODE_ENV: "test", CATALOG_READ_MODE: "database" }, database: db });
+  const originalName = before.festivals[0].name;
+  const changedName = `${originalName} fresh-read-check`;
+  await db.festival.update({ where: { slug: before.festivals[0].slug }, data: { name: changedName } });
+  try {
+    const after = await readCatalog({ environment: { NODE_ENV: "test", CATALOG_READ_MODE: "database" }, database: db });
+    assert.equal(after.festivals[0].name, changedName);
+  } finally {
+    await db.festival.update({ where: { slug: before.festivals[0].slug }, data: { name: originalName } });
+  }
+});

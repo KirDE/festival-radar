@@ -157,8 +157,6 @@ export async function readCatalog(options: {
   }
 }
 
-let catalogPromise: Promise<CatalogSnapshot> | undefined;
 export function getCatalog() {
-  catalogPromise ??= readCatalog();
-  return catalogPromise;
+  return readCatalog();
 }

@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import { NotificationSettings } from "@/components/NotificationSettings";
-import { supportedLanguages } from "@/data/festivals";
+import { supportedLanguages } from "@/lib/catalog/public";
 import { getCatalog } from "@/lib/catalog/repository";
 import type { Language } from "@/components/LanguageProvider";
+
+export const dynamic = "force-dynamic";
 
 const titles: Record<Language, string> = {
   en: "Notification settings",

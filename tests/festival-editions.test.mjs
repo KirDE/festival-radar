@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import sitemap from "../app/sitemap.ts";
-import { generateStaticParams } from "../app/festivals/[slug]/[year]/page.tsx";
 import { archivedEditions, festivalEditions, getFestivalEdition, getEditionsForYear, hasEditionSpecificOfficialEvidence, publishableFutureEditions, trackedFutureEditions } from "../data/editions.ts";
+
+const editionRoute = await readFile(new URL("../app/festivals/[slug]/[year]/page.tsx", import.meta.url), "utf8");
 
 test("festival editions are unique by festival and year", () => {
   const keys = festivalEditions.map(({ slug, editionYear }) => `${slug}:${editionYear}`);
@@ -70,7 +72,8 @@ test("cross-year lookup cannot overwrite the current edition", async () => {
   assert.equal(getFestivalEdition("wacken-open-air", 2027)?.recordState, "current");
   assert.equal(getFestivalEdition("wacken-open-air", 2028), undefined);
   assert.equal(getEditionsForYear(2028).length, 0);
-  assert.equal((await generateStaticParams()).some(({ year }) => year === "2028"), false);
+  assert.match(editionRoute, /export const dynamic = "force-dynamic"/);
+  assert.doesNotMatch(editionRoute, /generateStaticParams/);
   assert.equal((await sitemap()).some(({ url }) => url.includes("/2028/")), false);
   assert.equal(getEditionsForYear(2026).length, 1);
   assert.equal(getFestivalEdition("wacken-open-air", 2099), undefined);

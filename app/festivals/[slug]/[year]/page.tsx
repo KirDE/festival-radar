@@ -2,10 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCatalog } from "@/lib/catalog/repository";
 
-export async function generateStaticParams() {
-  const { editions } = await getCatalog();
-  return editions.map(({ slug, editionYear }) => ({ slug, year: String(editionYear) }));
-}
+export const dynamic = "force-dynamic";
 export default async function FestivalEditionPage({ params }: { params: Promise<{ slug: string; year: string }> }) {
   const { slug, year: rawYear } = await params;
   const { editions } = await getCatalog();

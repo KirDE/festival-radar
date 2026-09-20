@@ -66,3 +66,18 @@ During this phase the runtime publication overlay is still updated after a
 successful database commit so the explicit `CATALOG_READ_MODE=files` kill
 switch remains usable. PostgreSQL publication is the authoritative commit; the
 file overlay is transitional and is removed in phase 5.
+
+## Phase 4: production cutover
+
+The production release environment sets `CATALOG_READ_MODE=database` without a
+file fallback. On the first activation that changes from file mode to database
+mode, the privileged installer runs the idempotent backfill and an independent
+parity verification after migrations and before it activates the release. A
+failed backfill or parity report leaves the previous release and environment
+active.
+
+Catalogue pages and the sitemap are rendered dynamically after cutover so
+ingestion and admin publications become visible without a deploy. The
+deployment health response reports `catalog: "database"` and live catalogue
+counts; deployment verification requires that marker in addition to the exact
+commit and database health.

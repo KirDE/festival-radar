@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { HomeContent } from "@/components/HomeContent";
-import { supportedLanguages } from "@/data/festivals";
+import { supportedLanguages } from "@/lib/catalog/public";
 import { getCatalog } from "@/lib/catalog/repository";
+
+export const dynamic = "force-dynamic";
 import type { Language } from "@/components/LanguageProvider";
 export const dynamicParams=false;
 export function generateStaticParams(){return supportedLanguages.map((lang)=>({lang}));}
