@@ -115,6 +115,48 @@ enum FestivalSubmissionStatus {
   REJECTED
 }
 
+enum FestivalStatus {
+  CONFIRMED
+  PARTIAL
+  TBA
+}
+
+enum TicketStatus {
+  AVAILABLE
+  LOW
+  UNAVAILABLE
+  UNKNOWN
+}
+
+enum EditionRecordState {
+  ARCHIVED
+  CURRENT
+  TRACKING
+}
+
+enum EditionCompleteness {
+  COMPLETE
+  PARTIAL
+  TBA
+}
+
+enum LineupBilling {
+  HEADLINER
+  LINEUP
+}
+
+enum LineupEntryStatus {
+  ANNOUNCED
+  CANCELLED
+}
+
+enum ArtistIdentityState {
+  LINKED
+  AMBIGUOUS
+  UNRESOLVED
+  RETRYABLE
+}
+
 model User {
   id                        String                     @id @default(cuid())
   email                     String                     @unique
@@ -152,21 +194,21 @@ model EmailVerificationToken {
 }
 
 model FestivalSubmission {
-  id              String                   @id @default(cuid())
-  publicReference String                   @unique
-  fingerprint     String                   @unique
+  id              String                    @id @default(cuid())
+  publicReference String                    @unique
+  fingerprint     String                    @unique
   name            String
   editionYear     Int
   officialUrl     String
   notes           String?
-  status          FestivalSubmissionStatus @default(PENDING)
+  status          FestivalSubmissionStatus  @default(PENDING)
   submitterHash   String
-  submittedAt     DateTime                 @default(now())
-  updatedAt       DateTime                 @updatedAt
+  submittedAt     DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
   reviewedAt      DateTime?
   reviewedById    String?
   reviewNote      String?
-  reviewedBy      User?                    @relation("SubmissionReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
+  reviewedBy      User?                     @relation("SubmissionReviewer", fields: [reviewedById], references: [id], onDelete: Restrict)
   audit           FestivalSubmissionAudit[]
 
   @@index([status, submittedAt])
@@ -185,6 +227,189 @@ model FestivalSubmissionAudit {
 
   @@index([submissionId, createdAt])
   @@index([actorId, createdAt])
+}
+
+model Festival {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  name        String
+  country     String
+  countryCode String            @db.Char(2)
+  city        String?
+  officialUrl String
+  latitude    Float?
+  longitude   Float?
+  genres      String[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  editions    FestivalEdition[]
+  sources     FestivalSource[]
+
+  @@index([countryCode, slug])
+}
+
+model FestivalEdition {
+  id              String                 @id @default(cuid())
+  festivalId      String
+  year            Int
+  startDate       DateTime?              @db.Date
+  endDate         DateTime?              @db.Date
+  dateLabel       String?
+  status          FestivalStatus
+  ticketStatus    TicketStatus
+  ticketsUrl      String?
+  recordState     EditionRecordState
+  completeness    EditionCompleteness
+  sourceUpdatedAt DateTime
+  snapshotAt      DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  festival        Festival               @relation(fields: [festivalId], references: [id], onDelete: Cascade)
+  lineup          LineupEntry[]
+  provenance      EditionProvenance[]
+  timetable       TimetablePerformance[]
+  playlists       FestivalPlaylist[]
+
+  @@unique([festivalId, year])
+  @@index([year, recordState])
+}
+
+model Artist {
+  id             String                 @id @default(cuid())
+  slug           String                 @unique
+  name           String
+  aliases        String[]
+  origin         String?
+  genres         String[]
+  biography      String?
+  imageUrl       String?
+  imageAlt       String?
+  imageWidth     Int?
+  imageHeight    Int?
+  identityState  ArtistIdentityState
+  topTracks      String[]
+  recentSetlists Json
+  freshness      Json
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  identities     ArtistIdentity[]
+  links          ArtistLink[]
+  provenance     ArtistProvenance[]
+  appearances    LineupEntry[]
+  timetable      TimetablePerformance[]
+}
+
+model ArtistIdentity {
+  id         String @id @default(cuid())
+  artistId   String
+  provider   String
+  externalId String
+  artist     Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, provider])
+  @@unique([provider, externalId])
+}
+
+model ArtistLink {
+  id       String  @id @default(cuid())
+  artistId String
+  label    String
+  url      String
+  source   String
+  verified Boolean @default(false)
+  artist   Artist  @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, url])
+}
+
+model ArtistProvenance {
+  id        String   @id @default(cuid())
+  artistId  String
+  field     String
+  source    String
+  url       String
+  checkedAt DateTime
+  artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId, field])
+}
+
+model LineupEntry {
+  id        String            @id @default(cuid())
+  editionId String
+  artistId  String
+  billing   LineupBilling
+  position  Int
+  status    LineupEntryStatus @default(ANNOUNCED)
+  edition   FestivalEdition   @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  artist    Artist            @relation(fields: [artistId], references: [id], onDelete: Restrict)
+
+  @@unique([editionId, artistId])
+  @@unique([editionId, billing, position])
+  @@index([artistId, editionId])
+}
+
+model EditionProvenance {
+  id        String          @id @default(cuid())
+  editionId String
+  field     String
+  url       String
+  checkedAt DateTime
+  note      String
+  edition   FestivalEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@index([editionId, field])
+}
+
+model TimetablePerformance {
+  id         String            @id @default(cuid())
+  editionId  String
+  artistId   String?
+  artistName String
+  date       DateTime          @db.Date
+  stage      String
+  start      String
+  timeZone   String?
+  status     LineupEntryStatus @default(ANNOUNCED)
+  sourceUrl  String?
+  observedAt DateTime?
+  edition    FestivalEdition   @relation(fields: [editionId], references: [id], onDelete: Cascade)
+  artist     Artist?           @relation(fields: [artistId], references: [id], onDelete: SetNull)
+
+  @@unique([editionId, date, stage, start, artistName])
+  @@index([artistId, date])
+}
+
+model FestivalPlaylist {
+  id          String          @id @default(cuid())
+  editionId   String
+  provider    String
+  url         String
+  artistCount Int?
+  trackCount  Int?
+  syncedAt    DateTime?
+  edition     FestivalEdition @relation(fields: [editionId], references: [id], onDelete: Cascade)
+
+  @@unique([editionId, provider])
+  @@unique([provider, url])
+}
+
+model FestivalSource {
+  id                 String    @id @default(cuid())
+  festivalId         String?
+  festivalSlug       String
+  url                String
+  strategies         String[]
+  refreshPolicy      String
+  enabled            Boolean   @default(true)
+  editionYear        Int
+  manualReviewReason String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  festival           Festival? @relation(fields: [festivalId], references: [id], onDelete: SetNull)
+
+  @@unique([festivalSlug, url])
+  @@index([enabled, refreshPolicy])
 }
 
 model AdminDraft {

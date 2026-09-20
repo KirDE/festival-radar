@@ -89,6 +89,19 @@ Festival seed data lives in `data/festivals.ts`. Official source availability
 and the setlist.fm API are checked automatically every three days by GitHub
 Actions.
 
+The staged PostgreSQL catalogue migration is tracked in
+[issue #195](https://github.com/KirDE/festival-radar/issues/195). Its additive
+foundation can be populated and checked without changing the current read path:
+
+```bash
+npm run catalog:backfill
+npm run catalog:verify
+```
+
+Both commands print a machine-readable parity report. See
+[`docs/catalog-database-migration.md`](docs/catalog-database-migration.md) for
+the cutover and rollback contract.
+
 Festival ingestion runs daily and selects sources according to their adaptive
 daily, three-day, weekly, or archived cadence. Run one source with
 `npm run ingest -- --slug=wacken-open-air`; add `--due` to select only sources
