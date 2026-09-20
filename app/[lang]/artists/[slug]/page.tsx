@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { Language } from "@/components/LanguageProvider";
 import { ArtistDetail } from "@/components/ArtistDetail";
-import { supportedLanguages } from "@/data/festivals";
+import { supportedLanguages } from "@/lib/catalog/public";
 import { getCatalog } from "@/lib/catalog/repository";
 
 export const dynamic = "force-dynamic";

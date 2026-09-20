@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { festivalMonth, supportedLanguages } from "@/data/festivals";
+import { festivalMonth, supportedLanguages } from "@/lib/catalog/public";
 import { getCatalog } from "@/lib/catalog/repository";
 import { CATALOG_UPDATED_AT, SITE_ORIGIN } from "@/lib/seo";
 

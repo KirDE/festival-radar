@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { SubmissionForm } from "@/components/SubmissionForm";
-import { supportedLanguages } from "@/data/festivals";
+import { supportedLanguages } from "@/lib/catalog/public";
 import type { Language } from "@/components/LanguageProvider";
 
 const copy: Record<Language, { title: string; description: string; eyebrow: string; heading: string; intro: string }> = {

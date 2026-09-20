@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { FestivalExplorer } from "@/components/FestivalExplorer";
-import { festivalMonth } from "@/data/festivals";
+import { festivalMonth } from "@/lib/catalog/public";
 import { getCatalog } from "@/lib/catalog/repository";
 export const dynamic = "force-dynamic";
 export const dynamicParams=true;

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import type { Festival } from "@/data/festivals";
-import { artistSlug, festivals } from "@/data/festivals";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
 import { PlanningTools } from "./PlanningTools";
@@ -15,7 +14,17 @@ import {
   type Attendance,
 } from "./LocalPlanner";
 
-export function FestivalDetail({ item, playlist }: { item: Festival; playlist?: PlaylistStatus }) {
+export function FestivalDetail({
+  item,
+  festivals,
+  artistSlugs,
+  playlist,
+}: {
+  item: Festival;
+  festivals: Festival[];
+  artistSlugs: Readonly<Record<string, string>>;
+  playlist?: PlaylistStatus;
+}) {
   const { language, locale, t } = useLanguage();
   const planner = useLocalPlanner();
   const displayNames = new Intl.DisplayNames([locale], { type: "region" });
@@ -133,7 +142,7 @@ export function FestivalDetail({ item, playlist }: { item: Festival; playlist?: 
             <h3>{t("headliners")}</h3>
             <div className="headlinerGrid">
               {item.headliners.map((artist) => (
-                <Link href={`/${language}/artists/${artistSlug(artist)}/`} key={artist}>
+                <Link href={`/${language}/artists/${artistSlugs[artist]}/`} key={artist}>
                   {artist}
                   <span>{t("viewArtist")}</span>
                 </Link>
@@ -152,7 +161,7 @@ export function FestivalDetail({ item, playlist }: { item: Festival; playlist?: 
             <h3>{t(item.headliners.length > 0 ? "alsoAnnounced" : "announcedActs")}</h3>
             <div className="lineupGrid">
               {item.lineup.map((artist) => (
-                <Link href={`/${language}/artists/${artistSlug(artist)}/`} key={artist}>
+                <Link href={`/${language}/artists/${artistSlugs[artist]}/`} key={artist}>
                   {artist}
                 </Link>
               ))}

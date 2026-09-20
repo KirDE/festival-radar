@@ -1,4 +1,4 @@
-import { supportedLanguages } from "@/data/festivals";
+import { supportedLanguages } from "@/lib/catalog/public";
 import type { Language } from "@/components/LanguageProvider";
 
 const descriptions: Record<Language, string> = {
