@@ -302,7 +302,16 @@ export async function backfillCatalog(client: PrismaClient, seed: CatalogSeed) {
       const festivalId = festivalIds.get(item.festivalSlug);
       await db.festivalSource.upsert({
         where: { festivalSlug_url: { festivalSlug: item.festivalSlug, url: item.url } },
-        create: { ...item, festivalId },
+        create: {
+          festivalSlug: item.festivalSlug,
+          url: item.url,
+          strategies: item.strategies,
+          refreshPolicy: item.refreshPolicy,
+          enabled: item.enabled,
+          editionYear: item.editionYear,
+          manualReviewReason: item.manualReviewReason,
+          festivalId,
+        },
         update: { festivalId, strategies: item.strategies, refreshPolicy: item.refreshPolicy, enabled: item.enabled, editionYear: item.editionYear, manualReviewReason: item.manualReviewReason },
       });
     }
