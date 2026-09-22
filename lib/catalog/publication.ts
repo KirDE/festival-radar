@@ -36,7 +36,7 @@ async function ensureArtist(db: Database, name: string, observedAt: Date) {
   const slug = artistSlug(name);
   if (!slug) throw new Error(`Cannot derive artist slug for ${name}`);
   const bySlug = await db.artist.findUnique({ where: { slug } });
-  if (bySlug && bySlug.name !== name) throw new Error(`Artist slug collision: ${slug} (${bySlug.name} / ${name})`);
+  if (bySlug && bySlug.name.toLocaleLowerCase() !== name.toLocaleLowerCase()) throw new Error(`Artist slug collision: ${slug} (${bySlug.name} / ${name})`);
   const byName = await db.artist.findMany({ where: { name: { equals: name, mode: "insensitive" } }, select: { id: true, slug: true, name: true } });
   if (byName.length > 1 || (byName.length === 1 && byName[0].slug !== slug)) throw new Error(`Ambiguous artist identity for ${name}`);
   if (bySlug) return bySlug;
