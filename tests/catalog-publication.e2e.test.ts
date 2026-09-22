@@ -107,6 +107,27 @@ test("fails closed and rolls back every catalog row when artist identity is ambi
   assert.equal(await db.lineupEntry.count({ where: { edition: { festival: { slug: "rockharz" } }, artist: { name: requestedName } } }), 0);
 });
 
+test("reuses the canonical artist when the observed name differs only by case", async () => {
+  const canonicalName = `Case Artist ${suffix}`;
+  const observedName = `Case artist ${suffix}`;
+  const slug = encodeURIComponent(canonicalName.toLocaleLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, ""));
+  const canonical = await db.artist.create({ data: { slug, name: canonicalName, aliases: [], genres: [], identityState: "UNRESOLVED", topTracks: [], recentSetlists: [], freshness: {} } });
+  createdArtists.push(slug);
+  const value = result(observedName);
+  const attempt = await persist(value);
+
+  const publication = await publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix });
+
+  assert.ok(publication);
+  assert.equal(await db.artist.count({ where: { slug } }), 1);
+  const edition = await db.festivalEdition.findFirstOrThrow({
+    where: { festival: { slug: "rockharz" }, recordState: "CURRENT" },
+    select: { id: true },
+  });
+  const lineup = await db.lineupEntry.findUniqueOrThrow({ where: { editionId_artistId: { editionId: edition.id, artistId: canonical.id } } });
+  assert.equal(lineup.artistId, canonical.id);
+});
+
 test("rejects an edition mismatch before changing the catalog", async () => {
   const artist = `Wrong Edition ${suffix}`;
   const value = result(artist);
