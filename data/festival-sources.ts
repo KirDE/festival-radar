@@ -62,7 +62,7 @@ export const festivalSources: FestivalSource[] = [
   source("paleo", "weekly"),
   source("sweden-rock", "every_3_days"),
   source("tuska", "every_3_days", ["official_markup"]),
-  source("tons-of-rock", "weekly"),
+  { ...source("tons-of-rock", "daily", ["official_markup"]), followLinkPattern: "^/news/2027slipp\\d+/?$" },
   source("inferno", "weekly"),
   manual("copenhell", "official home page has no stable authoritative date or location marker"),
   source("roskilde", "weekly"),

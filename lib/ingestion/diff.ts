@@ -4,7 +4,7 @@ import type { FestivalCandidate, FestivalChange } from "./types.ts";
 function scalarChange(changes: FestivalChange[], field: "startDate" | "endDate" | "city" | "ticketsUrl" | "status", before: string | undefined, after: string | undefined) {
   if (after === undefined || before === after) return;
   const kind = field === "city" ? "city_changed" : field === "ticketsUrl" ? "tickets_changed" : field === "status" ? "status_changed" : "date_changed";
-  changes.push({ kind, field, before, after, reviewRequired: field === "startDate" || field === "endDate" });
+  changes.push({ kind, field, before, after, reviewRequired: (field === "startDate" || field === "endDate") && before !== undefined });
 }
 
 function listChanges(changes: FestivalChange[], field: "lineup" | "headliners", before: string[], after: string[] | undefined) {

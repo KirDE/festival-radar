@@ -13,6 +13,7 @@ export type FestivalSource = {
   editionYear: number;
   lastSuccessfulCheck?: string;
   fetchUrl?: string;
+  followLinkPattern?: string;
   headers?: Record<string, string>;
   manualReviewReason?: string;
 };

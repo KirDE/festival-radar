@@ -7,7 +7,7 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
   const changes = diffFestival(current, candidate);
   const reviewReasons = new Set(candidate.warnings);
   if (candidate.festivalSlug !== current.slug) reviewReasons.add("Candidate slug does not match the current festival");
-  const catalogueYear = current.startDate ? Number(current.startDate.slice(0, 4)) : undefined;
+  const catalogueYear = current.editionYear ?? (current.startDate ? Number(current.startDate.slice(0, 4)) : undefined);
   const mismatchedYears = catalogueYear ? candidate.observedEditionYears.filter((year) => year !== catalogueYear) : [];
   if (mismatchedYears.length) reviewReasons.add(`Candidate edition ${mismatchedYears.join(", ")} does not match catalogue edition ${catalogueYear}`);
   if (candidate.lineup && candidate.lineup.length > 0 && !catalogueYear) reviewReasons.add("Catalogue edition year is unknown; lineup requires review");

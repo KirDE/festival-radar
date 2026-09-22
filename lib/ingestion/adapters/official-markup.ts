@@ -172,6 +172,29 @@ function tuska(html: string): AdapterResult | undefined {
   return { startDate: `${date[4]}-${pad(date[3])}-${pad(date[1])}`, endDate: `${date[4]}-${pad(date[3])}-${pad(date[2])}`, excerpt: date[0] };
 }
 
+function tonsOfRock(html: string): AdapterResult | undefined {
+  const edition = html.match(/FØRSTE ARTISTER TIL TONS OF ROCK\s+(20\d{2})\s+ER KLARE/iu);
+  const date = html.match(/\b(\d{1,2})\s*[-–—]\s*(\d{1,2})\.\s*juni\s+(20\d{2})\b/iu);
+  const announced = html.match(/de første\s+(\d+)\s+artistene til Tons of Rock\s+(20\d{2})\s+er klare/iu);
+  const list = html.match(/Her er alle artistene for årets første slipp:\s*<\/p>\s*<p>([\s\S]*?)<\/p>/iu);
+  if (!edition || !date || !announced || !list || edition[1] !== date[3] || edition[1] !== announced[2]) return undefined;
+
+  const lineup = list[1]
+    .replace(/<br\s*\/?\s*>/giu, "\n")
+    .split("\n")
+    .map((name) => decode(name.replace(/<[^>]+>/g, " ")))
+    .filter(Boolean)
+    .map((name) => name === "Motionless in white" ? "Motionless in White" : name);
+  if (lineup.length !== Number(announced[1]) || new Set(lineup.map((name) => name.toLocaleLowerCase())).size !== lineup.length) return undefined;
+
+  return {
+    startDate: `${date[3]}-06-${pad(date[1])}`,
+    endDate: `${date[3]}-06-${pad(date[2])}`,
+    lineup,
+    excerpt: `${edition[0]} ${announced[0]} ${list[0]}`,
+  };
+}
+
 function trees(html: string): AdapterResult | undefined {
   const date = html.match(/(\d{1,2})(?:st|nd|rd|th)\s*[-–—]\s*(\d{1,2})(?:st|nd|rd|th)\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})/i);
   if (!date) return undefined;
@@ -198,6 +221,7 @@ const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
   "rock-am-ring": ringAndPark,
   "rock-im-park": ringAndPark,
   "southside": fkpLineup,
+  "tons-of-rock": tonsOfRock,
   "tuska": tuska,
   "tolminator": tolminator,
   "leyendas-del-rock": leyendas,

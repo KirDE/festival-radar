@@ -15,11 +15,11 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   const sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
   const baseDelayMs = Math.max(0, options.baseDelayMs ?? 1_000);
-  let response: Response | undefined;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  const fetchWithRetry = async (url: string): Promise<FetchAttempt> => {
+    let response: Response | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      response = await fetchImpl(source.fetchUrl ?? source.url, {
+      response = await fetchImpl(url, {
         redirect: "follow",
         signal: AbortSignal.timeout(20_000),
         headers: {
@@ -41,5 +41,26 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     const delay = Number.isFinite(retryAfter) && retryAfter >= 0 ? Math.min(retryAfter * 1_000, 30_000) : Math.min(baseDelayMs * 2 ** (attempt - 1), 30_000);
     await sleep(delay);
   }
-  throw new Error("Fetch attempts exhausted without a response");
+    throw new Error("Fetch attempts exhausted without a response");
+  };
+
+  const initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (!source.followLinkPattern || !initial.response.ok) return initial;
+
+  const html = await initial.response.text();
+  const pattern = new RegExp(source.followLinkPattern, "i");
+  const linkedUrl = [...html.matchAll(/<a\b[^>]*href\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi)]
+    .map((match) => match[1] ?? match[2])
+    .map((href) => {
+      try {
+        return new URL(href, initial.response.url || source.fetchUrl || source.url);
+      } catch {
+        return undefined;
+      }
+    })
+    .find((url) => url && pattern.test(url.pathname));
+  if (!linkedUrl) throw Object.assign(new Error(`No official linked page matched ${source.followLinkPattern}`), { attempts: initial.attempts });
+
+  const linked = await fetchWithRetry(linkedUrl.href);
+  return { response: linked.response, attempts: initial.attempts + linked.attempts };
 }
