@@ -10,9 +10,9 @@ import { hasAvailableTickets, ticketPresentation } from "../lib/tickets.ts";
 import { festivalLogoFallbacks, festivalLogoPath } from "../data/festival-logos.ts";
 import playlistStatus from "../data/playlist-status.json" with { type: "json" };
 
-test("the seed contains 51 unique festivals", () => {
-  assert.equal(festivals.length, 51);
-  assert.equal(new Set(festivals.map(({ slug }) => slug)).size, 51);
+test("the seed contains 52 unique festivals", () => {
+  assert.equal(festivals.length, 52);
+  assert.equal(new Set(festivals.map(({ slug }) => slug)).size, 52);
 });
 
 test("every emitted local festival logo URL exists", async () => {
@@ -88,6 +88,42 @@ test("M'era Luna is a complete monitored 2027 festival entry", () => {
   assert.deepEqual(getFestivalSource("mera-luna")?.strategies, ["official_markup"]);
   assert.equal(getFestivalSource("mera-luna")?.refreshPolicy, "daily");
   assert.equal(Object.hasOwn(playlistStatus, "mera-luna"), false, "playlist appears only after a verified provider refresh");
+});
+
+test("Midgardsblot tracks the evidenced 2027 edition without reusing the 2026 lineup", () => {
+  const item = festivals.find(({ slug }) => slug === "midgardsblot");
+  assert.deepEqual(item && {
+    name: item.name,
+    countryCode: item.countryCode,
+    city: item.city,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    officialUrl: item.officialUrl,
+    ticketsUrl: item.ticketsUrl,
+    ticketStatus: item.ticketStatus,
+    status: item.status,
+    headliners: item.headliners,
+    lineup: item.lineup,
+    genres: item.genres,
+    coordinates: item.coordinates,
+  }, {
+    name: "Midgardsblot Festival",
+    countryCode: "NO",
+    city: "Borre",
+    startDate: "2027-08-18",
+    endDate: "2027-08-21",
+    officialUrl: "https://midgardsblot.no/",
+    ticketsUrl: "https://www.ticketmaster.no/artist/midgardsblot-tickets/1197464",
+    ticketStatus: "available",
+    status: "tba",
+    headliners: [],
+    lineup: [],
+    genres: ["metal", "folk metal", "black metal"],
+    coordinates: { latitude: 59.385, longitude: 10.4668 },
+  });
+  assert.deepEqual(getFestivalSource("midgardsblot")?.strategies, ["official_markup"]);
+  assert.equal(getFestivalSource("midgardsblot")?.refreshPolicy, "daily");
+  assert.equal(Object.hasOwn(playlistStatus, "midgardsblot"), false, "no playlist is advertised before a 2027 lineup exists");
 });
 
 test("dated editions have valid chronological dates", () => {

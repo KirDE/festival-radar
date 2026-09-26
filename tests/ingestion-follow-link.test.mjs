@@ -33,3 +33,24 @@ test("fetchSource fails closed when the official announcement link is absent", a
     /No official linked page matched/,
   );
 });
+
+test("fetchSource follows a matching official script asset", async () => {
+  const requests = [];
+  const scriptSource = {
+    ...source,
+    festivalSlug: "midgardsblot",
+    url: "https://midgardsblot.example/",
+    followLinkPattern: "^/assets/index-[A-Za-z0-9_-]+\\.js$",
+  };
+  const { response, attempts } = await fetchSource(scriptSource, {
+    fetchImpl: async (url) => {
+      requests.push(String(url));
+      return requests.length === 1
+        ? new Response('<script type="module" src="/assets/index-vj0Jr4K-.js"></script>', { status: 200 })
+        : new Response('children:"18.-21. August 2027 | Borre Norway"', { status: 200 });
+    },
+  });
+  assert.deepEqual(requests, ["https://midgardsblot.example/", "https://midgardsblot.example/assets/index-vj0Jr4K-.js"]);
+  assert.equal(attempts, 2);
+  assert.match(await response.text(), /18\.-21\. August 2027/);
+});

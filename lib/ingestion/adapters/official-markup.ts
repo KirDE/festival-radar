@@ -195,6 +195,17 @@ function tonsOfRock(html: string): AdapterResult | undefined {
   };
 }
 
+function midgardsblot(html: string): AdapterResult | undefined {
+  const date = html.match(/\b(\d{1,2})\s*\.\s*[-–—]\s*(\d{1,2})\s*\.\s+August\s+(20\d{2})\s*\|\s*Borre\s+Norway\b/i);
+  if (!date) return undefined;
+  return {
+    startDate: `${date[3]}-08-${pad(date[1])}`,
+    endDate: `${date[3]}-08-${pad(date[2])}`,
+    city: "Borre",
+    excerpt: date[0],
+  };
+}
+
 function trees(html: string): AdapterResult | undefined {
   const date = html.match(/(\d{1,2})(?:st|nd|rd|th)\s*[-–—]\s*(\d{1,2})(?:st|nd|rd|th)\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})/i);
   if (!date) return undefined;
@@ -222,6 +233,7 @@ const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
   "rock-im-park": ringAndPark,
   "southside": fkpLineup,
   "tons-of-rock": tonsOfRock,
+  midgardsblot,
   "tuska": tuska,
   "tolminator": tolminator,
   "leyendas-del-rock": leyendas,
