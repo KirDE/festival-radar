@@ -114,6 +114,7 @@ const baseFestivals: Festival[] = [
   festival("sweden-rock", "Sweden Rock Festival", "Sweden", "SE", "https://swedenrock.com/", { city: "Sölvesborg", startDate: "2027-06-09", endDate: "2027-06-12" }),
   festival("tuska", "Tuska Festival", "Finland", "FI", "https://tuska.fi/", { city: "Helsinki", startDate: "2027-07-02", endDate: "2027-07-04", headliners: ["Lorna Shore", "Children of Bodom"], lineup: ["Heaven Shall Burn", "Kanonenfieber", "Fox Lake", "Gaerea", "Avralize", "Sinizter"], status: "confirmed" }),
   festival("tons-of-rock", "Tons of Rock", "Norway", "NO", "https://www.tonsofrock.no/", { city: "Oslo" }),
+  festival("midgardsblot", "Midgardsblot Festival", "Norway", "NO", "https://midgardsblot.no/", { city: "Borre", startDate: "2027-08-18", endDate: "2027-08-21", dateLabel: undefined, ticketsUrl: "https://www.ticketmaster.no/artist/midgardsblot-tickets/1197464", ticketStatus: "available", updatedAt: "2026-09-26T15:30:00.000Z" }),
   festival("inferno", "Inferno Metal Festival", "Norway", "NO", "https://www.infernofestival.net/", { city: "Oslo" }),
   festival("copenhell", "Copenhell", "Denmark", "DK", "https://www.copenhell.dk/", { city: "Copenhagen" }),
   festival("roskilde", "Roskilde Festival", "Denmark", "DK", "https://www.roskilde-festival.dk/", { city: "Roskilde" }),
@@ -135,7 +136,7 @@ const festivalLocationData: Record<string, [number, number]> = {
   "barcelona-rock-fest": [41.4515, 2.2081], "firenze-rocks": [43.7696, 11.2558], idays: [45.4642, 9.1900], "rock-in-roma": [41.9028, 12.4964],
   "alpen-flair": [46.7684, 11.6656], "pistoia-blues": [43.9333, 10.9167], pinkpop: [50.9080, 6.0190], roadburn: [51.5555, 5.0913],
   "dynamo-metal-fest": [51.4416, 5.4697], greenfield: [46.6863, 7.8632], paleo: [46.3833, 6.2396], "sweden-rock": [56.0521, 14.5754],
-  tuska: [60.1699, 24.9384], "tons-of-rock": [59.9139, 10.7522], inferno: [59.9139, 10.7522], copenhell: [55.6761, 12.5683],
+  tuska: [60.1699, 24.9384], "tons-of-rock": [59.9139, 10.7522], midgardsblot: [59.3850, 10.4668], inferno: [59.9139, 10.7522], copenhell: [55.6761, 12.5683],
   roskilde: [55.6419, 12.0878], rockstadt: [45.5930, 25.4600], tolminator: [46.1854, 13.7311],
 };
 
@@ -146,7 +147,7 @@ const festivalGenreData: Record<string, string[]> = {
   frequency: ["rock", "alternative"], polandrock: ["rock", "alternative"], "mad-cool": ["rock", "alternative"], idays: ["rock", "alternative"],
   "rock-in-roma": ["rock", "alternative"], "pistoia-blues": ["rock", "blues"], pinkpop: ["rock", "alternative"], paleo: ["rock", "alternative"], roskilde: ["rock", "alternative"],
   roadburn: ["metal", "doom metal", "experimental"], inferno: ["metal", "black metal"], "brutal-assault": ["metal", "extreme metal"],
-  motocultor: ["metal", "extreme metal"], hellfest: ["rock", "metal", "extreme metal"], tolminator: ["metal", "extreme metal"],
+  motocultor: ["metal", "extreme metal"], hellfest: ["rock", "metal", "extreme metal"], midgardsblot: ["metal", "folk metal", "black metal"], tolminator: ["metal", "extreme metal"],
 };
 
 import publications from "./ingestion-publications.json" with { type: "json" };

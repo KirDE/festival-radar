@@ -49,7 +49,7 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
 
   const html = await initial.response.text();
   const pattern = new RegExp(source.followLinkPattern, "i");
-  const linkedUrl = [...html.matchAll(/<a\b[^>]*href\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi)]
+  const linkedUrl = [...html.matchAll(/<(?:a\b[^>]*href|script\b[^>]*src)\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi)]
     .map((match) => match[1] ?? match[2])
     .map((href) => {
       try {

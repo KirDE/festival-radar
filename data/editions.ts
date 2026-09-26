@@ -89,7 +89,9 @@ const currentEditions: FestivalEdition[] = festivals.map((item) => ({
   completeness: item.status === "confirmed" ? "complete" : item.status,
   provenance: Object.freeze([item.slug === "tolminator"
     ? { field: "dates", url: item.officialUrl, checkedAt: item.updatedAt, note: "Official 2027 homepage publishes 28 July–1 August 2027." }
-    : { field: "edition", url: item.officialUrl, checkedAt: "2026-08-30T00:00:00Z", note: "Official festival source." }]),
+    : item.slug === "midgardsblot"
+      ? { field: "dates", url: item.officialUrl, checkedAt: item.updatedAt, note: "Official site publishes 18–21 August 2027 at Borre, Norway; the visible lineup remains labelled 2026 and is intentionally excluded." }
+      : { field: "edition", url: item.officialUrl, checkedAt: "2026-08-30T00:00:00Z", note: "Official festival source." }]),
 }));
 
 export const archivedEditions = Object.freeze([wacken2026]);
