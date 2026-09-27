@@ -65,4 +65,4 @@ jobs:
           name: festival-ingestion-${{ github.run_id }}
           path: outputs/ingestion-response.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 1

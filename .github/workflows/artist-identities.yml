@@ -50,4 +50,4 @@ jobs:
           name: artist-identities-${{ github.run_id }}
           path: outputs/artist-identities/state.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 1
