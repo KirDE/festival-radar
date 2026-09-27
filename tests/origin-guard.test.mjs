@@ -4,6 +4,10 @@ import test from "node:test";
 
 const cookieAuthenticatedMutations = [
   "app/api/auth/logout/route.ts",
+  "app/api/auth/passkey/register/options/route.ts",
+  "app/api/auth/passkey/register/verify/route.ts",
+  "app/api/auth/passkey/login/options/route.ts",
+  "app/api/auth/passkey/login/verify/route.ts",
   "app/api/admin/route.ts",
   "app/api/admin/changes/[id]/route.ts",
   "app/api/admin/drafts/[id]/route.ts",

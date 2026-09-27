@@ -52,7 +52,10 @@ a shared or production database. CI provisions a fresh PostgreSQL 16 service
 for every job before running this required check.
 
 The account API uses 30-day opaque, hashed database sessions in an HTTP-only
-cookie. `PUT /api/sync/{favorites|collections|saved-filters|plans}` provides
+cookie. New accounts can use either a password or a discoverable WebAuthn
+passkey; passkey ceremonies require user verification, bind challenges to the
+configured `APP_URL` relying party, and expire after five minutes.
+`PUT /api/sync/{favorites|collections|saved-filters|plans}` provides
 optimistic concurrency through a required revision number; stale writes return
 409. Plans can be shared using expiring, unguessable links via `/api/share`.
 Authenticated users can connect Spotify at `/api/spotify/connect`; refresh

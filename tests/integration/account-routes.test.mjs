@@ -158,6 +158,17 @@ test("auth, sync, sharing, and Spotify OAuth work against PostgreSQL", async () 
   assert.equal((await anonymous.json("/api/share", "POST", { documentId: "x" })).status, 401);
   assert.equal((await anonymous.json("/api/spotify/sync", "POST")).status, 401);
 
+  const passkeyClient = new Client();
+  assert.equal((await passkeyClient.request("/api/auth/passkey/login/options", { method: "POST", headers: { origin: "https://foreign.example" } })).status, 403);
+  const passkeyOptions = await passkeyClient.json("/api/auth/passkey/login/options", "POST", {});
+  assert.equal(passkeyOptions.status, 200);
+  assert.ok((await passkeyOptions.clone().json()).options.challenge);
+  const ceremonyCookie = passkeyOptions.headers.getSetCookie().find((value) => value.startsWith("festival_radar_passkey_ceremony="));
+  assert.match(ceremonyCookie, /HttpOnly/i);
+  assert.match(ceremonyCookie, /SameSite=Strict/i);
+  assert.match(ceremonyCookie, /Path=\/api\/auth\/passkey/i);
+  assert.equal((await passkeyClient.json("/api/auth/passkey/login/verify", "POST", { id: "unknown" })).status, 401);
+
   assert.equal((await anonymous.json("/api/auth/register", "POST", { email: "bad", password: "short" })).status, 400);
   const registration = await anonymous.json("/api/auth/register", "POST", { email: "First@Example.com", password: "correct horse battery staple" });
   assert.equal(registration.status, 201);
@@ -168,6 +179,7 @@ test("auth, sync, sharing, and Spotify OAuth work against PostgreSQL", async () 
   assert.match(sessionCookie, /Path=\//i);
   assert.match(sessionCookie, /Expires=/i);
   assert.equal((await new Client().json("/api/auth/register", "POST", { email: "first@example.com", password: "correct horse battery staple" })).status, 409);
+  assert.equal((await new Client().json("/api/auth/passkey/register/options", "POST", { email: "first@example.com" })).status, 409);
   assert.equal((await anonymous.request("/api/auth/logout", { method: "POST", headers: { origin: "https://foreign.example" } })).status, 403);
   assert.equal((await anonymous.json("/api/auth/me")).status, 200);
   assert.equal((await anonymous.json("/api/auth/logout", "POST")).status, 204);

@@ -172,7 +172,7 @@ enum CatalogPlaylistRefreshStatus {
 model User {
   id                        String                     @id @default(cuid())
   email                     String                     @unique
-  passwordHash              String
+  passwordHash              String?
   createdAt                 DateTime                   @default(now())
   updatedAt                 DateTime                   @updatedAt
   role                      UserRole                   @default(USER)
@@ -191,6 +191,23 @@ model User {
   reviewedSubmissions       FestivalSubmission[]       @relation("SubmissionReviewer")
   submissionAuditEntries    FestivalSubmissionAudit[]
   emailVerificationTokens   EmailVerificationToken[]
+  passkeys                  Passkey[]
+}
+
+model Passkey {
+  id         String    @id
+  userId     String
+  userHandle String
+  publicKey  Bytes
+  counter    BigInt    @default(0)
+  transports String[]
+  deviceType String
+  backedUp   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model EmailVerificationToken {
