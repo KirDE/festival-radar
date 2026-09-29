@@ -47,8 +47,9 @@ test("Greenfield extracts the edition-matched 2027 lineup and billing tiers", ()
     "Eisbrecher", "Sondaschule", "Fit for a King", "Danko Jones", "The Amity Affliction",
     "Holding Absence", "Speed", "Mittel Alta", "Hot Milk",
   ]);
+  assert.equal(candidate.status, "partial");
   assert.deepEqual(candidate.warnings, []);
-  assert.deepEqual(candidate.evidence.map(({ field }) => field), ["startDate", "endDate", "headliners", "lineup"]);
+  assert.deepEqual(candidate.evidence.map(({ field }) => field), ["startDate", "endDate", "headliners", "lineup", "status"]);
 });
 
 test("Greenfield fails closed without both official billing tiers", () => {
