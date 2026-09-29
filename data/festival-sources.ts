@@ -58,7 +58,7 @@ export const festivalSources: FestivalSource[] = [
   source("pinkpop", "every_3_days", ["official_markup"]),
   source("roadburn", "every_3_days"),
   manual("dynamo-metal-fest", "official page metadata describes the site rather than a dated Festival Event"),
-  source("greenfield", "every_3_days"),
+  source("greenfield", "daily", ["official_markup"]),
   source("paleo", "weekly"),
   source("sweden-rock", "every_3_days"),
   source("tuska", "every_3_days", ["official_markup"]),
