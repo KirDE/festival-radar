@@ -1,7 +1,7 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; excerpt: string };
+type AdapterResult = { startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; excerpt: string };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
@@ -111,6 +111,7 @@ function greenfield(html: string): AdapterResult | undefined {
     endDate: `${date[3]}-06-${pad(date[2])}`,
     headliners,
     lineup,
+    status: "partial",
     excerpt,
   };
 }
@@ -285,7 +286,7 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     return candidate;
   }
   if (result.startDate) candidate.observedEditionYears.push(Number(result.startDate.slice(0, 4)));
-  for (const field of ["startDate", "endDate", "city", "headliners", "lineup"] as const) {
+  for (const field of ["startDate", "endDate", "city", "headliners", "lineup", "status"] as const) {
     const value = result[field];
     if (!value || (Array.isArray(value) && value.length === 0)) continue;
     Object.assign(candidate, { [field]: value });
