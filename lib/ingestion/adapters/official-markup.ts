@@ -68,7 +68,7 @@ function ringAndPark(html: string): AdapterResult | undefined {
 
 function fkpArtistName(value: string): string {
   if (value !== value.toLocaleUpperCase()) return value;
-  const smallWords = new Set(["and", "de", "of", "the"]);
+  const smallWords = new Set(["a", "and", "de", "for", "of", "the"]);
   return value.split(/\s+/).map((word, index) => {
     if (["I", "MGK", "VNV"].includes(word)) return word;
     return word.split("-").map((part) => {
@@ -76,6 +76,43 @@ function fkpArtistName(value: string): string {
       return index > 0 && smallWords.has(lower) ? lower : part ? `${part[0].toLocaleUpperCase()}${part.slice(1).toLocaleLowerCase()}` : part;
     }).join("-");
   }).join(" ");
+}
+
+function greenfield(html: string): AdapterResult | undefined {
+  const date = html.match(/\b(\d{1,2})\s*\.\s*[-–—]\s*(\d{1,2})\s*\.\s+Juni\s+(20\d{2})\b/i);
+  if (!date) return undefined;
+
+  const headliners: string[] = [];
+  const lineup: string[] = [];
+  let excerpt = date[0];
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = attribute(match[1], "href");
+    const classes = attribute(match[1], "class")?.split(/\s+/) ?? [];
+    if (!href || !classes.includes("artist-item")) continue;
+
+    let pathname: string;
+    try {
+      pathname = new URL(href, "https://greenfieldfestival.ch/").pathname;
+    } catch {
+      continue;
+    }
+    if (!/^\/line-up\/[^/]+\/?$/i.test(pathname)) continue;
+
+    const name = fkpArtistName(decode(match[2].replace(/<[^>]+>/g, " ")));
+    if (!name || [...headliners, ...lineup].some((existing) => existing.localeCompare(name, undefined, { sensitivity: "base" }) === 0)) continue;
+    const target = classes.includes("h1") ? headliners : classes.includes("h3") ? lineup : undefined;
+    if (!target) continue;
+    target.push(name);
+    if (excerpt === date[0]) excerpt = `${date[0]} ${match[0]}`;
+  }
+  if (headliners.length === 0 || lineup.length === 0) return undefined;
+  return {
+    startDate: `${date[3]}-06-${pad(date[1])}`,
+    endDate: `${date[3]}-06-${pad(date[2])}`,
+    headliners,
+    lineup,
+    excerpt,
+  };
 }
 
 function meraLuna(html: string): AdapterResult | undefined {
@@ -226,6 +263,7 @@ function leyendas(html: string): AdapterResult | undefined {
 
 const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
   "2000trees": trees,
+  "greenfield": greenfield,
   "hurricane": fkpLineup,
   "mera-luna": meraLuna,
   "pinkpop": pinkpop,
