@@ -312,6 +312,10 @@ const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
   "leyendas-del-rock": leyendas,
 };
 
+export function hasOfficialMarkupAdapter(slug: string): boolean {
+  return Object.hasOwn(adapters, slug);
+}
+
 export function extractOfficialMarkupCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const candidate: FestivalCandidate = { schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] };
   const result = adapters[source.festivalSlug]?.(html);

@@ -299,6 +299,7 @@ model FestivalEdition {
   provenance      EditionProvenance[]
   timetable       TimetablePerformance[]
   playlists       FestivalPlaylist[]
+  sources         FestivalSource[]
 
   @@unique([festivalId, year])
   @@index([year, recordState])
@@ -437,12 +438,32 @@ model FestivalSource {
   enabled            Boolean   @default(true)
   editionYear        Int
   manualReviewReason String?
+  editionId          String?
+  parserKey          String?
+  fetchUrl           String?
+  followLinkPattern  String?
+  requestHeaders     Json?
+  cadenceSeconds     Int?
+  nextRunAt          DateTime?
+  consecutiveFailures Int     @default(0)
+  lastError          String?
+  lastAttemptAt      DateTime?
+  lastSuccessAt      DateTime?
+  leaseOwner         String?
+  leaseExpiresAt     DateTime?
+  httpEtag           String?
+  httpLastModified   String?
+  configurationBackfilledAt DateTime?
+  edition            FestivalEdition? @relation(fields: [editionId], references: [id], onDelete: SetNull)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   festival           Festival? @relation(fields: [festivalId], references: [id], onDelete: SetNull)
 
   @@unique([festivalSlug, url])
   @@index([enabled, refreshPolicy])
+  @@index([enabled, nextRunAt])
+  @@index([leaseExpiresAt])
+  @@index([editionId])
 }
 
 model AdminDraft {
