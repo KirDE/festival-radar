@@ -40,7 +40,7 @@ if [[ $# == 2 ]]; then
       # Neither journalctl stderr nor any journal content can reach the caller.
       # The parser emits only fixed labels and numeric counts for allowlisted
       # transport/comm classes, including unexpected and absent values.
-      if ! summary="$(journalctl -q --no-pager -o json --output-fields=_TRANSPORT,_COMM --since '-10 minutes' -n 200 "${fields[@]}" 2>/dev/null | "$release/.runtime/node" -e '
+      if ! summary="$(journalctl -q --no-pager -o json --output-fields=_TRANSPORT,_COMM --since '-2 hours' -n 200 "${fields[@]}" 2>/dev/null | "$release/.runtime/node" -e '
         let input = "", count = 0;
         const transports = { stdout: 0, journal: 0, syslog: 0, other: 0, missing: 0 };
         const comms = { node: 0, systemd: 0, other: 0, missing: 0 };
