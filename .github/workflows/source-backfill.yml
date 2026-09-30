@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Preview, apply, or verify the one-time configuration backfill
+        description: Preview, apply, verify, or diagnose the one-time configuration backfill
         required: true
         type: choice
         options:
           - preview
           - apply
           - verify
+          - diagnose
 
 concurrency:
   group: festival-radar-production
@@ -53,5 +54,5 @@ jobs:
         env:
           MODE: ${{ inputs.mode }}
         run: |
-          case "$MODE" in preview|apply|verify) ;; *) exit 2 ;; esac
+          case "$MODE" in preview|apply|verify|diagnose) ;; *) exit 2 ;; esac
           ssh production sudo -n /usr/local/libexec/festival-radar/activate-release "$GITHUB_SHA" "source-$MODE"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-commit="${1:?usage: activate-release COMMIT [source-preview|source-apply|source-verify]}"
+commit="${1:?usage: activate-release COMMIT [source-preview|source-apply|source-verify|source-diagnose]}"
 deploy_user="festival-radar-deploy"
 incoming="/var/lib/festival-radar-deploy/incoming"
 installer="/usr/local/libexec/festival-radar/install-release.sh"
@@ -15,7 +15,7 @@ exec 9>/run/festival-radar-activation.lock
 flock -n 9 || { echo "activation or source operation already running" >&2; exit 5; }
 if [[ $# == 2 ]]; then
   case "$2" in
-    source-preview|source-apply|source-verify) mode="${2#source-}" ;;
+    source-preview|source-apply|source-verify|source-diagnose) mode="${2#source-}" ;;
     *) echo "invalid source operation" >&2; exit 2 ;;
   esac
   root=/opt/festival-radar
@@ -24,6 +24,50 @@ if [[ $# == 2 ]]; then
   [[ -f "$release/DEPLOYED_COMMIT" && "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" ]] || { echo "release marker mismatch" >&2; exit 4; }
   [[ -f "$release/scripts/deploy/run-source-backfill.ts" ]] || { echo "source operation not packaged" >&2; exit 4; }
   [[ -f /etc/systemd/system/festival-radar-source-backfill@.service ]] || { echo "source unit not installed" >&2; exit 4; }
+  if [[ "$mode" == diagnose ]]; then
+    # Inspect only the preview unit, never invoke it or access its environment.
+    # The three exact-field selectors followed by -u expose which journald
+    # metadata is actually present. Each is a bounded sample, not a full count.
+    unit=festival-radar-source-backfill@preview.service
+    [[ -x "$release/.runtime/node" ]] || { echo "source diagnostic runtime unavailable" >&2; exit 6; }
+    for selector in exact stdout unit unit-expanded; do
+      case "$selector" in
+        exact) fields=("_SYSTEMD_UNIT=$unit" _TRANSPORT=stdout _COMM=node) ;;
+        stdout) fields=("_SYSTEMD_UNIT=$unit" _TRANSPORT=stdout) ;;
+        unit) fields=("_SYSTEMD_UNIT=$unit") ;;
+        unit-expanded) fields=(-u "$unit") ;;
+      esac
+      # Neither journalctl stderr nor any journal content can reach the caller.
+      # The parser emits only fixed labels and numeric counts for allowlisted
+      # transport/comm classes, including unexpected and absent values.
+      if ! summary="$(journalctl -q --no-pager -o json --output-fields=_TRANSPORT,_COMM --since '-10 minutes' -n 200 "${fields[@]}" 2>/dev/null | "$release/.runtime/node" -e '
+        let input = "", count = 0;
+        const transports = { stdout: 0, journal: 0, syslog: 0, other: 0, missing: 0 };
+        const comms = { node: 0, systemd: 0, other: 0, missing: 0 };
+        process.stdin.setEncoding("utf8");
+        process.stdin.on("data", chunk => { input += chunk; if (input.length > 4000000) process.exit(1); });
+        process.stdin.on("end", () => {
+          try {
+            for (const line of input.split("\n")) {
+              if (!line) continue;
+              const record = JSON.parse(line);
+              count++;
+              const transport = typeof record._TRANSPORT === "string" ? record._TRANSPORT : "missing";
+              const comm = typeof record._COMM === "string" ? record._COMM : "missing";
+              transports[Object.hasOwn(transports, transport) ? transport : "other"]++;
+              comms[Object.hasOwn(comms, comm) ? comm : "other"]++;
+            }
+            console.log("sample=" + count + " transport_stdout=" + transports.stdout + " transport_journal=" + transports.journal + " transport_syslog=" + transports.syslog + " transport_other=" + transports.other + " transport_missing=" + transports.missing + " comm_node=" + comms.node + " comm_systemd=" + comms.systemd + " comm_other=" + comms.other + " comm_missing=" + comms.missing);
+          } catch { process.exitCode = 1; }
+        });
+      ' 2>/dev/null)"; then
+        echo "source diagnostic journal unavailable" >&2
+        exit 6
+      fi
+      printf 'SOURCE_DIAG %s %s\n' "$selector" "$summary"
+    done
+    exit 0
+  fi
   unit="festival-radar-source-backfill@$mode.service"
   # A oneshot unit may not retain an InvocationID after start. Share a fresh
   # nonce with PID 1 using a root-owned file, never on a command line.
