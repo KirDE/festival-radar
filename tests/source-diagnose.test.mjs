@@ -78,7 +78,7 @@ test("source diagnosis reads bounded metadata without starting the unit or leaki
     assert.doesNotMatch(success.stdout + success.stderr, /SECRET|PASSWORD|TOKEN|NONCE|secret_comm|SOURCE_BACKFILL_AUDIT/);
     const selectors = (await readFile(calls, "utf8")).trim().split(nl);
     assert.equal(selectors.length, 4);
-    for (const selector of selectors) assert.match(selector, /--since -10 minutes -n 200/);
+    for (const selector of selectors) assert.match(selector, /--since -2 hours -n 200/);
     assert.doesNotMatch(selectors.join(nl), /systemctl|start|apply/);
     await writeFile(calls, "");
     const unreadable = run(undefined, { MOCK_UNREADABLE: "1" });
