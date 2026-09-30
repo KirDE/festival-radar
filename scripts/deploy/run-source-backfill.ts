@@ -1,4 +1,6 @@
 // Fixed-mode operator entry point. Never print URLs, database errors, or configuration.
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { festivalSources } from "../../data/festival-sources.ts";
 import { backfillSources } from "../../lib/sources/repository.ts";
@@ -31,8 +33,19 @@ export async function runSourceBackfill(db: PrismaClient, mode: "preview" | "app
   return { ok, output: audit(mode, ok ? "ok" : "review-required", nonce, report.counts, drift) };
 }
 
+// Resolve both paths: systemd executes through current -> releases/<sha>.
+// A missing entry path must not make an imported module start the operation.
+function isMainModule(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
 // Imported by tests without starting a process or connecting to any database.
-if (process.argv[1] && import.meta.url === new URL("file://" + process.argv[1]).href) {
+if (isMainModule()) {
   const args = process.argv.slice(2);
   const mode = args.length === 1 && ["preview", "apply", "verify"].includes(args[0]) ? args[0] as "preview" | "apply" | "verify" : null;
   const nonce = process.env.SOURCE_BACKFILL_NONCE;
