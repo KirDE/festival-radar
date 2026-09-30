@@ -1,4 +1,4 @@
-import type { Festival } from "@/data/festivals";
+import type { Festival } from "@/lib/domain/festival";
 
 export function festivalArtists(item: Festival) {
   return new Set([...item.headliners, ...item.lineup].map((artist) => artist.toLocaleLowerCase()));

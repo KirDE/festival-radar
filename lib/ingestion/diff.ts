@@ -1,4 +1,4 @@
-import type { Festival } from "../../data/festivals.ts";
+import type { Festival } from "../domain/festival.ts";
 import type { FestivalCandidate, FestivalChange } from "./types.ts";
 
 function scalarChange(changes: FestivalChange[], field: "startDate" | "endDate" | "city" | "ticketsUrl" | "status", before: string | undefined, after: string | undefined) {

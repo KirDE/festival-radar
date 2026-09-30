@@ -1,4 +1,4 @@
-import type { Festival } from "@/data/festivals";
+import type { Festival } from "@/lib/domain/festival";
 
 export const SITE_ORIGIN = "https://festivals.kir-it.de";
 export const CATALOG_UPDATED_AT = "2026-09-01T15:18:00.000Z";

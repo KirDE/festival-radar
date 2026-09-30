@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Festival } from "../../data/festivals.ts";
+import type { Festival } from "../domain/festival.ts";
 import type { FestivalSource } from "./types.ts";
 import { extractFestivalCandidate } from "./extract.ts";
 import { fetchSource, type FetchOptions } from "./fetch.ts";

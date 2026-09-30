@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import type { Festival } from "@/data/festivals";
-import type { ArtistProfile } from "@/data/artists";
+import type { Festival } from "@/lib/domain/festival";
+import type { ArtistProfile } from "@/lib/domain/artist";
 import { useLanguage } from "./LanguageProvider";
 import { FavoriteButton } from "./LocalPlanner";
 

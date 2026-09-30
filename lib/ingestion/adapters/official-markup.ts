@@ -280,7 +280,7 @@ function midgardsblot(html: string): AdapterResult | undefined {
 function trees(html: string): AdapterResult | undefined {
   const date = html.match(/(\d{1,2})(?:st|nd|rd|th)\s*[-–—]\s*(\d{1,2})(?:st|nd|rd|th)\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})/i);
   if (!date) return undefined;
-  const month = String(new Date(`${date[3]} 1, 2000`).getUTCMonth() + 1).padStart(2, "0");
+  const month = String(new Date(`${date[3]} 1, 2000`).getMonth() + 1).padStart(2, "0");
   return { startDate: `${date[4]}-${month}-${pad(date[1])}`, endDate: `${date[4]}-${month}-${pad(date[2])}`, excerpt: date[0] };
 }
 

@@ -1,4 +1,4 @@
-import type { Festival } from "../data/festivals.ts";
+import type { Festival } from "./domain/festival.ts";
 
 export type Coordinates = { latitude: number; longitude: number };
 export type FestivalFilters = { genre?: string; origin?: Coordinates; maxDistanceKm?: number };

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { FestivalEdition } from "@/data/editions";
+import type { FestivalEdition } from "@/lib/domain/edition";
 import { getCatalog } from "@/lib/catalog/repository";
 export const dynamic = "force-dynamic";
 

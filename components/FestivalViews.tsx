@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Festival } from "@/data/festivals";
+import type { Festival } from "@/lib/domain/festival";
 import { calendarFile } from "@/lib/planning";
 import { useLanguage, type Language } from "./LanguageProvider";
 

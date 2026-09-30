@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import type { Festival } from "@/data/festivals";
+import type { Festival } from "@/lib/domain/festival";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
 import { PlanningTools } from "./PlanningTools";
-import type { PlaylistStatus } from "@/data/festivals";
+import type { PlaylistStatus } from "@/lib/domain/festival";
 import { ticketPresentation } from "@/lib/tickets";
 import { announcedArtists, hasAnnouncedLineup } from "@/lib/festival-lineup";
 import {
