@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 
 const sha = "a".repeat(40);
 
@@ -186,4 +187,38 @@ test("runner rejects missing and malformed nonce before DB work or accepted audi
     assert.match(result.stderr, /source operation guard rejected/);
     assert.doesNotMatch(result.stderr, /postgresql|Prisma|SOURCE_BACKFILL_AUDIT/);
   }
+});
+
+test("runner reached through current symlink rejects invalid nonce instead of silently exiting", async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "source-runner-symlink-"));
+  try {
+    // Keep the runner and its imports in the real release, like the production unit.
+    await symlink(path.resolve("."), path.join(temporary, "current"));
+    const runner = path.join(temporary, "current", "scripts", "deploy", "run-source-backfill.ts");
+    for (const value of [undefined, "A".repeat(64)]) {
+      const env = { ...process.env, DEPLOYED_COMMIT: sha, DATABASE_URL: "postgresql://localhost/festival_integration_test" };
+      if (value === undefined) delete env.SOURCE_BACKFILL_NONCE;
+      else env.SOURCE_BACKFILL_NONCE = value;
+      const result = spawnSync(process.execPath, ["--experimental-strip-types", runner, "apply"], { env, encoding: "utf8" });
+      assert.equal(result.status, 1, "runner must not silently exit via symlink: " + result.stderr);
+      assert.equal(result.stdout, "");
+      assert.match(result.stderr, /source operation guard rejected/);
+      assert.doesNotMatch(result.stderr, /postgresql|Prisma|SOURCE_BACKFILL_AUDIT/);
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }); }
+});
+
+test("importing runner does not start an operation", async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "source-runner-import-"));
+  try {
+    const runner = pathToFileURL(path.resolve("scripts/deploy/run-source-backfill.ts")).href;
+    const importer = path.join(temporary, "importer.mjs");
+    await writeFile(importer, "await import(" + JSON.stringify(runner) + ");\n");
+    const env = { ...process.env, DEPLOYED_COMMIT: sha, DATABASE_URL: "postgresql://localhost/festival_integration_test" };
+    delete env.SOURCE_BACKFILL_NONCE;
+    const result = spawnSync(process.execPath, ["--experimental-strip-types", importer], { env, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, "");
+    assert.equal(result.stderr, "");
+  } finally { await rm(temporary, { recursive: true, force: true }); }
 });
