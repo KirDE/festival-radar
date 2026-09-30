@@ -65,7 +65,9 @@ test("marked-row drift fails closed without repairing or writing unrelated rows"
   assert.equal(preview.ok, false);
   assert.equal(JSON.parse(preview.output).drift, 1);
   assert.doesNotMatch(preview.output, /https?:\/\//);
-  await assert.rejects(runSourceBackfill(db, "apply", nonce), /Unresolved source drift/);
+  const rejected = await runSourceBackfill(db, "apply", nonce);
+  assert.equal(rejected.ok, false);
+  assert.deepEqual(JSON.parse(rejected.output), { operation: "festival-source-backfill", mode: "apply", nonce, status: "unresolved-drift", drift: null });
   assert.deepEqual(await db.festivalSource.findUniqueOrThrow({ where: { id: row.id } }), edited);
   assert.equal(await db.festivalSource.findUnique({ where: { id: pending.id } }), null);
   assert.doesNotMatch(audit("apply", "guard-or-data-error", nonce), /https?:\/\//);

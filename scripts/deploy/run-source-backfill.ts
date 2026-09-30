@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { festivalSources } from "../../data/festival-sources.ts";
-import { backfillSources } from "../../lib/sources/repository.ts";
+import { backfillSources, SourceBackfillReject, type SourceBackfillRejectCode, type SourceBackfillReport } from "../../lib/sources/repository.ts";
 
 export const migration = "20260930190000_source_configuration_foundation";
 
@@ -11,9 +11,15 @@ export function validNonce(nonce: string | undefined): nonce is string {
   return typeof nonce === "string" && /^[0-9a-f]{64}$/.test(nonce);
 }
 
-export function audit(mode: string, status: string, nonce: string, counts?: { insert: number; fill: number; preserve: number }, drift = 0) {
+type Mode = "preview" | "apply" | "verify";
+type AuditStatus = "ok" | "review-required" | "migration-missing" | "migration-check-error" | "database-or-unknown-error" | "guard-or-data-error" | "disconnect-error" | SourceBackfillRejectCode;
+const errorStatuses = new Set<AuditStatus>(["migration-missing", "migration-check-error", "database-or-unknown-error", "guard-or-data-error", "disconnect-error", "seed-validation", "duplicate-source", "missing-enabled-festival", "missing-edition", "binding-conflict", "legacy-config-conflict", "unresolved-drift"]);
+
+export function audit(mode: Mode, status: AuditStatus, nonce: string, counts?: { insert: number; fill: number; preserve: number }, drift?: number) {
   if (!validNonce(nonce)) throw new Error("invalid source operation nonce");
-  return JSON.stringify({ operation: "festival-source-backfill", mode, nonce, status, ...(counts ? { counts } : {}), drift });
+  if (!["preview", "apply", "verify"].includes(mode) || !(["ok", "review-required"].includes(status) || errorStatuses.has(status))) throw new Error("invalid source operation audit");
+  if (errorStatuses.has(status) ? counts !== undefined || drift !== undefined : !counts || !Number.isSafeInteger(drift) || drift! < 0 || Object.values(counts).some((value) => !Number.isSafeInteger(value) || value < 0)) throw new Error("invalid source operation audit shape");
+  return JSON.stringify({ operation: "festival-source-backfill", mode, nonce, status, ...(counts ? { counts } : {}), drift: errorStatuses.has(status) ? null : drift });
 }
 
 export async function migrationApplied(db: PrismaClient): Promise<boolean> {
@@ -24,10 +30,19 @@ export async function migrationApplied(db: PrismaClient): Promise<boolean> {
   return rows.length === 1 && Number(rows[0].count) === 1;
 }
 
-export async function runSourceBackfill(db: PrismaClient, mode: "preview" | "apply" | "verify", nonce: string) {
+export async function runSourceBackfill(db: PrismaClient, mode: Mode, nonce: string) {
   if (!validNonce(nonce)) throw new Error("invalid source operation nonce");
-  if (!await migrationApplied(db)) return { ok: false, output: audit(mode, "migration-missing", nonce) };
-  const report = await backfillSources(db, festivalSources, { dryRun: mode !== "apply", failOnDrift: true });
+  let migrated: boolean;
+  try { migrated = await migrationApplied(db); }
+  catch { return { ok: false, output: audit(mode, "migration-check-error", nonce) }; }
+  if (!migrated) return { ok: false, output: audit(mode, "migration-missing", nonce) };
+  let report: SourceBackfillReport;
+  try { report = await backfillSources(db, festivalSources, { dryRun: mode !== "apply", failOnDrift: true }); }
+  catch (error) {
+    // Never serialize exception text, including Prisma's SQL and source URLs.
+    const status = error instanceof SourceBackfillReject && errorStatuses.has(error.code) ? error.code : "database-or-unknown-error";
+    return { ok: false, output: audit(mode, status, nonce) };
+  }
   const drift = report.plan.filter((item) => item.drift.length).length;
   const ok = report.ok && (mode !== "verify" || (report.counts.insert === 0 && report.counts.fill === 0));
   return { ok, output: audit(mode, ok ? "ok" : "review-required", nonce, report.counts, drift) };
