@@ -1,7 +1,7 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; excerpt: string };
+type AdapterResult = { editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; excerpt: string };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
@@ -114,6 +114,39 @@ function greenfield(html: string): AdapterResult | undefined {
     status: "partial",
     excerpt,
   };
+}
+
+function rockForPeople(html: string): AdapterResult | undefined {
+  const edition = html.match(/<img\b[^>]*(?:src\s*=\s*["'][^"']*date-topbar-(20\d{2})\.svg["'][^>]*|alt\s*=\s*["']Rock for People\s+(20\d{2})\s+datum["'][^>]*)>/i);
+  const editionYear = Number(edition?.[1] ?? edition?.[2]);
+  if (!Number.isInteger(editionYear)) return undefined;
+
+  const headliners: string[] = [];
+  const lineup: string[] = [];
+  let excerpt = edition?.[0] ?? "";
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = attribute(match[1], "href");
+    const classes = attribute(match[1], "class")?.split(/\s+/) ?? [];
+    if (!href || !classes.includes("card") || !classes.includes("card--lineup")) continue;
+
+    let pathname: string;
+    try {
+      pathname = new URL(href, "https://rockforpeople.cz/").pathname;
+    } catch {
+      continue;
+    }
+    if (!/^\/lineup\/[^/]+\/?$/i.test(pathname)) continue;
+
+    const heading = match[2].match(/<h3\b[^>]*>([\s\S]*?)<\/h3>/i)?.[1];
+    const name = heading ? decode(heading.replace(/<sup\b[^>]*>[\s\S]*?<\/sup>/gi, " ").replace(/<[^>]+>/g, " ")) : "";
+    if (!name || [...headliners, ...lineup].some((existing) => existing.localeCompare(name, undefined, { sensitivity: "base" }) === 0)) continue;
+    const target = classes.includes("yellow") ? headliners : classes.includes("white") ? lineup : undefined;
+    if (!target) continue;
+    target.push(name);
+    if (excerpt === edition?.[0]) excerpt = `${edition?.[0]} ${match[0]}`;
+  }
+  if (headliners.length === 0 || lineup.length === 0) return undefined;
+  return { editionYear, headliners, lineup, status: "partial", excerpt };
 }
 
 function meraLuna(html: string): AdapterResult | undefined {
@@ -269,6 +302,7 @@ const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
   "mera-luna": meraLuna,
   "pinkpop": pinkpop,
   "rock-am-ring": ringAndPark,
+  "rock-for-people": rockForPeople,
   "rock-im-park": ringAndPark,
   "southside": fkpLineup,
   "tons-of-rock": tonsOfRock,
@@ -285,6 +319,7 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     candidate.warnings.push(`Official markup adapter found no trustworthy fields for ${source.festivalSlug}`);
     return candidate;
   }
+  if (result.editionYear) candidate.observedEditionYears.push(result.editionYear);
   if (result.startDate) candidate.observedEditionYears.push(Number(result.startDate.slice(0, 4)));
   for (const field of ["startDate", "endDate", "city", "headliners", "lineup", "status"] as const) {
     const value = result[field];

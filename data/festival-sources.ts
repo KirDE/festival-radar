@@ -40,7 +40,7 @@ export const festivalSources: FestivalSource[] = [
   source("alcatraz", "weekly"),
   source("nova-rock", "daily"),
   source("frequency", "weekly"),
-  source("rock-for-people", "daily"),
+  { ...source("rock-for-people", "daily", ["official_markup"]), fetchUrl: "https://rockforpeople.cz/lineup/" },
   source("brutal-assault", "weekly"),
   source("masters-of-rock", "every_3_days"),
   source("polandrock", "weekly"),
