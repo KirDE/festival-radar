@@ -108,9 +108,9 @@ if [[ $# == 2 ]]; then
   entries="$(head -c 65537 -- "$audit_file" 2>/dev/null)" || { echo "source audit unreadable" >&2; exit 6; }
   [[ ${#entries} -le 65536 ]] || { echo "source audit oversized" >&2; exit 6; }
   [[ "$(stat -c %s -- "$audit_file" 2>/dev/null)" == "$audit_size" ]] || { echo "source audit changed" >&2; exit 6; }
-  # Successful planning always has counts and known numeric drift. A failure
-  # has neither counts nor a measured drift; accept only fixed runner statuses.
-  audit_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(ok|review-required)","counts":\{"insert":[0-9]+,"fill":[0-9]+,"preserve":[0-9]+\},"drift":[0-9]+\}$|^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(migration-missing|migration-check-error|database-or-unknown-error|guard-or-data-error|disconnect-error|seed-validation|duplicate-source|missing-enabled-festival|missing-edition|binding-conflict|legacy-config-conflict|unresolved-drift)","drift":null\}$'
+  # Only the complete legacy conflict scan may expose a fixed numeric summary.
+  # Other failures have neither counts nor a measured drift.
+  audit_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(ok|review-required)","counts":\{"insert":[0-9]+,"fill":[0-9]+,"preserve":[0-9]+\},"drift":[0-9]+\}$|^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(migration-missing|migration-check-error|database-or-unknown-error|guard-or-data-error|disconnect-error|seed-validation|duplicate-source|missing-enabled-festival|missing-edition|binding-conflict|unresolved-drift)","drift":null\}$|^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"legacy-config-conflict","conflictSummary":\{"affectedRows":[1-9][0-9]*,"editionYear":[0-9]+,"refreshPolicy":[0-9]+,"strategies":[0-9]+\},"drift":null\}$'
   audit=""
   line_count=0
   while IFS= read -r line || [[ -n "$line" ]]; do

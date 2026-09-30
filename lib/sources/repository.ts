@@ -62,9 +62,16 @@ export type SourceBackfillReport = { ok: boolean; counts: Record<Plan["action"],
 // Only these local planning rejects may be exposed as diagnostic categories.
 // Messages remain useful locally but must never reach the protected audit.
 export type SourceBackfillRejectCode = "seed-validation" | "duplicate-source" | "missing-enabled-festival" | "missing-edition" | "binding-conflict" | "legacy-config-conflict" | "unresolved-drift";
+export type LegacyConfigConflictSummary = Readonly<{ affectedRows: number; editionYear: number; refreshPolicy: number; strategies: number }>;
 export class SourceBackfillReject extends Error {
   readonly code: SourceBackfillRejectCode;
-  constructor(code: SourceBackfillRejectCode, message: string) { super(message); this.name = "SourceBackfillReject"; this.code = code; }
+  readonly conflictSummary?: LegacyConfigConflictSummary;
+  constructor(code: "legacy-config-conflict", message: string, conflictSummary: LegacyConfigConflictSummary);
+  constructor(code: Exclude<SourceBackfillRejectCode, "legacy-config-conflict">, message: string);
+  constructor(code: SourceBackfillRejectCode, message: string, conflictSummary?: LegacyConfigConflictSummary) {
+    super(message); this.name = "SourceBackfillReject"; this.code = code;
+    if (code === "legacy-config-conflict" && conflictSummary) this.conflictSummary = conflictSummary;
+  }
 }
 
 // Called only by the explicit one-time operator command. Never by catalogue backfill or deploy.
@@ -77,6 +84,7 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
     const seen = new Set<string>();
     const operations: { where: { festivalSlug_url: { festivalSlug: string; url: string } }; create: Prisma.FestivalSourceCreateInput; patch: Prisma.FestivalSourceUpdateInput; action: Plan["action"] }[] = [];
     const plan: Plan[] = [];
+    const conflictSummary = { affectedRows: 0, editionYear: 0, refreshPolicy: 0, strategies: 0 };
     for (const source of inventory) {
       let parserKey: string;
       try { parserKey = validateSource(source); }
@@ -95,7 +103,20 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
       const row = rowByKey.get(key);
       if (row?.festivalId && row.festivalId !== festival?.id) throw new SourceBackfillReject("binding-conflict", "Source festival binding conflict: " + key);
       if (row?.editionId && row.editionId !== edition?.id) throw new SourceBackfillReject("binding-conflict", "Source edition binding conflict: " + key);
-      if (row && !row.configurationBackfilledAt && (row.editionYear !== source.editionYear || row.refreshPolicy !== source.refreshPolicy || JSON.stringify(row.strategies) !== JSON.stringify(source.strategies))) throw new SourceBackfillReject("legacy-config-conflict", "Legacy source configuration conflict: " + key);
+      if (row && !row.configurationBackfilledAt) {
+        const year = row.editionYear !== source.editionYear;
+        const policy = row.refreshPolicy !== source.refreshPolicy;
+        const strategy = JSON.stringify(row.strategies) !== JSON.stringify(source.strategies);
+        if (year || policy || strategy) {
+          conflictSummary.affectedRows++;
+          if (year) conflictSummary.editionYear++;
+          if (policy) conflictSummary.refreshPolicy++;
+          if (strategy) conflictSummary.strategies++;
+          // Still validate every inventory entry. Another planning rejection
+          // takes precedence over an incomplete conflict scan.
+          continue;
+        }
+      }
       const desired = { festivalId: festival?.id ?? null, editionId: edition?.id ?? null, parserKey, fetchUrl: source.fetchUrl ?? null, followLinkPattern: source.followLinkPattern ?? null, requestHeaders: source.headers ?? null, cadenceSeconds: cadence[source.refreshPolicy] };
       const fields: string[] = [];
       const drift: string[] = row && row.enabled !== source.enabled ? ["enabled"] : [];
@@ -109,6 +130,7 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
       plan.push({ festivalSlug: source.festivalSlug, url: source.url, action, fields, drift });
       operations.push({ where: { festivalSlug_url: { festivalSlug: source.festivalSlug, url: source.url } }, create: { ...(festival ? { festival: { connect: { id: festival.id } } } : {}), ...(edition ? { edition: { connect: { id: edition.id } } } : {}), festivalSlug: source.festivalSlug, url: source.url, strategies: source.strategies, refreshPolicy: source.refreshPolicy, enabled: source.enabled, editionYear: source.editionYear, manualReviewReason: source.manualReviewReason, parserKey, fetchUrl: source.fetchUrl, followLinkPattern: source.followLinkPattern, requestHeaders: source.headers, cadenceSeconds: cadence[source.refreshPolicy], configurationBackfilledAt: new Date() }, patch: { ...patch, configurationBackfilledAt: new Date() }, action });
     }
+    if (conflictSummary.affectedRows) throw new SourceBackfillReject("legacy-config-conflict", "Legacy source configuration conflict", conflictSummary);
     // A first migration with drift is not an acknowledged migration. Reject the
     // entire plan before inserts, fills, or configurationBackfilledAt updates.
     // Marked rows are already DB-owned: their operator edits remain reportable
