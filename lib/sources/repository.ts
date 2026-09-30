@@ -62,7 +62,19 @@ export type SourceBackfillReport = { ok: boolean; counts: Record<Plan["action"],
 // Only these local planning rejects may be exposed as diagnostic categories.
 // Messages remain useful locally but must never reach the protected audit.
 export type SourceBackfillRejectCode = "seed-validation" | "duplicate-source" | "missing-enabled-festival" | "missing-edition" | "binding-conflict" | "legacy-config-conflict" | "unresolved-drift";
-export type LegacyConfigConflictSummary = Readonly<{ affectedRows: number; editionYear: number; refreshPolicy: number; strategies: number }>;
+// Numeric, inventory-indexed CURRENT values only. The fifth strategy bit means
+// at least one unrecognized DB strategy (never serialize its string value).
+export type ConflictTuple = readonly [index: number, editionYear: number, refreshPolicy: number, strategies: number];
+export type LegacyConfigConflictSummary = Readonly<{ affectedRows: number; editionYear: number; refreshPolicy: number; strategies: number; digest: readonly ConflictTuple[] }>;
+export const MAX_CONFLICT_DIGEST = 20;
+const policyCodes: Record<string, number> = { daily: 1, every_3_days: 2, weekly: 3, archived: 4 };
+export function policyCode(value: string): number { return Object.hasOwn(policyCodes, value) ? policyCodes[value] : 0; }
+export function strategyMask(values: readonly string[]): number {
+  return values.reduce((mask, value) => {
+    const index = strategies.indexOf(value as ParserStrategy);
+    return mask | (index === -1 ? 16 : 1 << index);
+  }, 0);
+}
 export class SourceBackfillReject extends Error {
   readonly code: SourceBackfillRejectCode;
   readonly conflictSummary?: LegacyConfigConflictSummary;
@@ -84,8 +96,8 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
     const seen = new Set<string>();
     const operations: { where: { festivalSlug_url: { festivalSlug: string; url: string } }; create: Prisma.FestivalSourceCreateInput; patch: Prisma.FestivalSourceUpdateInput; action: Plan["action"] }[] = [];
     const plan: Plan[] = [];
-    const conflictSummary = { affectedRows: 0, editionYear: 0, refreshPolicy: 0, strategies: 0 };
-    for (const source of inventory) {
+    const conflictSummary: { affectedRows: number; editionYear: number; refreshPolicy: number; strategies: number; digest: ConflictTuple[] } = { affectedRows: 0, editionYear: 0, refreshPolicy: 0, strategies: 0, digest: [] };
+    for (const [index, source] of inventory.entries()) {
       let parserKey: string;
       try { parserKey = validateSource(source); }
       catch (error) {
@@ -108,6 +120,9 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
         const policy = row.refreshPolicy !== source.refreshPolicy;
         const strategy = JSON.stringify(row.strategies) !== JSON.stringify(source.strategies);
         if (year || policy || strategy) {
+          // Never leak a prefix if the bounded diagnostic cannot represent the scan.
+          if (conflictSummary.digest.length === MAX_CONFLICT_DIGEST) throw new Error("Conflict digest bound exceeded");
+          conflictSummary.digest.push([index, row.editionYear, policyCode(row.refreshPolicy), strategyMask(row.strategies)]);
           conflictSummary.affectedRows++;
           if (year) conflictSummary.editionYear++;
           if (policy) conflictSummary.refreshPolicy++;

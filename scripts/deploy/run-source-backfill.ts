@@ -3,7 +3,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { festivalSources } from "../../data/festival-sources.ts";
-import { backfillSources, SourceBackfillReject, type LegacyConfigConflictSummary, type SourceBackfillRejectCode, type SourceBackfillReport } from "../../lib/sources/repository.ts";
+import { backfillSources, SourceBackfillReject, policyCode, strategyMask, MAX_CONFLICT_DIGEST, type LegacyConfigConflictSummary, type SourceBackfillRejectCode, type SourceBackfillReport } from "../../lib/sources/repository.ts";
 
 export const migration = "20260930190000_source_configuration_foundation";
 
@@ -23,9 +23,19 @@ export function audit(mode: Mode, status: AuditStatus, nonce: string, counts?: {
   if (status === "legacy-config-conflict" ? !conflictSummary || !validCount(conflictSummary.affectedRows) || conflictSummary.affectedRows === 0 ||
     !validCount(conflictSummary.editionYear) || !validCount(conflictSummary.refreshPolicy) || !validCount(conflictSummary.strategies) ||
     [conflictSummary.editionYear, conflictSummary.refreshPolicy, conflictSummary.strategies].some((value) => value > conflictSummary.affectedRows) ||
-    conflictSummary.editionYear + conflictSummary.refreshPolicy + conflictSummary.strategies < conflictSummary.affectedRows : conflictSummary !== undefined) throw new Error("invalid source operation audit shape");
+    conflictSummary.editionYear + conflictSummary.refreshPolicy + conflictSummary.strategies < conflictSummary.affectedRows ||
+    !Array.isArray(conflictSummary.digest) || conflictSummary.digest.length !== conflictSummary.affectedRows || conflictSummary.digest.length > MAX_CONFLICT_DIGEST ||
+    !conflictSummary.digest.every((tuple, position) => Array.isArray(tuple) && tuple.length === 4 &&
+      tuple.every((value) => Number.isSafeInteger(value)) && tuple[0] >= 0 && tuple[0] < festivalSources.length &&
+      (position === 0 || tuple[0] > conflictSummary.digest[position - 1][0]) &&
+      tuple[1] >= -2147483648 && tuple[1] <= 2147483647 && tuple[2] >= 0 && tuple[2] <= 4 && tuple[3] >= 0 && tuple[3] <= 31) ||
+    conflictSummary.digest.filter(([index, year]) => year !== festivalSources[index].editionYear).length !== conflictSummary.editionYear ||
+    conflictSummary.digest.filter(([index, , policy]) => policy !== policyCode(festivalSources[index].refreshPolicy)).length !== conflictSummary.refreshPolicy ||
+    // Mask omits ordering; the planner still counts order-only mismatches.
+    conflictSummary.digest.filter(([index, , , mask]) => mask !== strategyMask(festivalSources[index].strategies)).length > conflictSummary.strategies
+    : conflictSummary !== undefined) throw new Error("invalid source operation audit shape");
   return JSON.stringify({ operation: "festival-source-backfill", mode, nonce, status, ...(counts ? { counts } : {}),
-    ...(conflictSummary ? { conflictSummary: { affectedRows: conflictSummary.affectedRows, editionYear: conflictSummary.editionYear, refreshPolicy: conflictSummary.refreshPolicy, strategies: conflictSummary.strategies } } : {}),
+    ...(conflictSummary ? { conflictSummary: { affectedRows: conflictSummary.affectedRows, editionYear: conflictSummary.editionYear, refreshPolicy: conflictSummary.refreshPolicy, strategies: conflictSummary.strategies, digest: conflictSummary.digest.map(([index, year, policy, mask]) => [index, year, policy, mask]) } } : {}),
     drift: errorStatuses.has(status) ? null : drift });
 }
 
