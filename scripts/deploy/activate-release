@@ -25,33 +25,34 @@ if [[ $# == 2 ]]; then
   [[ -f "$release/scripts/deploy/run-source-backfill.ts" ]] || { echo "source operation not packaged" >&2; exit 4; }
   [[ -f /etc/systemd/system/festival-radar-source-backfill@.service ]] || { echo "source unit not installed" >&2; exit 4; }
   unit="festival-radar-source-backfill@$mode.service"
-  # A journal cursor may be unavailable for a new unit. Compare invocation IDs
-  # instead so an older audit can never satisfy this start.
-  previous_invocation="$(systemctl show --property=InvocationID --value "$unit" 2>/dev/null)" || { echo "source operation invocation unavailable" >&2; exit 6; }
-  [[ -z "$previous_invocation" || "$previous_invocation" =~ ^[0-9a-f]{32}$ ]] || { echo "source operation invocation unavailable" >&2; exit 6; }
+  # A oneshot unit may not retain an InvocationID after start. Share a fresh
+  # nonce with PID 1 using a root-owned file, never on a command line.
+  nonce_dir=/run/festival-radar-source-backfill
+  if [[ ! -e "$nonce_dir" && ! -L "$nonce_dir" ]]; then
+    mkdir -m 0700 -- "$nonce_dir" || { echo "source environment directory unavailable" >&2; exit 6; }
+  fi
+  [[ -d "$nonce_dir" && ! -L "$nonce_dir" && "$(stat -c %u:%a -- "$nonce_dir")" == 0:700 ]] || { echo "source environment directory unsafe" >&2; exit 6; }
+  nonce="$(od -An -N32 -tx1 /dev/urandom | tr -d '[:space:]')" || { echo "source nonce unavailable" >&2; exit 6; }
+  [[ "$nonce" =~ ^[0-9a-f]{64}$ ]] || { echo "source nonce invalid" >&2; exit 6; }
+  env_file="$nonce_dir/$mode.env"
+  temp_file="$(mktemp "$nonce_dir/.$mode.XXXXXXXX")" || { echo "source environment unavailable" >&2; exit 6; }
+  trap 'rm -f -- "$temp_file" "$env_file"' EXIT
+  printf 'SOURCE_BACKFILL_NONCE=%s\n' "$nonce" > "$temp_file"
+  [[ "$(stat -c %u:%a -- "$temp_file")" == 0:600 ]] || { echo "source environment unsafe" >&2; exit 6; }
+  mv -fT -- "$temp_file" "$env_file"
+  # Second-resolution timestamps include the entire second before the start.
+  started_at="@$(date +%s)"
   # systemctl may relay unit errors containing protected configuration.
   result=0
   if ! systemctl start "$unit" >/dev/null 2>&1; then
     echo "source operation systemctl start failed" >&2
     result=6
   fi
-  invocation="$(systemctl show --property=InvocationID --value "$unit" 2>/dev/null)" || invocation=""
-  if [[ ! "$invocation" =~ ^[0-9a-f]{32}$ ]]; then
-    echo "source operation new invocation absent or invalid" >&2
-    exit 6
-  fi
-  if [[ "$invocation" == "$previous_invocation" ]]; then
-    echo "source operation new invocation unchanged" >&2
-    exit 6
-  fi
-  # A marker is only accepted from this invocation's Node stdout stream in
-  # this unit, and only in the runner's fixed safe audit shape. Other journal
-  # messages (including ones beginning with the marker) cannot be relayed.
-  audit_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","status":"(ok|review-required|migration-missing|guard-or-data-error|disconnect-error|guard-rejected)"(,"counts":\{"insert":[0-9]+,"fill":[0-9]+,"preserve":[0-9]+\})?,"drift":[0-9]+\}$'
-  # Journald may ingest a completed one-shot unit asynchronously. Never fall
-  # back to an unscoped or previous journal, even after systemctl fails.
+  # Bounded fresh journal read; same-second stale records have other nonces.
+  # Never relay arbitrary logs, only the complete fixed-shape runner audit.
+  audit_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(ok|review-required|migration-missing|guard-or-data-error|disconnect-error)"(,"counts":\{"insert":[0-9]+,"fill":[0-9]+,"preserve":[0-9]+\})?,"drift":[0-9]+\}$'
   for attempt in {1..10}; do
-    if entries="$(journalctl --no-pager -o cat _SYSTEMD_UNIT="$unit" _SYSTEMD_INVOCATION_ID="$invocation" _TRANSPORT=stdout _COMM=node 2>/dev/null)"; then
+    if entries="$(journalctl --no-pager -o cat --since="$started_at" -n 200 _SYSTEMD_UNIT="$unit" _TRANSPORT=stdout _COMM=node 2>/dev/null)"; then
       if [[ -z "$entries" ]]; then
         journal_state="empty"
       else
@@ -59,7 +60,14 @@ if [[ $# == 2 ]]; then
         while IFS= read -r line; do
           if [[ "$line" =~ $audit_pattern ]]; then audit="$line"; fi
         done <<< "$entries"
-        if [[ -n "$audit" ]]; then echo "$audit"; exit "$result"; fi
+        if [[ -n "$audit" ]]; then
+          # Only after matching the whole original record, remove its exact
+          # nonce field before forwarding the audit to SSH/Actions stdout.
+          audit_prefix='SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'",'
+          printf '%s\n' 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'",'"${audit#"$audit_prefix"}"
+          if [[ "$audit" == *'"status":"ok"'* && "$result" == 0 ]]; then exit 0; fi
+          exit 6
+        fi
         journal_state="no marker"
       fi
     else
@@ -67,7 +75,7 @@ if [[ $# == 2 ]]; then
     fi
     if (( attempt < 10 )); then sleep 1; fi
   done
-  echo "source operation current invocation journal $journal_state" >&2
+  echo "source operation journal $journal_state" >&2
   exit 6
 fi
 
