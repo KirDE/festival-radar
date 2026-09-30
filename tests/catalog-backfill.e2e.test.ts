@@ -27,6 +27,23 @@ test("catalog backfill is complete and idempotent", async () => {
   assert.deepEqual(second, first);
 });
 
+test("catalog backfill never inserts or overwrites database-owned source configuration", async () => {
+  assert.equal(await db.festivalSource.count(), 0);
+  const festival = catalogSeed.festivals[0];
+  const row = await db.festivalSource.create({ data: {
+    festivalSlug: festival.slug, festival: { connect: { slug: festival.slug } },
+    url: "https://db-only.example.test/operator", strategies: ["manual_review"],
+    refreshPolicy: "weekly", enabled: false, editionYear: 2027,
+  } });
+  const before = await db.festivalSource.findUniqueOrThrow({ where: { id: row.id } });
+  const result = await backfillCatalog(db, catalogSeed);
+  assert.equal(result.ok, true, result.mismatches.join("\n"));
+  assert.equal("sources" in result.expected, false);
+  assert.equal("sources" in result.actual, false);
+  assert.equal(await db.festivalSource.count(), 1);
+  assert.deepEqual(await db.festivalSource.findUniqueOrThrow({ where: { id: row.id } }), before);
+});
+
 test("parity verification detects missing relational data", async () => {
   const edition = await db.festivalEdition.findFirstOrThrow({ where: { lineup: { some: {} } } });
   await db.lineupEntry.deleteMany({ where: { editionId: edition.id } });

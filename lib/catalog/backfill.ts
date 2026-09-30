@@ -298,23 +298,8 @@ export async function backfillCatalog(client: PrismaClient, seed: CatalogSeed) {
       }
     }
 
-    for (const item of seed.sources) {
-      const festivalId = festivalIds.get(item.festivalSlug);
-      await db.festivalSource.upsert({
-        where: { festivalSlug_url: { festivalSlug: item.festivalSlug, url: item.url } },
-        create: {
-          festivalSlug: item.festivalSlug,
-          url: item.url,
-          strategies: item.strategies,
-          refreshPolicy: item.refreshPolicy,
-          enabled: item.enabled,
-          editionYear: item.editionYear,
-          manualReviewReason: item.manualReviewReason,
-          festivalId,
-        },
-        update: { festivalId, strategies: item.strategies, refreshPolicy: item.refreshPolicy, enabled: item.enabled, editionYear: item.editionYear, manualReviewReason: item.manualReviewReason },
-      });
-    }
+    // Source configuration is owned by the guarded source operation and DB admins.
+    // Generic catalog backfill must never rewrite it.
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 60_000 });
 
   return verifyCatalogParity(client, seed);
@@ -341,12 +326,11 @@ function dateString(value: Date | null) {
 
 export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): Promise<CatalogParity> {
   validateCatalogSeed(seed);
-  const [festivals, editions, artists, lineupEntries, sources, playlists] = await Promise.all([
+  const [festivals, editions, artists, lineupEntries, playlists] = await Promise.all([
     db.festival.count(),
     db.festivalEdition.count(),
     db.artist.count(),
     db.lineupEntry.count(),
-    db.festivalSource.count(),
     db.festivalPlaylist.count(),
   ]);
   const expected = {
@@ -354,15 +338,14 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
     editions: seed.editions.length,
     artists: seed.artists.length,
     lineupEntries: seed.editions.reduce((count, item) => count + item.headliners.length + item.lineup.length, 0),
-    sources: seed.sources.length,
     playlists: Object.values(seed.playlists).filter((item) => item.spotifyUrl).length,
   };
-  const actual = { festivals, editions, artists, lineupEntries, sources, playlists };
+  const actual = { festivals, editions, artists, lineupEntries, playlists };
   const mismatches = Object.entries(expected)
     .filter(([key, value]) => actual[key as keyof typeof actual] !== value)
     .map(([key, value]) => `${key}: expected ${value}, found ${actual[key as keyof typeof actual]}`);
 
-  const [databaseFestivals, databaseEditions, databaseArtists, databaseSources, databasePlaylists] = await Promise.all([
+  const [databaseFestivals, databaseEditions, databaseArtists, databasePlaylists] = await Promise.all([
     db.festival.findMany(),
     db.festivalEdition.findMany({
     include: {
@@ -371,7 +354,6 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
     },
     }),
     db.artist.findMany({ include: { identities: { orderBy: { provider: "asc" } } } }),
-    db.festivalSource.findMany(),
     db.festivalPlaylist.findMany({ include: { edition: { include: { festival: { select: { slug: true } } } } } }),
   ]);
 
@@ -460,26 +442,6 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
       identityState: row.identityState,
       topTracks: row.topTracks,
       identities: row.identities.map(({ provider, externalId }) => [provider, externalId]),
-    });
-  }
-
-  const sourceByKey = new Map(databaseSources.map((item) => [`${item.festivalSlug}:${item.url}`, item]));
-  for (const item of seed.sources) {
-    const key = `${item.festivalSlug}:${item.url}`;
-    const row = sourceByKey.get(key);
-    if (!row) { mismatches.push(`${key}: missing source`); continue; }
-    compareRecord(mismatches, `source ${key}`, {
-      strategies: [...item.strategies],
-      refreshPolicy: item.refreshPolicy,
-      enabled: item.enabled,
-      editionYear: item.editionYear,
-      manualReviewReason: item.manualReviewReason ?? null,
-    }, {
-      strategies: row.strategies,
-      refreshPolicy: row.refreshPolicy,
-      enabled: row.enabled,
-      editionYear: row.editionYear,
-      manualReviewReason: row.manualReviewReason,
     });
   }
 
