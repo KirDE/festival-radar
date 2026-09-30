@@ -25,7 +25,7 @@ if [[ $# == 2 ]]; then
   [[ -f "$release/scripts/deploy/run-source-backfill.ts" ]] || { echo "source operation not packaged" >&2; exit 4; }
   [[ -f /etc/systemd/system/festival-radar-source-backfill@.service ]] || { echo "source unit not installed" >&2; exit 4; }
   unit="festival-radar-source-backfill@$mode.service"
-  cursor="$(journalctl --no-pager -o cat --show-cursor -u "$unit" -n 1 2>/dev/null | sed -n 's/^-- cursor: //p' | tail -n 1)"
+  cursor="$(journalctl --no-pager -o cat --show-cursor -u "$unit" -n 1 2>/dev/null | sed -n 's/^-- cursor: //p' | tail -n 1 || true)"
   if systemctl start "$unit"; then result=0; else result=6; fi
   if [[ -n "$cursor" ]]; then
     audit="$(journalctl --no-pager -o cat --after-cursor "$cursor" -u "$unit" | grep '^SOURCE_BACKFILL_AUDIT ' | tail -n 1 || true)"

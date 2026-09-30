@@ -35,10 +35,12 @@ test("fixed-mode wrapper rejects privilege, extra arguments, wrong commit, and a
     const mock = path.join(temporary, "bin");
     await mkdir(mock);
     await writeFile(path.join(mock, "systemctl"), "#!/bin/sh\nprintf 'called:%s\\n' \"$*\"\n");
-    await writeFile(path.join(mock, "journalctl"), "#!/bin/sh\necho 'SOURCE_BACKFILL_AUDIT {\"mode\":\"preview\",\"status\":\"ok\"}'\n");
+    // With no prior unit log, cursor lookup can exit 1; post-start audit must still run.
+    await writeFile(path.join(mock, "journalctl"), "#!/bin/sh\ncase \" $* \" in\n  *\" --show-cursor \"*) exit 1 ;;\nesac\necho 'SOURCE_BACKFILL_AUDIT {\"mode\":\"preview\",\"status\":\"ok\"}'\n");
     execFileSync("chmod", ["+x", path.join(mock, "systemctl"), path.join(mock, "journalctl")]);
     const valid = spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy" } });
     assert.equal(valid.status, 0, valid.stderr);
+    assert.match(valid.stdout, /called:start festival-radar-source-backfill@preview\.service/);
     assert.match(valid.stdout, /SOURCE_BACKFILL_AUDIT/);
     const busy = spawnSync("flock", ["-x", lock, "bash", script, sha, "source-preview"], { encoding: "utf8", env: { ...process.env, SUDO_USER: "festival-radar-deploy" } });
     assert.equal(busy.status, 5);
@@ -48,6 +50,12 @@ test("fixed-mode wrapper rejects privilege, extra arguments, wrong commit, and a
     assert.equal(failed.status, 6);
     assert.match(failed.stdout, /SOURCE_BACKFILL_AUDIT/);
     assert.match(failed.stderr, /source operation failed/);
+    await writeFile(path.join(mock, "systemctl"), "#!/bin/sh\nexit 0\n");
+    await writeFile(path.join(mock, "journalctl"), "#!/bin/sh\nexit 1\n");
+    const noAudit = spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy" } });
+    assert.equal(noAudit.status, 6);
+    assert.match(noAudit.stderr, /source operation audit unavailable/);
+    assert.match(noAudit.stderr, /source operation failed/);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 
