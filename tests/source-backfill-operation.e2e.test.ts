@@ -64,6 +64,7 @@ test("marked-row drift fails closed without repairing or writing unrelated rows"
   const preview = await runSourceBackfill(db, "preview", nonce);
   assert.equal(preview.ok, false);
   assert.equal(JSON.parse(preview.output).drift, 1);
+  assert.equal(JSON.parse(preview.output).counts.insert, 1); // the deleted unrelated source remains a pending insert
   assert.doesNotMatch(preview.output, /https?:\/\//);
   const rejected = await runSourceBackfill(db, "apply", nonce);
   assert.equal(rejected.ok, false);
@@ -108,6 +109,65 @@ test("three legacy DB conflicts emit numeric current values without changing any
     for (const original of before) await db.festivalSource.update({ where: { id: original.id }, data: {
       configurationBackfilledAt: original.configurationBackfilledAt, strategies: original.strategies,
       refreshPolicy: original.refreshPolicy,
+    } });
+  }
+});
+
+test("known historical rows transition after a pure preview and remain idempotent", async () => {
+  const indices = [23, 41, 45];
+  const oldPolicies = ["daily", "every_3_days", "weekly"];
+  // Earlier tests may have deleted an unrelated source. Normalize the
+  // disposable fixture before asserting exact counts for these three rows.
+  const keys = await db.festivalSource.findMany({ select: { festivalSlug: true, url: true } });
+  const knownKeys = new Set(keys.map((item) => JSON.stringify([item.festivalSlug, item.url])));
+  const missing = festivalSources.filter((item) => !knownKeys.has(JSON.stringify([item.festivalSlug, item.url])));
+  const baselinePreview = await runSourceBackfill(db, "preview", nonce);
+  assert.equal(baselinePreview.ok, true);
+  assert.equal(JSON.parse(baselinePreview.output).counts.insert, missing.length);
+  const baselineApply = await runSourceBackfill(db, "apply", nonce);
+  assert.equal(baselineApply.ok, true);
+  assert.equal((await db.festivalSource.count()), festivalSources.length);
+  const originals = await Promise.all(indices.map((index) => db.festivalSource.findUniqueOrThrow({
+    where: { festivalSlug_url: { festivalSlug: festivalSources[index].festivalSlug, url: festivalSources[index].url } },
+  })));
+  try {
+    for (const [position, original] of originals.entries()) {
+      await db.festivalSource.update({ where: { id: original.id }, data: {
+        configurationBackfilledAt: null, strategies: ["json_ld_event", "html_fallback"],
+        refreshPolicy: oldPolicies[position], editionId: null, parserKey: null,
+        fetchUrl: null, followLinkPattern: null, cadenceSeconds: null,
+      } });
+    }
+    const legacy = await Promise.all(originals.map((row) => db.festivalSource.findUniqueOrThrow({ where: { id: row.id } })));
+    const preview = await runSourceBackfill(db, "preview", nonce);
+    assert.equal(preview.ok, true);
+    assert.deepEqual(JSON.parse(preview.output).counts, { insert: 0, fill: 3, preserve: festivalSources.length - 3 });
+    assert.equal(JSON.parse(preview.output).drift, 0);
+    assert.deepEqual(await Promise.all(originals.map((row) => db.festivalSource.findUniqueOrThrow({ where: { id: row.id } }))), legacy);
+    const applied = await runSourceBackfill(db, "apply", nonce);
+    assert.equal(applied.ok, true);
+    for (const [position, original] of originals.entries()) {
+      const row = await db.festivalSource.findUniqueOrThrow({ where: { id: original.id } });
+      const desired = festivalSources[indices[position]];
+      assert.deepEqual(row.strategies, desired.strategies);
+      assert.equal(row.refreshPolicy, "daily");
+      assert.equal(row.parserKey, "official_markup:" + desired.festivalSlug);
+      assert.equal(row.fetchUrl, desired.fetchUrl ?? null);
+      assert.equal(row.followLinkPattern, desired.followLinkPattern ?? null);
+      assert.ok(row.editionId);
+      assert.ok(row.configurationBackfilledAt);
+      assert.equal(row.enabled, original.enabled);
+    }
+    const after = await Promise.all(originals.map((row) => db.festivalSource.findUniqueOrThrow({ where: { id: row.id } })));
+    assert.deepEqual(JSON.parse((await runSourceBackfill(db, "apply", nonce)).output).counts,
+      { insert: 0, fill: 0, preserve: festivalSources.length });
+    assert.deepEqual(await Promise.all(originals.map((row) => db.festivalSource.findUniqueOrThrow({ where: { id: row.id } }))), after);
+  } finally {
+    for (const original of originals) await db.festivalSource.update({ where: { id: original.id }, data: {
+      configurationBackfilledAt: original.configurationBackfilledAt, strategies: original.strategies,
+      refreshPolicy: original.refreshPolicy, editionId: original.editionId, parserKey: original.parserKey,
+      fetchUrl: original.fetchUrl, followLinkPattern: original.followLinkPattern,
+      cadenceSeconds: original.cadenceSeconds,
     } });
   }
 });

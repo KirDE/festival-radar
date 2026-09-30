@@ -75,6 +75,31 @@ export function strategyMask(values: readonly string[]): number {
     return mask | (index === -1 ? 16 : 1 << index);
   }, 0);
 }
+// Exact historical changes only (a4f9cf6, fdcc074, b482118), not a
+// general permission to replace legacy configuration. Pin slug and URL.
+const knownLegacyTransitions = [
+  { index: 23, slug: "rock-for-people", url: "https://rockforpeople.cz/", oldPolicy: "daily", fetchUrl: "https://rockforpeople.cz/lineup/", followLinkPattern: null },
+  { index: 41, slug: "greenfield", url: "https://greenfieldfestival.ch/", oldPolicy: "every_3_days", fetchUrl: null, followLinkPattern: null },
+  { index: 45, slug: "tons-of-rock", url: "https://www.tonsofrock.no/", oldPolicy: "weekly", fetchUrl: null, followLinkPattern: "^/news/2027slipp\\d+/?$" },
+] as const;
+
+function isKnownLegacyTransition(index: number, source: FestivalSource, row: SourceRow, festivalId: string | undefined): boolean {
+  const known = knownLegacyTransitions.find((item) => item.index === index && item.slug === source.festivalSlug && item.url === source.url);
+  return !!known && row.festivalSlug === known.slug && row.url === known.url && row.configurationBackfilledAt === null &&
+    row.editionYear === 2027 && row.refreshPolicy === known.oldPolicy &&
+    JSON.stringify(row.strategies) === JSON.stringify(["json_ld_event", "html_fallback"]) &&
+    source.editionYear === 2027 && source.refreshPolicy === "daily" && source.enabled === true &&
+    JSON.stringify(source.strategies) === JSON.stringify(["official_markup"]) &&
+    (source.fetchUrl ?? null) === known.fetchUrl && (source.followLinkPattern ?? null) === known.followLinkPattern &&
+    source.headers === undefined && source.manualReviewReason === undefined &&
+    row.enabled === true && (row.festivalId === null || row.festivalId === festivalId) && row.editionId === null &&
+    row.parserKey === null && row.cadenceSeconds === null && row.fetchUrl === null &&
+    row.followLinkPattern === null && row.requestHeaders === null && row.manualReviewReason === null &&
+    row.nextRunAt === null && row.consecutiveFailures === 0 && row.lastError === null &&
+    row.lastAttemptAt === null && row.lastSuccessAt === null && row.leaseOwner === null &&
+    row.leaseExpiresAt === null && row.httpEtag === null && row.httpLastModified === null;
+}
+
 export class SourceBackfillReject extends Error {
   readonly code: SourceBackfillRejectCode;
   readonly conflictSummary?: LegacyConfigConflictSummary;
@@ -87,14 +112,18 @@ export class SourceBackfillReject extends Error {
 }
 
 // Called only by the explicit one-time operator command. Never by catalogue backfill or deploy.
-export async function backfillSources(db: PrismaClient, inventory: readonly FestivalSource[], options: { dryRun?: boolean; failOnDrift?: boolean } = {}): Promise<SourceBackfillReport> {
+export async function backfillSources(db: PrismaClient, inventory: readonly FestivalSource[], options: { dryRun?: boolean; failOnDrift?: boolean; reconcileKnownLegacy?: boolean } = {}): Promise<SourceBackfillReport> {
   return db.$transaction(async (tx) => {
+    // Apply must inspect a stable set of existing rows, including marked rows
+    // which it will not update. Lock before taking the planning snapshot so a
+    // concurrent operator edit cannot slip between preflight and commit.
+    if (!options.dryRun) await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "FestivalSource" FOR UPDATE`;
     const festivals = await tx.festival.findMany({ select: { id: true, slug: true, editions: { select: { id: true, year: true } } } });
     const existing = await tx.festivalSource.findMany();
     const festivalBySlug = new Map(festivals.map((festival) => [festival.slug, festival]));
     const rowByKey = new Map(existing.map((row) => [JSON.stringify([row.festivalSlug, row.url]), row]));
     const seen = new Set<string>();
-    const operations: { where: { festivalSlug_url: { festivalSlug: string; url: string } }; create: Prisma.FestivalSourceCreateInput; patch: Prisma.FestivalSourceUpdateInput; action: Plan["action"] }[] = [];
+    const operations: { row?: SourceRow; create: Prisma.FestivalSourceCreateInput; patch: Prisma.FestivalSourceUpdateInput; action: Plan["action"] }[] = [];
     const plan: Plan[] = [];
     const conflictSummary: { affectedRows: number; editionYear: number; refreshPolicy: number; strategies: number; digest: ConflictTuple[] } = { affectedRows: 0, editionYear: 0, refreshPolicy: 0, strategies: 0, digest: [] };
     for (const [index, source] of inventory.entries()) {
@@ -115,10 +144,11 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
       const row = rowByKey.get(key);
       if (row?.festivalId && row.festivalId !== festival?.id) throw new SourceBackfillReject("binding-conflict", "Source festival binding conflict: " + key);
       if (row?.editionId && row.editionId !== edition?.id) throw new SourceBackfillReject("binding-conflict", "Source edition binding conflict: " + key);
+      const transition = !!(row && options.reconcileKnownLegacy && isKnownLegacyTransition(index, source, row, festival?.id));
       if (row && !row.configurationBackfilledAt) {
-        const year = row.editionYear !== source.editionYear;
-        const policy = row.refreshPolicy !== source.refreshPolicy;
-        const strategy = JSON.stringify(row.strategies) !== JSON.stringify(source.strategies);
+        const year = !transition && row.editionYear !== source.editionYear;
+        const policy = !transition && row.refreshPolicy !== source.refreshPolicy;
+        const strategy = !transition && JSON.stringify(row.strategies) !== JSON.stringify(source.strategies);
         if (year || policy || strategy) {
           // Never leak a prefix if the bounded diagnostic cannot represent the scan.
           if (conflictSummary.digest.length === MAX_CONFLICT_DIGEST) throw new Error("Conflict digest bound exceeded");
@@ -132,10 +162,16 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
           continue;
         }
       }
-      const desired = { festivalId: festival?.id ?? null, editionId: edition?.id ?? null, parserKey, fetchUrl: source.fetchUrl ?? null, followLinkPattern: source.followLinkPattern ?? null, requestHeaders: source.headers ?? null, cadenceSeconds: cadence[source.refreshPolicy] };
+      const desired = { festivalId: festival?.id ?? null, editionId: edition?.id ?? null, parserKey, fetchUrl: source.fetchUrl ?? null, followLinkPattern: source.followLinkPattern ?? null, requestHeaders: source.headers ?? null, manualReviewReason: source.manualReviewReason ?? null, cadenceSeconds: cadence[source.refreshPolicy] };
       const fields: string[] = [];
       const drift: string[] = row && row.enabled !== source.enabled ? ["enabled"] : [];
-      const patch: Record<string, unknown> = {};
+      if (row?.configurationBackfilledAt && options.failOnDrift) {
+        if (row.editionYear !== source.editionYear) drift.push("editionYear");
+        if (row.refreshPolicy !== source.refreshPolicy) drift.push("refreshPolicy");
+        if (JSON.stringify(row.strategies) !== JSON.stringify(source.strategies)) drift.push("strategies");
+      }
+      const patch: Record<string, unknown> = transition ? { refreshPolicy: source.refreshPolicy, strategies: source.strategies } : {};
+      if (transition) fields.push("refreshPolicy", "strategies");
       for (const [field, value] of Object.entries(desired)) {
         const current = row?.[field as keyof SourceRow];
         if (!row || (!row.configurationBackfilledAt && current === null && value !== null)) { fields.push(field); if (row) patch[field] = value; }
@@ -143,7 +179,7 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
       }
       const action = !row ? "insert" : !row.configurationBackfilledAt ? "fill" : "preserve";
       plan.push({ festivalSlug: source.festivalSlug, url: source.url, action, fields, drift });
-      operations.push({ where: { festivalSlug_url: { festivalSlug: source.festivalSlug, url: source.url } }, create: { ...(festival ? { festival: { connect: { id: festival.id } } } : {}), ...(edition ? { edition: { connect: { id: edition.id } } } : {}), festivalSlug: source.festivalSlug, url: source.url, strategies: source.strategies, refreshPolicy: source.refreshPolicy, enabled: source.enabled, editionYear: source.editionYear, manualReviewReason: source.manualReviewReason, parserKey, fetchUrl: source.fetchUrl, followLinkPattern: source.followLinkPattern, requestHeaders: source.headers, cadenceSeconds: cadence[source.refreshPolicy], configurationBackfilledAt: new Date() }, patch: { ...patch, configurationBackfilledAt: new Date() }, action });
+      operations.push({ row, create: { ...(festival ? { festival: { connect: { id: festival.id } } } : {}), ...(edition ? { edition: { connect: { id: edition.id } } } : {}), festivalSlug: source.festivalSlug, url: source.url, strategies: source.strategies, refreshPolicy: source.refreshPolicy, enabled: source.enabled, editionYear: source.editionYear, manualReviewReason: source.manualReviewReason, parserKey, fetchUrl: source.fetchUrl, followLinkPattern: source.followLinkPattern, requestHeaders: source.headers, cadenceSeconds: cadence[source.refreshPolicy], configurationBackfilledAt: new Date() }, patch: { ...patch, configurationBackfilledAt: new Date() }, action });
     }
     if (conflictSummary.affectedRows) throw new SourceBackfillReject("legacy-config-conflict", "Legacy source configuration conflict", conflictSummary);
     // A first migration with drift is not an acknowledged migration. Reject the
@@ -161,8 +197,16 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
     }
     if (!options.dryRun) for (const operation of operations) {
       if (operation.action === "insert") await tx.festivalSource.create({ data: operation.create });
-      else if (operation.action === "fill") await tx.festivalSource.update({ where: operation.where, data: operation.patch });
+      else if (operation.action === "fill" && operation.row) {
+        // Serializable protects the full read/plan/write snapshot; the CAS
+        // also rejects a row changed or marked after it was read.
+        const updated = await tx.festivalSource.updateMany({
+          where: { id: operation.row.id, updatedAt: operation.row.updatedAt, configurationBackfilledAt: null },
+          data: operation.patch,
+        });
+        if (updated.count !== 1) throw new SourceBackfillReject("unresolved-drift", "Source changed during backfill");
+      }
     }
     return { ok: plan.every((entry) => !entry.drift.length), counts: { insert: plan.filter((entry) => entry.action === "insert").length, fill: plan.filter((entry) => entry.action === "fill").length, preserve: plan.filter((entry) => entry.action === "preserve").length }, plan };
-  }, { timeout: 30000 });
+  }, { timeout: 30000, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
