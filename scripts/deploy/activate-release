@@ -79,47 +79,50 @@ if [[ $# == 2 ]]; then
   nonce="$(od -An -N32 -tx1 /dev/urandom | tr -d '[:space:]')" || { echo "source nonce unavailable" >&2; exit 6; }
   [[ "$nonce" =~ ^[0-9a-f]{64}$ ]] || { echo "source nonce invalid" >&2; exit 6; }
   env_file="$nonce_dir/$mode.env"
+  audit_file="$nonce_dir/$mode.audit"
   temp_file="$(mktemp "$nonce_dir/.$mode.XXXXXXXX")" || { echo "source environment unavailable" >&2; exit 6; }
-  trap 'rm -f -- "$temp_file" "$env_file"' EXIT
+  trap 'rm -f -- "$temp_file" "$env_file" "$audit_file"' EXIT
   printf 'SOURCE_BACKFILL_NONCE=%s\n' "$nonce" > "$temp_file"
   [[ "$(stat -c %u:%a -- "$temp_file")" == 0:600 ]] || { echo "source environment unsafe" >&2; exit 6; }
   mv -fT -- "$temp_file" "$env_file"
-  # Second-resolution timestamps include the entire second before the start.
-  started_at="@$(date +%s)"
+  # PID 1 opens StandardOutput=append before dropping the service credentials.
+  # Atomically replace the previous audit with a fresh root-owned 0600 file.
+  temp_file="$(mktemp "$nonce_dir/.$mode.XXXXXXXX")" || { echo "source audit unavailable" >&2; exit 6; }
+  [[ "$(stat -c %u:%a -- "$temp_file")" == 0:600 ]] || { echo "source audit unsafe" >&2; exit 6; }
+  mv -fT -- "$temp_file" "$audit_file"
   # systemctl may relay unit errors containing protected configuration.
   result=0
   if ! systemctl start "$unit" >/dev/null 2>&1; then
     echo "source operation systemctl start failed" >&2
     result=6
   fi
-  # Bounded fresh journal read; same-second stale records have other nonces.
-  # Never relay arbitrary logs, only the complete fixed-shape runner audit.
+  # The private file is the only audit transport. Reject unsafe or oversized
+  # output without printing raw unit output, logs, or database errors.
+  [[ -f "$audit_file" && ! -L "$audit_file" && "$(stat -c %u:%a -- "$audit_file" 2>/dev/null)" == 0:600 ]] || { echo "source audit unsafe" >&2; exit 6; }
+  audit_size="$(stat -c %s -- "$audit_file" 2>/dev/null)" || { echo "source audit unreadable" >&2; exit 6; }
+  [[ "$audit_size" =~ ^[0-9]+$ ]] && (( audit_size > 0 && audit_size <= 65536 )) || { echo "source audit empty or oversized" >&2; exit 6; }
+  # Bash command substitution silently discards NUL; reject it before parsing.
+  if ! (tr -d '\000' < "$audit_file" | cmp -s -- "$audit_file" -) 2>/dev/null; then
+    echo "source audit unreadable or binary" >&2; exit 6
+  fi
+  entries="$(head -c 65537 -- "$audit_file" 2>/dev/null)" || { echo "source audit unreadable" >&2; exit 6; }
+  [[ ${#entries} -le 65536 ]] || { echo "source audit oversized" >&2; exit 6; }
+  [[ "$(stat -c %s -- "$audit_file" 2>/dev/null)" == "$audit_size" ]] || { echo "source audit changed" >&2; exit 6; }
   audit_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(ok|review-required|migration-missing|guard-or-data-error|disconnect-error)"(,"counts":\{"insert":[0-9]+,"fill":[0-9]+,"preserve":[0-9]+\})?,"drift":[0-9]+\}$'
-  for attempt in {1..10}; do
-    if entries="$(journalctl --no-pager -o cat --since="$started_at" -n 200 _SYSTEMD_UNIT="$unit" _TRANSPORT=stdout _COMM=node 2>/dev/null)"; then
-      if [[ -z "$entries" ]]; then
-        journal_state="empty"
-      else
-        audit=""
-        while IFS= read -r line; do
-          if [[ "$line" =~ $audit_pattern ]]; then audit="$line"; fi
-        done <<< "$entries"
-        if [[ -n "$audit" ]]; then
-          # Only after matching the whole original record, remove its exact
-          # nonce field before forwarding the audit to SSH/Actions stdout.
-          audit_prefix='SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'",'
-          printf '%s\n' 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'",'"${audit#"$audit_prefix"}"
-          if [[ "$audit" == *'"status":"ok"'* && "$result" == 0 ]]; then exit 0; fi
-          exit 6
-        fi
-        journal_state="no marker"
-      fi
-    else
-      journal_state="unreadable"
+  audit=""
+  line_count=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    (( ++line_count <= 200 && ${#line} <= 1024 )) || { echo "source audit bounds exceeded" >&2; exit 6; }
+    if [[ "$line" =~ $audit_pattern ]]; then
+      [[ -z "$audit" ]] || { echo "source audit ambiguous" >&2; exit 6; }
+      audit="$line"
     fi
-    if (( attempt < 10 )); then sleep 1; fi
-  done
-  echo "source operation journal $journal_state" >&2
+  done <<< "$entries"
+  [[ -n "$audit" ]] || { echo "source audit no marker" >&2; exit 6; }
+  # Strip the exact nonce field only after matching the entire runner record.
+  audit_prefix='SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'",'
+  printf '%s\n' 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'",'"${audit#"$audit_prefix"}"
+  if [[ "$audit" == *'"status":"ok"'* && "$result" == 0 ]]; then exit 0; fi
   exit 6
 fi
 

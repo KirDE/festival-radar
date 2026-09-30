@@ -85,6 +85,8 @@ EnvironmentFile=$shared/production.env
 EnvironmentFile=/run/festival-radar-source-backfill/%i.env
 Environment=NODE_ENV=production
 ExecStart=$app_root/current/.runtime/node --experimental-strip-types $app_root/current/scripts/deploy/run-source-backfill.ts %i
+StandardOutput=append:/run/festival-radar-source-backfill/%i.audit
+StandardError=journal
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
