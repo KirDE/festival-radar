@@ -69,6 +69,27 @@ ReadWritePaths=$app_root
 WantedBy=multi-user.target
 UNIT
 
+# Manual-only unit: never enable or schedule it. A privileged fixed-mode wrapper
+# controls invocation; the database operation itself runs as the application user.
+cat > "/etc/systemd/system/$service-source-backfill@.service" <<UNIT
+[Unit]
+Description=Manual Festival Radar source configuration operation %i
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=$app_root/current
+EnvironmentFile=$shared/production.env
+Environment=NODE_ENV=production
+ExecStart=$app_root/current/.runtime/node --experimental-strip-types $app_root/current/scripts/deploy/run-source-backfill.ts %i
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+TimeoutStartSec=120
+UNIT
+
 cat > "/etc/systemd/system/$service-collection@.service" <<UNIT
 [Unit]
 Description=Festival Radar production collection job %i

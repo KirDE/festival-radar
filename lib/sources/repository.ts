@@ -46,7 +46,7 @@ export function mapSource(row: SourceRow & { edition?: { festivalId: string; yea
   if (headers !== null && (typeof headers !== "object" || Array.isArray(headers) || Object.values(headers).some((value) => typeof value !== "string"))) throw new Error("Invalid stored request headers");
   const source: FestivalSource = { festivalSlug: row.festivalSlug, url: row.url, strategies: row.strategies as ParserStrategy[], refreshPolicy: row.refreshPolicy as RefreshPolicy, enabled: row.enabled, editionYear: row.editionYear, ...(row.fetchUrl ? { fetchUrl: row.fetchUrl } : {}), ...(row.followLinkPattern ? { followLinkPattern: row.followLinkPattern } : {}), ...(headers ? { headers: headers as Record<string, string> } : {}), ...(row.manualReviewReason ? { manualReviewReason: row.manualReviewReason } : {}) };
   if (!row.parserKey || validateSource({ ...source, parserKey: row.parserKey }) !== row.parserKey) throw new Error("Unconfigured parser");
-  if (!row.festivalId || (row.enabled && !row.editionId) || (row.editionId && (!row.edition || row.edition.year !== row.editionYear || row.edition.festivalId !== row.festivalId))) throw new Error("Invalid source edition binding");
+  if ((row.enabled && (!row.festivalId || !row.editionId)) || (row.editionId && (!row.edition || row.edition.year !== row.editionYear || row.edition.festivalId !== row.festivalId))) throw new Error("Invalid source edition binding");
   if (!row.cadenceSeconds || row.cadenceSeconds <= 0 || !Number.isInteger(row.cadenceSeconds)) throw new Error("Invalid source cadence");
   return { ...source, id: row.id, editionId: row.editionId, parserKey: row.parserKey, cadenceSeconds: row.cadenceSeconds, nextRunAt: row.nextRunAt, consecutiveFailures: row.consecutiveFailures, leaseOwner: row.leaseOwner, leaseExpiresAt: row.leaseExpiresAt, httpEtag: row.httpEtag, httpLastModified: row.httpLastModified };
 }
@@ -59,7 +59,7 @@ type Plan = { festivalSlug: string; url: string; action: "insert" | "fill" | "pr
 export type SourceBackfillReport = { ok: boolean; counts: Record<Plan["action"], number>; plan: Plan[] };
 
 // Called only by the explicit one-time operator command. Never by catalogue backfill or deploy.
-export async function backfillSources(db: PrismaClient, inventory: readonly FestivalSource[], options: { dryRun?: boolean } = {}): Promise<SourceBackfillReport> {
+export async function backfillSources(db: PrismaClient, inventory: readonly FestivalSource[], options: { dryRun?: boolean; failOnDrift?: boolean } = {}): Promise<SourceBackfillReport> {
   return db.$transaction(async (tx) => {
     const festivals = await tx.festival.findMany({ select: { id: true, slug: true, editions: { select: { id: true, year: true } } } });
     const existing = await tx.festivalSource.findMany();
@@ -74,14 +74,14 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
       if (seen.has(key)) throw new Error("Duplicate source: " + key);
       seen.add(key);
       const festival = festivalBySlug.get(source.festivalSlug);
-      if (!festival) throw new Error("Missing festival: " + source.festivalSlug);
-      const edition = festival.editions.find((item) => item.year === source.editionYear);
+      if (!festival && source.enabled) throw new Error("Missing enabled festival: " + source.festivalSlug);
+      const edition = festival?.editions.find((item) => item.year === source.editionYear);
       if (!edition && source.enabled) throw new Error("Missing source edition: " + key + " / " + source.editionYear);
       const row = rowByKey.get(key);
-      if (row?.festivalId && row.festivalId !== festival.id) throw new Error("Source festival binding conflict: " + key);
+      if (row?.festivalId && row.festivalId !== festival?.id) throw new Error("Source festival binding conflict: " + key);
       if (row?.editionId && row.editionId !== edition?.id) throw new Error("Source edition binding conflict: " + key);
       if (row && !row.configurationBackfilledAt && (row.editionYear !== source.editionYear || row.refreshPolicy !== source.refreshPolicy || JSON.stringify(row.strategies) !== JSON.stringify(source.strategies))) throw new Error("Legacy source configuration conflict: " + key);
-      const desired = { festivalId: festival.id, editionId: edition?.id ?? null, parserKey, fetchUrl: source.fetchUrl ?? null, followLinkPattern: source.followLinkPattern ?? null, requestHeaders: source.headers ?? null, cadenceSeconds: cadence[source.refreshPolicy] };
+      const desired = { festivalId: festival?.id ?? null, editionId: edition?.id ?? null, parserKey, fetchUrl: source.fetchUrl ?? null, followLinkPattern: source.followLinkPattern ?? null, requestHeaders: source.headers ?? null, cadenceSeconds: cadence[source.refreshPolicy] };
       const fields: string[] = [];
       const drift: string[] = row && row.enabled !== source.enabled ? ["enabled"] : [];
       const patch: Record<string, unknown> = {};
@@ -92,15 +92,18 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
       }
       const action = !row ? "insert" : !row.configurationBackfilledAt ? "fill" : "preserve";
       plan.push({ festivalSlug: source.festivalSlug, url: source.url, action, fields, drift });
-      operations.push({ where: { festivalSlug_url: { festivalSlug: source.festivalSlug, url: source.url } }, create: { festival: { connect: { id: festival.id } }, ...(edition ? { edition: { connect: { id: edition.id } } } : {}), festivalSlug: source.festivalSlug, url: source.url, strategies: source.strategies, refreshPolicy: source.refreshPolicy, enabled: source.enabled, editionYear: source.editionYear, manualReviewReason: source.manualReviewReason, parserKey, fetchUrl: source.fetchUrl, followLinkPattern: source.followLinkPattern, requestHeaders: source.headers, cadenceSeconds: cadence[source.refreshPolicy], configurationBackfilledAt: new Date() }, patch: { ...patch, configurationBackfilledAt: new Date() }, action });
+      operations.push({ where: { festivalSlug_url: { festivalSlug: source.festivalSlug, url: source.url } }, create: { ...(festival ? { festival: { connect: { id: festival.id } } } : {}), ...(edition ? { edition: { connect: { id: edition.id } } } : {}), festivalSlug: source.festivalSlug, url: source.url, strategies: source.strategies, refreshPolicy: source.refreshPolicy, enabled: source.enabled, editionYear: source.editionYear, manualReviewReason: source.manualReviewReason, parserKey, fetchUrl: source.fetchUrl, followLinkPattern: source.followLinkPattern, requestHeaders: source.headers, cadenceSeconds: cadence[source.refreshPolicy], configurationBackfilledAt: new Date() }, patch: { ...patch, configurationBackfilledAt: new Date() }, action });
     }
     // A first migration with drift is not an acknowledged migration. Reject the
     // entire plan before inserts, fills, or configurationBackfilledAt updates.
     // Marked rows are already DB-owned: their operator edits remain reportable
-    // drift, but must not prevent unrelated first-time configuration.
+    // drift, but must not prevent unrelated first-time configuration in the
+    // legacy/local mode. The protected production operation opts into a strict
+    // all-drift gate and never acknowledges any conflicting configuration.
     const initialDrift = plan.filter((entry) => entry.action === "fill" && entry.drift.length);
-    if (!options.dryRun && initialDrift.length) {
-      throw new Error("Unresolved initial source drift: " + initialDrift.map((entry) =>
+    const driftToReject = options.failOnDrift ? plan.filter((entry) => entry.drift.length) : initialDrift;
+    if (!options.dryRun && driftToReject.length) {
+      throw new Error((options.failOnDrift ? "Unresolved source drift: " : "Unresolved initial source drift: ") + driftToReject.map((entry) =>
         JSON.stringify([entry.festivalSlug, entry.url]) + " (" + entry.drift.join(", ") + ")"
       ).join("; "));
     }

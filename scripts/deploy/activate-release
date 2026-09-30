@@ -1,13 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-commit="${1:?usage: activate-release COMMIT}"
+commit="${1:?usage: activate-release COMMIT [source-preview|source-apply|source-verify]}"
 deploy_user="festival-radar-deploy"
 incoming="/var/lib/festival-radar-deploy/incoming"
 installer="/usr/local/libexec/festival-radar/install-release.sh"
 
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid commit" >&2; exit 2; }
 [[ "${SUDO_USER:-}" == "$deploy_user" ]] || { echo "unauthorized deploy caller" >&2; exit 3; }
+[[ $# -ge 1 && $# -le 2 ]] || { echo "invalid activation arguments" >&2; exit 2; }
+
+# Existing sudoers grant matches commit-prefixed arguments. Validate every token.
+exec 9>/run/festival-radar-activation.lock
+flock -n 9 || { echo "activation or source operation already running" >&2; exit 5; }
+if [[ $# == 2 ]]; then
+  case "$2" in
+    source-preview|source-apply|source-verify) mode="${2#source-}" ;;
+    *) echo "invalid source operation" >&2; exit 2 ;;
+  esac
+  root=/opt/festival-radar
+  release="$root/releases/$commit"
+  [[ "$(readlink -f "$root/current" 2>/dev/null || true)" == "$release" ]] || { echo "deployed commit mismatch" >&2; exit 4; }
+  [[ -f "$release/DEPLOYED_COMMIT" && "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" ]] || { echo "release marker mismatch" >&2; exit 4; }
+  [[ -f "$release/scripts/deploy/run-source-backfill.ts" ]] || { echo "source operation not packaged" >&2; exit 4; }
+  [[ -f /etc/systemd/system/festival-radar-source-backfill@.service ]] || { echo "source unit not installed" >&2; exit 4; }
+  unit="festival-radar-source-backfill@$mode.service"
+  cursor="$(journalctl --no-pager -o cat --show-cursor -u "$unit" -n 1 2>/dev/null | sed -n 's/^-- cursor: //p' | tail -n 1)"
+  if systemctl start "$unit"; then result=0; else result=6; fi
+  if [[ -n "$cursor" ]]; then
+    audit="$(journalctl --no-pager -o cat --after-cursor "$cursor" -u "$unit" | grep '^SOURCE_BACKFILL_AUDIT ' | tail -n 1 || true)"
+  else
+    audit="$(journalctl --no-pager -o cat -u "$unit" -n 30 | grep '^SOURCE_BACKFILL_AUDIT ' | tail -n 1 || true)"
+  fi
+  if [[ -n "$audit" ]]; then echo "$audit"; else echo "source operation audit unavailable" >&2; result=6; fi
+  if [[ "$result" != 0 ]]; then echo "source operation failed" >&2; fi
+  exit "$result"
+fi
 
 archive="$incoming/$commit.tar.gz"
 environment="$incoming/$commit.env"
