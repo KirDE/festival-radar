@@ -1,5 +1,6 @@
 import { AdminChangeStatus, AdminDraftStatus, AdminResourceKind, AdminRunStatus, Prisma } from "@prisma/client";
-import { getFestivalSource } from "@/data/festival-sources";
+import { listConfiguredSources } from "@/lib/sources/repository";
+import { fetchSource } from "@/lib/ingestion/fetch";
 import { db } from "@/lib/db";
 import { publishAdminFestivalChange } from "@/lib/catalog/publication";
 import { readCatalog } from "@/lib/catalog/repository";
@@ -126,14 +127,15 @@ export async function decideChange(id: string, decision: "approve" | "reject", a
 }
 
 export async function refreshFestival(slug: string, actor: { id: string; email: string }) {
-  const source = getFestivalSource(slug);
+  const sources = await listConfiguredSources(db, slug);
   const festival = (await readCatalog()).festivals.find((item) => item.slug === slug);
-  if (!source || !festival || !source.enabled) throw new Error("Festival source is not configured");
+  if (sources.length !== 1 || !festival || !sources[0].enabled) throw new Error("Festival source is not configured");
+  const [source] = sources;
   const sourceUrl = process.env.NODE_ENV !== "production" && process.env.ADMIN_TEST_SOURCE_URL ? process.env.ADMIN_TEST_SOURCE_URL : source.url;
   const run = await db.adminParserRun.create({ data: { festivalSlug: slug, sourceId: sourceUrl, adapter: source.strategies.join(","), requestedById: actor.id, log: json([{ at: new Date().toISOString(), message: "Fetch started" }]) } });
   const started = Date.now();
   try {
-    const response = await fetch(sourceUrl, { headers: { "User-Agent": "FestivalRadarAdmin/1.0" }, signal: AbortSignal.timeout(20_000) });
+    const { response } = await fetchSource(sourceUrl === source.url ? source : { ...source, url: sourceUrl, fetchUrl: sourceUrl, followLinkPattern: undefined });
     if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
     const candidate = extractFestivalCandidate(await response.text(), source, new Date().toISOString());
     const fields = ["startDate", "endDate", "city", "headliners", "lineup", "ticketsUrl", "status"] as const;
