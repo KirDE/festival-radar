@@ -18,6 +18,22 @@ test("2000trees uses the active official domain and extracts its edition banner"
   assert.deepEqual(candidate.evidence.map(({ field }) => field), ["startDate", "endDate"]);
 });
 
+test("2000trees July dates do not shift at local midnight in positive-offset timezones", () => {
+  const source = getFestivalSource("2000trees");
+  const originalTimeZone = process.env.TZ;
+  try {
+    for (const timeZone of ["UTC", "Europe/Berlin", "Pacific/Auckland"]) {
+      process.env.TZ = timeZone;
+      const candidate = extractFestivalCandidate('<p class="alt-subheading">7TH - 10TH JULY 2027</p>', source, "2026-09-01T00:00:00Z");
+      assert.equal(candidate.startDate, "2027-07-07", timeZone);
+      assert.equal(candidate.endDate, "2027-07-10", timeZone);
+    }
+  } finally {
+    if (originalTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimeZone;
+  }
+});
+
 test("the defunct MetalDays source is retained as explicit disabled provenance", () => {
   const source = getFestivalSource("metaldays");
   assert.equal(source?.enabled, false);
