@@ -6,6 +6,7 @@ type Database = PrismaClient | Prisma.TransactionClient;
 const strategies: ParserStrategy[] = ["json_ld_event", "html_fallback", "official_markup", "manual_review"];
 const cadence: Record<RefreshPolicy, number> = { daily: 86400, every_3_days: 259200, weekly: 604800, archived: 2592000 };
 const policies = Object.keys(cadence);
+class SourceSeedValidationError extends Error {}
 
 function validUrl(value: string): boolean {
   try {
@@ -15,26 +16,26 @@ function validUrl(value: string): boolean {
 }
 
 export function sourceParserKey(source: Pick<FestivalSource, "festivalSlug" | "strategies">): string {
-  if (!Array.isArray(source.strategies) || !source.strategies.length || source.strategies.some((value) => !strategies.includes(value)) || new Set(source.strategies).size !== source.strategies.length) throw new Error("Invalid parser strategies");
-  if (source.strategies.includes("manual_review") && source.strategies.length !== 1) throw new Error("Manual parser cannot be combined");
-  if (source.strategies.includes("official_markup") && !hasOfficialMarkupAdapter(source.festivalSlug)) throw new Error("Unknown official parser for " + source.festivalSlug);
+  if (!Array.isArray(source.strategies) || !source.strategies.length || source.strategies.some((value) => !strategies.includes(value)) || new Set(source.strategies).size !== source.strategies.length) throw new SourceSeedValidationError("Invalid parser strategies");
+  if (source.strategies.includes("manual_review") && source.strategies.length !== 1) throw new SourceSeedValidationError("Manual parser cannot be combined");
+  if (source.strategies.includes("official_markup") && !hasOfficialMarkupAdapter(source.festivalSlug)) throw new SourceSeedValidationError("Unknown official parser for " + source.festivalSlug);
   return source.strategies.join("+") + (source.strategies.includes("official_markup") ? ":" + source.festivalSlug : "");
 }
 
 export function validateSource(source: FestivalSource & { parserKey?: string }): string {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(source.festivalSlug)) throw new Error("Invalid festival slug");
-  if (!validUrl(source.url) || (source.fetchUrl !== undefined && !validUrl(source.fetchUrl))) throw new Error("Invalid source or fetch URL");
-  if (!Number.isInteger(source.editionYear) || source.editionYear < 2000 || source.editionYear > 2100) throw new Error("Invalid source edition");
-  if (!policies.includes(source.refreshPolicy)) throw new Error("Invalid refresh policy");
-  if (typeof source.enabled !== "boolean") throw new Error("Invalid source enabled flag");
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(source.festivalSlug)) throw new SourceSeedValidationError("Invalid festival slug");
+  if (!validUrl(source.url) || (source.fetchUrl !== undefined && !validUrl(source.fetchUrl))) throw new SourceSeedValidationError("Invalid source or fetch URL");
+  if (!Number.isInteger(source.editionYear) || source.editionYear < 2000 || source.editionYear > 2100) throw new SourceSeedValidationError("Invalid source edition");
+  if (!policies.includes(source.refreshPolicy)) throw new SourceSeedValidationError("Invalid refresh policy");
+  if (typeof source.enabled !== "boolean") throw new SourceSeedValidationError("Invalid source enabled flag");
   if (source.followLinkPattern !== undefined) {
     const pattern = source.followLinkPattern;
-    if (!pattern || pattern.length > 256 || !pattern.startsWith("^") || !pattern.endsWith("$") || /[()|]/.test(pattern) || /\\[1-9]/.test(pattern)) throw new Error("Unsafe follow-link regex");
-    try { new RegExp(pattern, "i"); } catch { throw new Error("Invalid follow-link regex"); }
+    if (!pattern || pattern.length > 256 || !pattern.startsWith("^") || !pattern.endsWith("$") || /[()|]/.test(pattern) || /\\[1-9]/.test(pattern)) throw new SourceSeedValidationError("Unsafe follow-link regex");
+    try { new RegExp(pattern, "i"); } catch { throw new SourceSeedValidationError("Invalid follow-link regex"); }
   }
-  if (source.headers !== undefined && (!source.headers || typeof source.headers !== "object" || Array.isArray(source.headers) || Object.entries(source.headers).some(([key, value]) => !/^[a-z0-9-]+$/i.test(key) || typeof value !== "string" || /[\r\n]/.test(value)))) throw new Error("Invalid request headers");
+  if (source.headers !== undefined && (!source.headers || typeof source.headers !== "object" || Array.isArray(source.headers) || Object.entries(source.headers).some(([key, value]) => !/^[a-z0-9-]+$/i.test(key) || typeof value !== "string" || /[\r\n]/.test(value)))) throw new SourceSeedValidationError("Invalid request headers");
   const key = sourceParserKey(source);
-  if (source.parserKey !== undefined && source.parserKey !== key) throw new Error("Unknown or mismatched parser key: " + source.parserKey);
+  if (source.parserKey !== undefined && source.parserKey !== key) throw new SourceSeedValidationError("Unknown or mismatched parser key: " + source.parserKey);
   return key;
 }
 
@@ -58,6 +59,14 @@ export async function listConfiguredSources(db: Database, festivalSlug?: string)
 type Plan = { festivalSlug: string; url: string; action: "insert" | "fill" | "preserve"; fields: string[]; drift: string[] };
 export type SourceBackfillReport = { ok: boolean; counts: Record<Plan["action"], number>; plan: Plan[] };
 
+// Only these local planning rejects may be exposed as diagnostic categories.
+// Messages remain useful locally but must never reach the protected audit.
+export type SourceBackfillRejectCode = "seed-validation" | "duplicate-source" | "missing-enabled-festival" | "missing-edition" | "binding-conflict" | "legacy-config-conflict" | "unresolved-drift";
+export class SourceBackfillReject extends Error {
+  readonly code: SourceBackfillRejectCode;
+  constructor(code: SourceBackfillRejectCode, message: string) { super(message); this.name = "SourceBackfillReject"; this.code = code; }
+}
+
 // Called only by the explicit one-time operator command. Never by catalogue backfill or deploy.
 export async function backfillSources(db: PrismaClient, inventory: readonly FestivalSource[], options: { dryRun?: boolean; failOnDrift?: boolean } = {}): Promise<SourceBackfillReport> {
   return db.$transaction(async (tx) => {
@@ -69,18 +78,24 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
     const operations: { where: { festivalSlug_url: { festivalSlug: string; url: string } }; create: Prisma.FestivalSourceCreateInput; patch: Prisma.FestivalSourceUpdateInput; action: Plan["action"] }[] = [];
     const plan: Plan[] = [];
     for (const source of inventory) {
-      const parserKey = validateSource(source);
+      let parserKey: string;
+      try { parserKey = validateSource(source); }
+      catch (error) {
+        // Categorize by origin, never by parsing an exception's message.
+        if (error instanceof SourceSeedValidationError) throw new SourceBackfillReject("seed-validation", error.message);
+        throw error;
+      }
       const key = JSON.stringify([source.festivalSlug, source.url]);
-      if (seen.has(key)) throw new Error("Duplicate source: " + key);
+      if (seen.has(key)) throw new SourceBackfillReject("duplicate-source", "Duplicate source: " + key);
       seen.add(key);
       const festival = festivalBySlug.get(source.festivalSlug);
-      if (!festival && source.enabled) throw new Error("Missing enabled festival: " + source.festivalSlug);
+      if (!festival && source.enabled) throw new SourceBackfillReject("missing-enabled-festival", "Missing enabled festival: " + source.festivalSlug);
       const edition = festival?.editions.find((item) => item.year === source.editionYear);
-      if (!edition && source.enabled) throw new Error("Missing source edition: " + key + " / " + source.editionYear);
+      if (!edition && source.enabled) throw new SourceBackfillReject("missing-edition", "Missing source edition: " + key + " / " + source.editionYear);
       const row = rowByKey.get(key);
-      if (row?.festivalId && row.festivalId !== festival?.id) throw new Error("Source festival binding conflict: " + key);
-      if (row?.editionId && row.editionId !== edition?.id) throw new Error("Source edition binding conflict: " + key);
-      if (row && !row.configurationBackfilledAt && (row.editionYear !== source.editionYear || row.refreshPolicy !== source.refreshPolicy || JSON.stringify(row.strategies) !== JSON.stringify(source.strategies))) throw new Error("Legacy source configuration conflict: " + key);
+      if (row?.festivalId && row.festivalId !== festival?.id) throw new SourceBackfillReject("binding-conflict", "Source festival binding conflict: " + key);
+      if (row?.editionId && row.editionId !== edition?.id) throw new SourceBackfillReject("binding-conflict", "Source edition binding conflict: " + key);
+      if (row && !row.configurationBackfilledAt && (row.editionYear !== source.editionYear || row.refreshPolicy !== source.refreshPolicy || JSON.stringify(row.strategies) !== JSON.stringify(source.strategies))) throw new SourceBackfillReject("legacy-config-conflict", "Legacy source configuration conflict: " + key);
       const desired = { festivalId: festival?.id ?? null, editionId: edition?.id ?? null, parserKey, fetchUrl: source.fetchUrl ?? null, followLinkPattern: source.followLinkPattern ?? null, requestHeaders: source.headers ?? null, cadenceSeconds: cadence[source.refreshPolicy] };
       const fields: string[] = [];
       const drift: string[] = row && row.enabled !== source.enabled ? ["enabled"] : [];
@@ -103,7 +118,7 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
     const initialDrift = plan.filter((entry) => entry.action === "fill" && entry.drift.length);
     const driftToReject = options.failOnDrift ? plan.filter((entry) => entry.drift.length) : initialDrift;
     if (!options.dryRun && driftToReject.length) {
-      throw new Error((options.failOnDrift ? "Unresolved source drift: " : "Unresolved initial source drift: ") + driftToReject.map((entry) =>
+      throw new SourceBackfillReject("unresolved-drift", (options.failOnDrift ? "Unresolved source drift: " : "Unresolved initial source drift: ") + driftToReject.map((entry) =>
         JSON.stringify([entry.festivalSlug, entry.url]) + " (" + entry.drift.join(", ") + ")"
       ).join("; "));
     }
