@@ -37,54 +37,53 @@ test("fixed-mode wrapper rejects privilege, extra arguments, wrong commit, and a
     assert.match(run(["b".repeat(40), "source-preview"]).stderr, /deployed commit mismatch/);
     assert.match(run([sha.slice(0, -1) + "z", "source-preview"]).stderr, /invalid commit/);
     const mock = path.join(temporary, "bin");
-    const journalCalls = path.join(temporary, "journal-calls");
     await mkdir(mock);
     await writeFile(path.join(mock, "systemctl"), String.raw`#!/bin/sh
-case "$1" in
-  start)
-    if [ "$MOCK_MISSING_ENV" = 1 ]; then rm -f "$MOCK_ENV_FILE"; exit 1; fi
-    if [ ! -f "$MOCK_ENV_FILE" ]; then exit 1; fi
-    [ "$(stat -c %a "$MOCK_ENV_FILE")" = 600 ] || exit 1
-    [ "$(stat -c %a "$(dirname "$MOCK_ENV_FILE")")" = 700 ] || exit 1
-    cp "$MOCK_ENV_FILE" "$MOCK_CAPTURED_ENV"
-    echo 'sensitive unit error' >&2
-    if [ "$MOCK_SYSTEMCTL_FAIL" = 1 ]; then exit 1; fi ;;
-esac
+[ "$1" = start ] || exit 1
+[ "$2" = festival-radar-source-backfill@preview.service ] || exit 1
+if [ "$MOCK_MISSING_ENV" = 1 ]; then rm -f "$MOCK_ENV_FILE"; exit 1; fi
+[ -f "$MOCK_ENV_FILE" ] || exit 1
+[ "$(stat -c %a "$MOCK_ENV_FILE")" = 600 ] || exit 1
+[ "$(stat -c %a "$MOCK_AUDIT_FILE")" = 600 ] || exit 1
+[ "$(stat -c %a "$(dirname "$MOCK_ENV_FILE")")" = 700 ] || exit 1
+cp "$MOCK_ENV_FILE" "$MOCK_CAPTURED_ENV"
+nonce=$(sed -n 's/^SOURCE_BACKFILL_NONCE=//p' "$MOCK_CAPTURED_ENV")
+# Simulate the service manager's append file descriptor (never journal stdout).
+if [ "$MOCK_EMPTY" != 1 ]; then
+  echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"ok","drift":0}' >> "$MOCK_AUDIT_FILE"
+  if [ "$MOCK_SPOOF" = 1 ]; then
+    printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"ok","url":"sensitive","drift":0}\n' "$nonce" >> "$MOCK_AUDIT_FILE"
+  fi
+  if [ "$MOCK_AUDIT" = 1 ]; then
+    if [ "$MOCK_SYSTEMCTL_FAIL" = 1 ] && [ "$MOCK_FAIL_WITH_OK" != 1 ]; then status=review-required; extra=',"counts":{"insert":2,"fill":0,"preserve":3}'; drift=1;
+    elif [ "$MOCK_REVIEW" = 1 ]; then status=review-required; extra=''; drift=1;
+    else status=ok; extra=''; drift=0; fi
+    printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"%s"%s,"drift":%s}\n' "$nonce" "$status" "$extra" "$drift" >> "$MOCK_AUDIT_FILE"
+    cp "$MOCK_AUDIT_FILE" "$MOCK_AUDIT_CAPTURE"
+    if [ "$MOCK_DUPLICATE" = 1 ]; then tail -n 1 "$MOCK_AUDIT_FILE" >> "$MOCK_AUDIT_FILE"; fi
+  fi
+  if [ "$MOCK_OVERSIZE" = 1 ]; then head -c 70000 /dev/zero | tr '\000' x >> "$MOCK_AUDIT_FILE"; fi
+  if [ "$MOCK_LONG_LINE" = 1 ]; then head -c 2000 /dev/zero | tr '\000' x >> "$MOCK_AUDIT_FILE"; fi
+  if [ "$MOCK_NUL" = 1 ]; then printf '\000' >> "$MOCK_AUDIT_FILE"; fi
+  if [ "$MOCK_MANY_LINES" = 1 ]; then i=0; while [ "$i" -lt 201 ]; do echo noise >> "$MOCK_AUDIT_FILE"; i=$((i+1)); done; fi
+  if [ "$MOCK_UNSAFE" = 1 ]; then chmod 644 "$MOCK_AUDIT_FILE"; fi
+  if [ "$MOCK_MISSING_AUDIT" = 1 ]; then rm "$MOCK_AUDIT_FILE"; fi
+fi
+echo 'sensitive unit error' >&2
+if [ "$MOCK_SYSTEMCTL_FAIL" = 1 ]; then exit 1; fi
 `);
-    // Filter must require the exact unit and Node stdout; the mock emits only
-    // the captured fresh nonce (or a stale/spoofed record for negative cases).
-    await writeFile(path.join(mock, "journalctl"), String.raw`#!/bin/sh
-case " $* " in
-  *" --since=@"*" -n 200 _SYSTEMD_UNIT=festival-radar-source-backfill@preview.service _TRANSPORT=stdout _COMM=node "*)
-    count=0
-    if [ -f "$MOCK_JOURNAL_CALLS" ]; then count=$(cat "$MOCK_JOURNAL_CALLS"); fi
-    count=$((count + 1))
-    printf '%s\n' "$count" > "$MOCK_JOURNAL_CALLS"
-    if [ "$MOCK_JOURNAL_UNREADABLE" = 1 ]; then echo 'sensitive journal error' >&2; exit 1; fi
-    echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"ok","drift":0}'
-    if [ "$MOCK_AUDIT" = 1 ] && [ "$count" -ge "$MOCK_AUDIT_AFTER" ]; then
-      nonce=$(sed -n 's/^SOURCE_BACKFILL_NONCE=//p' "$MOCK_CAPTURED_ENV")
-      if [ "$MOCK_SYSTEMCTL_FAIL" = 1 ] && [ "$MOCK_FAIL_WITH_OK" != 1 ]; then status=review-required; extra=',"counts":{"insert":2,"fill":0,"preserve":3}'; drift=1;
-      elif [ "$MOCK_REVIEW" = 1 ]; then status=review-required; extra=''; drift=1;
-      else status=ok; extra=''; drift=0; fi
-      printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"%s"%s,"drift":%s}\n' "$nonce" "$status" "$extra" "$drift" > "$MOCK_JOURNAL_RECORD"
-      cat "$MOCK_JOURNAL_RECORD"
-    elif [ "$MOCK_SPOOF" = 1 ]; then
-      nonce=$(sed -n 's/^SOURCE_BACKFILL_NONCE=//p' "$MOCK_CAPTURED_ENV")
-      printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"ok","url":"sensitive","drift":0}\n' "$nonce"
-    elif [ "$MOCK_JOURNAL_NO_MARKER" = 1 ]; then echo 'sensitive journal entry'; fi ;;
-  *) echo 'sensitive unscoped journal entry' ;;
-esac
+    await writeFile(path.join(mock, "head"), String.raw`#!/bin/sh
+if [ "$MOCK_UNREADABLE" = 1 ]; then echo sensitive-read-error >&2; exit 1; fi
+exec /usr/bin/head "$@"
 `);
-    await writeFile(path.join(mock, "sleep"), "#!/bin/sh\nexit 0\n");
-    execFileSync("chmod", ["+x", path.join(mock, "systemctl"), path.join(mock, "journalctl"), path.join(mock, "sleep")]);
+    execFileSync("chmod", ["+x", path.join(mock, "systemctl"), path.join(mock, "head")]);
     const capturedEnv = path.join(temporary, "captured-env");
-    const journalRecord = path.join(temporary, "journal-record");
-    const mockEnv = { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy", MOCK_ENV_FILE: path.join(nonceDir, "preview.env"), MOCK_CAPTURED_ENV: capturedEnv, MOCK_JOURNAL_RECORD: journalRecord, MOCK_JOURNAL_CALLS: journalCalls, MOCK_AUDIT: "1", MOCK_AUDIT_AFTER: "1", MOCK_SYSTEMCTL_FAIL: "0", MOCK_JOURNAL_NO_MARKER: "0", MOCK_JOURNAL_UNREADABLE: "0", MOCK_SPOOF: "0" };
+    const auditCapture = path.join(temporary, "audit-capture");
+    const auditFile = path.join(nonceDir, "preview.audit");
+    const mockEnv = { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy", MOCK_ENV_FILE: path.join(nonceDir, "preview.env"), MOCK_AUDIT_FILE: auditFile, MOCK_AUDIT_CAPTURE: auditCapture, MOCK_CAPTURED_ENV: capturedEnv, MOCK_AUDIT: "1", MOCK_SYSTEMCTL_FAIL: "0" };
     const runMock = async (env = {}) => {
       await rm(capturedEnv, { force: true });
-      await rm(journalCalls, { force: true });
-      await rm(journalRecord, { force: true });
+      await rm(auditCapture, { force: true });
       const result = spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...mockEnv, ...env } });
       const captured = await readFile(capturedEnv, "utf8").catch(() => "");
       if (captured) {
@@ -92,73 +91,56 @@ esac
         assert.doesNotMatch(result.stdout + result.stderr, new RegExp(nonce));
         assert.doesNotMatch(result.stdout, /"nonce"/);
       }
+      assert.equal(await readFile(auditFile, "utf8").catch(() => null), null);
+      assert.equal(await readFile(mockEnv.MOCK_ENV_FILE, "utf8").catch(() => null), null);
       return result;
     };
-    const valid = await runMock();
+    const valid = await runMock({ MOCK_SPOOF: "1" });
     assert.equal(valid.status, 0, valid.stderr);
     assert.doesNotMatch(valid.stderr, /sensitive/);
-    assert.match(valid.stdout, /SOURCE_BACKFILL_AUDIT.*"status":"ok"/);
+    assert.equal(valid.stdout.trim(), 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","status":"ok","drift":0}');
     const nonce1 = (await readFile(capturedEnv, "utf8")).trim().split("=")[1];
     assert.match(nonce1, /^[0-9a-f]{64}$/);
     assert.equal((await stat(nonceDir)).mode & 0o777, 0o700);
-    assert.match(await readFile(journalRecord, "utf8"), new RegExp(nonce1));
-    assert.equal(valid.stdout.trim(), 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","status":"ok","drift":0}');
-    await assert.rejects(readFile(path.join(nonceDir, "preview.env")));
-    const delayed = await runMock({ MOCK_AUDIT_AFTER: "3" });
-    const nonce2 = (await readFile(capturedEnv, "utf8")).trim().split("=")[1];
-    assert.notEqual(nonce2, nonce1);
-    assert.match(await readFile(journalRecord, "utf8"), new RegExp(nonce2));
-    assert.equal(delayed.stdout.trim().split("\n").length, 1);
-    assert.equal(delayed.status, 0, delayed.stderr);
-    assert.match(delayed.stdout, /SOURCE_BACKFILL_AUDIT.*"status":"ok"/);
-    assert.equal(await readFile(journalCalls, "utf8"), "3\n");
+    assert.match(await readFile(auditCapture, "utf8"), new RegExp(nonce1));
+    assert.match(await readFile(auditCapture, "utf8"), /"url":"sensitive"/);
+    // A prior root-owned file must be replaced, not appended to or trusted.
+    await writeFile(auditFile, 'SOURCE_BACKFILL_AUDIT {"status":"stale"}\n');
+    const next = await runMock();
+    assert.equal(next.status, 0, next.stderr);
+    assert.doesNotMatch(await readFile(auditCapture, "utf8"), /"status":"stale"/);
+    assert.notEqual((await readFile(capturedEnv, "utf8")).trim().split("=")[1], nonce1);
+    const outside = path.join(temporary, "outside");
+    await writeFile(outside, "untouched\n");
+    await symlink(outside, auditFile);
+    assert.equal((await runMock()).status, 0);
+    assert.equal(await readFile(outside, "utf8"), "untouched\n");
     const busy = spawnSync("flock", ["-x", lock, "bash", script, sha, "source-preview"], { encoding: "utf8", env: { ...process.env, SUDO_USER: "festival-radar-deploy" } });
     assert.equal(busy.status, 5);
     assert.match(busy.stderr, /already running/);
     const failed = await runMock({ MOCK_SYSTEMCTL_FAIL: "1" });
     assert.equal(failed.status, 6);
     assert.equal(failed.stdout.trim(), 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","status":"review-required","counts":{"insert":2,"fill":0,"preserve":3},"drift":1}');
-    assert.match(await readFile(journalRecord, "utf8"), /"nonce":"[0-9a-f]{64}"/);
     assert.match(failed.stderr, /systemctl start failed/);
     assert.doesNotMatch(failed.stderr, /sensitive/);
-    assert.equal(await readFile(journalCalls, "utf8"), "1\n");
-    const failedWithOk = await runMock({ MOCK_SYSTEMCTL_FAIL: "1", MOCK_FAIL_WITH_OK: "1" });
-    assert.equal(failedWithOk.status, 6);
-    assert.match(failedWithOk.stdout, /"status":"ok"/);
-    const missingEnv = await runMock({ MOCK_MISSING_ENV: "1", MOCK_AUDIT: "0" });
-    assert.equal(missingEnv.status, 6);
-    assert.doesNotMatch(missingEnv.stdout, /SOURCE_BACKFILL_AUDIT/);
-    assert.match(missingEnv.stderr, /systemctl start failed/);
-    const failedNoMarker = await runMock({ MOCK_SYSTEMCTL_FAIL: "1", MOCK_AUDIT: "0" });
-    assert.equal(failedNoMarker.status, 6);
-    assert.doesNotMatch(failedNoMarker.stdout, /SOURCE_BACKFILL_AUDIT/);
-    assert.match(failedNoMarker.stderr, /systemctl start failed[\s\S]*journal no marker/);
-    const noAudit = await runMock({ MOCK_AUDIT: "0" });
-    assert.equal(noAudit.status, 6);
-    assert.doesNotMatch(noAudit.stdout, /SOURCE_BACKFILL_AUDIT/);
-    assert.match(noAudit.stderr, /journal no marker/);
-    assert.equal(await readFile(journalCalls, "utf8"), "10\n");
-    // An old marker cannot satisfy the fresh invocation, even after retries.
-    const staleAudit = await runMock({ MOCK_AUDIT: "0" });
-    assert.equal(staleAudit.status, 6);
-    assert.doesNotMatch(staleAudit.stdout, /SOURCE_BACKFILL_AUDIT/);
-    assert.match(staleAudit.stderr, /journal no marker/);
     const review = await runMock({ MOCK_REVIEW: "1" });
     assert.equal(review.status, 6);
     assert.equal(JSON.parse(review.stdout.slice("SOURCE_BACKFILL_AUDIT ".length)).status, "review-required");
-    assert.equal((await readFile(path.join(nonceDir, "preview.env")).catch(() => null)), null);
-    const unreadable = await runMock({ MOCK_JOURNAL_UNREADABLE: "1" });
-    assert.equal(unreadable.status, 6);
-    assert.match(unreadable.stderr, /journal unreadable/);
-    assert.doesNotMatch(unreadable.stderr, /sensitive/);
-    const noMarker = await runMock({ MOCK_JOURNAL_NO_MARKER: "1", MOCK_AUDIT: "0" });
-    assert.equal(noMarker.status, 6);
-    assert.match(noMarker.stderr, /journal no marker/);
-    assert.doesNotMatch(noMarker.stderr, /sensitive/);
-    const spoofed = await runMock({ MOCK_AUDIT: "0", MOCK_SPOOF: "1" });
-    assert.equal(spoofed.status, 6);
-    assert.doesNotMatch(spoofed.stdout, /SOURCE_BACKFILL_AUDIT|sensitive/);
-    assert.match(spoofed.stderr, /journal no marker/);
+    const failedWithOk = await runMock({ MOCK_SYSTEMCTL_FAIL: "1", MOCK_FAIL_WITH_OK: "1" });
+    assert.equal(failedWithOk.status, 6);
+    assert.match(failedWithOk.stdout, /"status":"ok"/);
+    for (const env of [
+      { MOCK_MISSING_ENV: "1" }, { MOCK_EMPTY: "1" }, { MOCK_AUDIT: "0" },
+      { MOCK_AUDIT: "0", MOCK_SPOOF: "1" }, { MOCK_OVERSIZE: "1" },
+      { MOCK_LONG_LINE: "1" }, { MOCK_UNREADABLE: "1" }, { MOCK_DUPLICATE: "1" },
+      { MOCK_NUL: "1" }, { MOCK_MANY_LINES: "1" }, { MOCK_UNSAFE: "1" },
+      { MOCK_MISSING_AUDIT: "1" },
+    ]) {
+      const result = await runMock(env);
+      assert.equal(result.status, 6, JSON.stringify(env));
+      assert.doesNotMatch(result.stdout, /SOURCE_BACKFILL_AUDIT|sensitive/);
+      assert.doesNotMatch(result.stderr, /sensitive/);
+    }
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 
@@ -175,6 +157,10 @@ test("packaged Node runner, app-user unit, and protected manual trigger only", a
   assert.match(installer, /ExecStart=.*\.runtime\/node --experimental-strip-types .*run-source-backfill\.ts %i/);
   assert.match(installer, /User=www-data[\s\S]*EnvironmentFile=\$shared\/production.env\nEnvironmentFile=\/run\/festival-radar-source-backfill\/%i.env/);
   assert.doesNotMatch(installer, /EnvironmentFile=-\/run\/festival-radar-source-backfill/);
+  assert.match(installer, /StandardOutput=append:\/run\/festival-radar-source-backfill\/%i\.audit/);
+  assert.match(installer, /StandardError=journal/);
+  assert.match(wrapper, /audit_file="\$nonce_dir\/\$mode\.audit"/);
+  assert.doesNotMatch(wrapper.slice(wrapper.indexOf("  unit=\"festival-radar-source-backfill@\$mode.service\"")), /journalctl/);
   assert.doesNotMatch(installer, /enable --now "\$service-source-backfill/);
   assert.match(workflow, /workflow_dispatch:[\s\S]*mode:/);
   assert.match(workflow, /environment: production/);
