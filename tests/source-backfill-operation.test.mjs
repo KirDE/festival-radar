@@ -67,7 +67,8 @@ case " $* " in
       if [ "$MOCK_SYSTEMCTL_FAIL" = 1 ] && [ "$MOCK_FAIL_WITH_OK" != 1 ]; then status=review-required; extra=',"counts":{"insert":2,"fill":0,"preserve":3}'; drift=1;
       elif [ "$MOCK_REVIEW" = 1 ]; then status=review-required; extra=''; drift=1;
       else status=ok; extra=''; drift=0; fi
-      printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"%s"%s,"drift":%s}\n' "$nonce" "$status" "$extra" "$drift"
+      printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"%s"%s,"drift":%s}\n' "$nonce" "$status" "$extra" "$drift" > "$MOCK_JOURNAL_RECORD"
+      cat "$MOCK_JOURNAL_RECORD"
     elif [ "$MOCK_SPOOF" = 1 ]; then
       nonce=$(sed -n 's/^SOURCE_BACKFILL_NONCE=//p' "$MOCK_CAPTURED_ENV")
       printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"ok","url":"sensitive","drift":0}\n' "$nonce"
@@ -78,11 +79,20 @@ esac
     await writeFile(path.join(mock, "sleep"), "#!/bin/sh\nexit 0\n");
     execFileSync("chmod", ["+x", path.join(mock, "systemctl"), path.join(mock, "journalctl"), path.join(mock, "sleep")]);
     const capturedEnv = path.join(temporary, "captured-env");
-    const mockEnv = { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy", MOCK_ENV_FILE: path.join(nonceDir, "preview.env"), MOCK_CAPTURED_ENV: capturedEnv, MOCK_JOURNAL_CALLS: journalCalls, MOCK_AUDIT: "1", MOCK_AUDIT_AFTER: "1", MOCK_SYSTEMCTL_FAIL: "0", MOCK_JOURNAL_NO_MARKER: "0", MOCK_JOURNAL_UNREADABLE: "0", MOCK_SPOOF: "0" };
+    const journalRecord = path.join(temporary, "journal-record");
+    const mockEnv = { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy", MOCK_ENV_FILE: path.join(nonceDir, "preview.env"), MOCK_CAPTURED_ENV: capturedEnv, MOCK_JOURNAL_RECORD: journalRecord, MOCK_JOURNAL_CALLS: journalCalls, MOCK_AUDIT: "1", MOCK_AUDIT_AFTER: "1", MOCK_SYSTEMCTL_FAIL: "0", MOCK_JOURNAL_NO_MARKER: "0", MOCK_JOURNAL_UNREADABLE: "0", MOCK_SPOOF: "0" };
     const runMock = async (env = {}) => {
       await rm(capturedEnv, { force: true });
       await rm(journalCalls, { force: true });
-      return spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...mockEnv, ...env } });
+      await rm(journalRecord, { force: true });
+      const result = spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...mockEnv, ...env } });
+      const captured = await readFile(capturedEnv, "utf8").catch(() => "");
+      if (captured) {
+        const nonce = captured.trim().split("=")[1];
+        assert.doesNotMatch(result.stdout + result.stderr, new RegExp(nonce));
+        assert.doesNotMatch(result.stdout, /"nonce"/);
+      }
+      return result;
     };
     const valid = await runMock();
     assert.equal(valid.status, 0, valid.stderr);
@@ -91,12 +101,14 @@ esac
     const nonce1 = (await readFile(capturedEnv, "utf8")).trim().split("=")[1];
     assert.match(nonce1, /^[0-9a-f]{64}$/);
     assert.equal((await stat(nonceDir)).mode & 0o777, 0o700);
-    assert.match(valid.stdout, new RegExp(nonce1));
+    assert.match(await readFile(journalRecord, "utf8"), new RegExp(nonce1));
+    assert.equal(valid.stdout.trim(), 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","status":"ok","drift":0}');
     await assert.rejects(readFile(path.join(nonceDir, "preview.env")));
     const delayed = await runMock({ MOCK_AUDIT_AFTER: "3" });
     const nonce2 = (await readFile(capturedEnv, "utf8")).trim().split("=")[1];
     assert.notEqual(nonce2, nonce1);
-    assert.match(delayed.stdout, new RegExp(nonce2));
+    assert.match(await readFile(journalRecord, "utf8"), new RegExp(nonce2));
+    assert.equal(delayed.stdout.trim().split("\n").length, 1);
     assert.equal(delayed.status, 0, delayed.stderr);
     assert.match(delayed.stdout, /SOURCE_BACKFILL_AUDIT.*"status":"ok"/);
     assert.equal(await readFile(journalCalls, "utf8"), "3\n");
@@ -105,7 +117,8 @@ esac
     assert.match(busy.stderr, /already running/);
     const failed = await runMock({ MOCK_SYSTEMCTL_FAIL: "1" });
     assert.equal(failed.status, 6);
-    assert.match(failed.stdout, /SOURCE_BACKFILL_AUDIT.*"status":"review-required".*"insert":2/);
+    assert.equal(failed.stdout.trim(), 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","status":"review-required","counts":{"insert":2,"fill":0,"preserve":3},"drift":1}');
+    assert.match(await readFile(journalRecord, "utf8"), /"nonce":"[0-9a-f]{64}"/);
     assert.match(failed.stderr, /systemctl start failed/);
     assert.doesNotMatch(failed.stderr, /sensitive/);
     assert.equal(await readFile(journalCalls, "utf8"), "1\n");
@@ -132,7 +145,7 @@ esac
     assert.match(staleAudit.stderr, /journal no marker/);
     const review = await runMock({ MOCK_REVIEW: "1" });
     assert.equal(review.status, 6);
-    assert.match(review.stdout, /"status":"review-required"/);
+    assert.equal(JSON.parse(review.stdout.slice("SOURCE_BACKFILL_AUDIT ".length)).status, "review-required");
     assert.equal((await readFile(path.join(nonceDir, "preview.env")).catch(() => null)), null);
     const unreadable = await runMock({ MOCK_JOURNAL_UNREADABLE: "1" });
     assert.equal(unreadable.status, 6);

@@ -61,7 +61,10 @@ if [[ $# == 2 ]]; then
           if [[ "$line" =~ $audit_pattern ]]; then audit="$line"; fi
         done <<< "$entries"
         if [[ -n "$audit" ]]; then
-          echo "$audit"
+          # Only after matching the whole original record, remove its exact
+          # nonce field before forwarding the audit to SSH/Actions stdout.
+          audit_prefix='SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'",'
+          printf '%s\n' 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'",'"${audit#"$audit_prefix"}"
           if [[ "$audit" == *'"status":"ok"'* && "$result" == 0 ]]; then exit 0; fi
           exit 6
         fi
