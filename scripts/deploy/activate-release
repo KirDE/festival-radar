@@ -110,12 +110,31 @@ if [[ $# == 2 ]]; then
   [[ "$(stat -c %s -- "$audit_file" 2>/dev/null)" == "$audit_size" ]] || { echo "source audit changed" >&2; exit 6; }
   # Only the complete legacy conflict scan may expose a fixed numeric summary.
   # Other failures have neither counts nor a measured drift.
-  audit_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(ok|review-required)","counts":\{"insert":[0-9]+,"fill":[0-9]+,"preserve":[0-9]+\},"drift":[0-9]+\}$|^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(migration-missing|migration-check-error|database-or-unknown-error|guard-or-data-error|disconnect-error|seed-validation|duplicate-source|missing-enabled-festival|missing-edition|binding-conflict|unresolved-drift)","drift":null\}$|^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"legacy-config-conflict","conflictSummary":\{"affectedRows":[1-9][0-9]*,"editionYear":[0-9]+,"refreshPolicy":[0-9]+,"strategies":[0-9]+\},"drift":null\}$'
+  audit_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(ok|review-required)","counts":\{"insert":[0-9]+,"fill":[0-9]+,"preserve":[0-9]+\},"drift":[0-9]+\}$|^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(migration-missing|migration-check-error|database-or-unknown-error|guard-or-data-error|disconnect-error|seed-validation|duplicate-source|missing-enabled-festival|missing-edition|binding-conflict|unresolved-drift)","drift":null\}$'
+  # At most twenty fixed-width numeric tuples; no dynamic JSON keys/strings.
+  tuple='\[(0|[1-9][0-9]{0,3}),-?(0|[1-9][0-9]{0,9}),[0-4],(0|[1-9]|[12][0-9]|3[01])\]'
+  conflict_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"legacy-config-conflict","conflictSummary":\{"affectedRows":([1-9]|1[0-9]|20),"editionYear":([0-9]|1[0-9]|20),"refreshPolicy":([0-9]|1[0-9]|20),"strategies":([0-9]|1[0-9]|20),"digest":\[('"$tuple"'(,'"$tuple"'){0,19})\]\},"drift":null\}$'
   audit=""
   line_count=0
   while IFS= read -r line || [[ -n "$line" ]]; do
     (( ++line_count <= 200 && ${#line} <= 1024 )) || { echo "source audit bounds exceeded" >&2; exit 6; }
-    if [[ "$line" =~ $audit_pattern ]]; then
+    if [[ "$line" =~ $conflict_pattern ]]; then
+      affected="${BASH_REMATCH[1]}"
+      digest="${BASH_REMATCH[5]}"
+      remaining="$digest"
+      seen=0 previous=-1
+      # The regular expression above has already constrained all characters.
+      while [[ -n "$remaining" ]]; do
+        [[ "$remaining" =~ ^$tuple(,|$) ]] || { echo "source audit digest invalid" >&2; exit 6; }
+        index=$((10#${BASH_REMATCH[1]}))
+        (( index > previous )) || { echo "source audit digest order invalid" >&2; exit 6; }
+        previous=$index
+        (( ++seen <= 20 )) || { echo "source audit digest bound exceeded" >&2; exit 6; }
+        remaining="${remaining#"${BASH_REMATCH[0]}"}"
+      done
+      (( seen == affected )) || { echo "source audit digest count invalid" >&2; exit 6; }
+    fi
+    if [[ "$line" =~ $audit_pattern || "$line" =~ $conflict_pattern ]]; then
       [[ -z "$audit" ]] || { echo "source audit ambiguous" >&2; exit 6; }
       audit="$line"
     fi

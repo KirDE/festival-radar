@@ -53,7 +53,7 @@ nonce=$(sed -n 's/^SOURCE_BACKFILL_NONCE=//p' "$MOCK_CAPTURED_ENV")
 if [ "$MOCK_EMPTY" != 1 ]; then
   echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"ok","counts":{"insert":0,"fill":0,"preserve":0},"drift":0}' >> "$MOCK_AUDIT_FILE"
   if [ "$MOCK_STALE_CONFLICT" = 1 ]; then
-    echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"legacy-config-conflict","conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1},"drift":null}' >> "$MOCK_AUDIT_FILE"
+    echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"legacy-config-conflict","conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1,"digest":[[0,2028,1,4],[1,2027,2,8]]},"drift":null}' >> "$MOCK_AUDIT_FILE"
   fi
   if [ "$MOCK_SPOOF" = 1 ]; then
     printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"ok","url":"sensitive","counts":{"insert":0,"fill":0,"preserve":0},"drift":0}\n' "$nonce" >> "$MOCK_AUDIT_FILE"
@@ -61,7 +61,7 @@ if [ "$MOCK_EMPTY" != 1 ]; then
   if [ "$MOCK_AUDIT" = 1 ]; then
     if [ "$MOCK_STATUS" = legacy-config-conflict ]; then
       status=legacy-config-conflict
-      extra=',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1}'
+      extra=',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1,"digest":[[0,2028,1,4],[1,2027,2,8]]}'
       drift=null
     elif [ -n "$MOCK_STATUS" ]; then status="$MOCK_STATUS"; extra=''; drift=null;
     elif [ "$MOCK_SYSTEMCTL_FAIL" = 1 ] && [ "$MOCK_FAIL_WITH_OK" != 1 ]; then status=review-required; extra=',"counts":{"insert":2,"fill":0,"preserve":3}'; drift=1;
@@ -142,8 +142,13 @@ exec /usr/bin/head "$@"
       const result = await runMock({ MOCK_STATUS: category });
       assert.equal(result.status, 6, category);
       assert.deepEqual(JSON.parse(result.stdout.slice("SOURCE_BACKFILL_AUDIT ".length)), { operation: "festival-source-backfill", mode: "preview", status: category,
-        ...(category === "legacy-config-conflict" ? { conflictSummary: { affectedRows: 2, editionYear: 1, refreshPolicy: 1, strategies: 1 } } : {}), drift: null });
+        ...(category === "legacy-config-conflict" ? { conflictSummary: { affectedRows: 2, editionYear: 1, refreshPolicy: 1, strategies: 1, digest: [[0, 2028, 1, 4], [1, 2027, 2, 8]] } } : {}), drift: null });
     }
+    const twenty = Array.from({ length: 20 }, (_, index) => [index, 2028, 1, 4]);
+    const bounded = await runMock({ MOCK_STATUS: "legacy-config-conflict",
+      MOCK_CONFLICT_OVERRIDE: ',"conflictSummary":{"affectedRows":20,"editionYear":20,"refreshPolicy":0,"strategies":0,"digest":' + JSON.stringify(twenty) + '}' });
+    assert.equal(bounded.status, 6);
+    assert.deepEqual(JSON.parse(bounded.stdout.slice("SOURCE_BACKFILL_AUDIT ".length)).conflictSummary.digest, twenty);
     const failedWithOk = await runMock({ MOCK_SYSTEMCTL_FAIL: "1", MOCK_FAIL_WITH_OK: "1" });
     assert.equal(failedWithOk.status, 6);
     assert.match(failedWithOk.stdout, /"status":"ok"/);
@@ -152,10 +157,18 @@ exec /usr/bin/head "$@"
       { MOCK_STATUS: "seed-validation", MOCK_ERROR_ZERO_DRIFT: "1" },
       { MOCK_STATUS: "legacy-config-conflict", MOCK_ERROR_COUNTS: "1" },
       { MOCK_STATUS: "legacy-config-conflict", MOCK_ERROR_ZERO_DRIFT: "1" },
-      ...[',"conflictSummary":null', ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1},"url":"https://secret.example"',
-        ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1},"counts":{"insert":0,"fill":0,"preserve":0}',
-        ',"conflictSummary":{"affectedRows":2,"editionYear":"1","refreshPolicy":1,"strategies":1}',
-        ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1,"unexpected":1}'].map((MOCK_CONFLICT_OVERRIDE) => ({ MOCK_STATUS: "legacy-config-conflict", MOCK_CONFLICT_OVERRIDE })),
+      ...[',"conflictSummary":null', ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1,"digest":[[0,2028,1,4],[1,2027,2,8]]},"url":"https://secret.example"',
+        ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1,"digest":[[0,2028,1,4],[1,2027,2,8]]},"counts":{"insert":0,"fill":0,"preserve":0}',
+        ',"conflictSummary":{"affectedRows":2,"editionYear":"1","refreshPolicy":1,"strategies":1,"digest":[[0,2028,1,4],[1,2027,2,8]]}',
+        ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1,"unexpected":1}',
+        ...['[[0,2028,1,4]]', '[[1,2028,1,4],[0,2027,2,8]]', '[[0,2028,1,4],[0,2027,2,8]]',
+          '[[0,"2028",1,4],[1,2027,2,8]]', '[[0,2028,9,4],[1,2027,2,8]]',
+          '[[0,2028,1,32],[1,2027,2,8]]', '[[00,2028,1,4],[1,2027,2,8]]',
+          '[[0,02028,1,4],[1,2027,2,8]]', '[[0,2028,1,04],[1,2027,2,8]]',
+          '[[0,2028,1,4],[1,2027,2,8]],"url":"https://secret.example"',
+          '[' + Array.from({ length: 21 }, (_, i) => '[' + i + ',2028,1,4]').join(',') + ']'].map((digest) =>
+          ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1,"digest":' + digest + '}')
+      ].map((MOCK_CONFLICT_OVERRIDE) => ({ MOCK_STATUS: "legacy-config-conflict", MOCK_CONFLICT_OVERRIDE })),
       { MOCK_MISSING_ENV: "1" }, { MOCK_EMPTY: "1" }, { MOCK_AUDIT: "0" },
       { MOCK_AUDIT: "0", MOCK_SPOOF: "1" }, { MOCK_AUDIT: "0", MOCK_STALE_CONFLICT: "1" }, { MOCK_OVERSIZE: "1" },
       { MOCK_LONG_LINE: "1" }, { MOCK_UNREADABLE: "1" }, { MOCK_DUPLICATE: "1" },

@@ -80,3 +80,34 @@ test("missing or malformed nonce fails before database access", async () => {
     await assert.rejects(runSourceBackfill(forbidden, "apply", invalid), /invalid source operation nonce/);
   }
 });
+
+test("three legacy DB conflicts emit numeric current values without changing any rows", async () => {
+  const indices = [0, 2, 3];
+  const before = await Promise.all(indices.map((index) => db.festivalSource.findUniqueOrThrow({
+    where: { festivalSlug_url: { festivalSlug: festivalSources[index].festivalSlug, url: festivalSources[index].url } },
+  })));
+  try {
+    for (const [position, original] of before.entries()) {
+      await db.festivalSource.update({ where: { id: original.id }, data: {
+        configurationBackfilledAt: null, strategies: ["manual_review"],
+        refreshPolicy: position === 0 ? original.refreshPolicy : position === 1 ? "weekly" : "every_3_days",
+      } });
+    }
+    const changed = await Promise.all(before.map((original) => db.festivalSource.findUniqueOrThrow({ where: { id: original.id } })));
+    for (const mode of ["preview", "apply"] as const) {
+      const result = await runSourceBackfill(db, mode, nonce);
+      assert.equal(result.ok, false);
+      assert.deepEqual(JSON.parse(result.output).conflictSummary, { affectedRows: 3,
+        editionYear: 0, refreshPolicy: 2, strategies: 3,
+        digest: indices.map((index, position) => [index, changed[position].editionYear,
+          position === 0 ? 1 : position === 1 ? 3 : 2, 8]) });
+      assert.deepEqual(await Promise.all(before.map((original) => db.festivalSource.findUniqueOrThrow({ where: { id: original.id } }))), changed);
+      assert.doesNotMatch(result.output, /https|festivalSlug|"url"|"counts"/);
+    }
+  } finally {
+    for (const original of before) await db.festivalSource.update({ where: { id: original.id }, data: {
+      configurationBackfilledAt: original.configurationBackfilledAt, strategies: original.strategies,
+      refreshPolicy: original.refreshPolicy,
+    } });
+  }
+});
