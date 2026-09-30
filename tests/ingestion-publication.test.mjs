@@ -87,3 +87,14 @@ test("workflow keeps auditable publication and artifact handling after accepted 
   assert.match(validation, /summary\.status == "COMPLETED" or \.summary\.status == "PARTIAL"/);
   assert.match(workflow, /name: Retain review and diagnostic artifacts[\s\S]*if: always\(\)/);
 });
+
+test("ingestion without database does not use file sources outside fixtures", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "ingestion-no-db-"));
+  const output = path.join(dir, "output");
+  const result = spawnSync(process.execPath, ["scripts/ingest-festivals.mjs", "--slug=rockharz", "--output=" + output], {
+    encoding: "utf8", env: { ...process.env, DATABASE_URL: "" },
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Database-backed sources are required/);
+  await assert.rejects(readFile(path.join(output, "summary.json"), "utf8"), { code: "ENOENT" });
+});

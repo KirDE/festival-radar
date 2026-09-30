@@ -68,8 +68,9 @@ export async function POST(request: Request) {
         lastSuccessfulCheck: sourceState?.lastSuccessfulCheck?.toISOString() ?? null,
       },
     });
-  } catch (cause) {
-    console.error("Production ingestion failed", cause instanceof Error ? cause.message : "unknown error");
+  } catch {
+    // Database/Prisma errors may include protected source URLs or connection details.
+    console.error("Production ingestion failed");
     return error("Production ingestion failed.", 500);
   }
 }

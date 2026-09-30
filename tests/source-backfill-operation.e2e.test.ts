@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { spawnSync } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { backfillCatalog } from "../lib/catalog/backfill.ts";
 import { catalogSeed } from "../lib/catalog/seed.ts";
@@ -53,6 +57,71 @@ test("preview stays read-only, apply idempotent, verify checks completeness", as
   assert.deepEqual(JSON.parse((await runSourceBackfill(db, "apply", nonce)).output).counts, { insert: 0, fill: 0, preserve: festivalSources.length });
   assert.deepEqual(await db.festivalSource.findMany({ orderBy: [{ festivalSlug: "asc" }, { url: "asc" }] }), after);
   assert.equal((await runSourceBackfill(db, "verify", nonce)).ok, true);
+});
+
+test("ingestion reads live DB source edits and never the file inventory", async () => {
+  const source = festivalSources.find((item) => item.festivalSlug === "rockharz")!;
+  const row = await db.festivalSource.findUniqueOrThrow({ where: { festivalSlug_url: { festivalSlug: source.festivalSlug, url: source.url } } });
+  const priorState = await db.ingestionSourceState.findUnique({ where: { festivalSlug: source.festivalSlug } });
+  const dir = await mkdtemp(path.join(tmpdir(), "festival-db-source-"));
+  const fixture = path.join(dir, "fixture.html");
+  await writeFile(fixture, "<html></html>");
+  const changedUrl = "https://db-source.example.test/rockharz";
+  let runId: string | undefined;
+  try {
+    await db.festivalSource.update({ where: { id: row.id }, data: {
+      url: changedUrl, strategies: ["manual_review"], parserKey: "manual_review",
+      refreshPolicy: "weekly", cadenceSeconds: 604800,
+    } });
+    const result = spawnSync(process.execPath, ["--experimental-strip-types", "scripts/ingest-festivals.mjs",
+      "--slug=rockharz", "--force", "--fixture=" + fixture, "--output=" + path.join(dir, "output")],
+      { encoding: "utf8", env: process.env });
+    assert.equal(result.status, 0);
+    const summary = JSON.parse(await readFile(path.join(dir, "output", "summary.json"), "utf8"));
+    runId = summary.ingestionRunId;
+    assert.ok(runId);
+    assert.equal(summary.totalSources, 1);
+    assert.deepEqual(summary.results[0].extractionPath, ["manual_review"]);
+    assert.equal(summary.published, 0);
+    const attempt = await db.ingestionAttempt.findFirstOrThrow({ where: { runId } });
+    assert.equal(attempt.requestedUrl, changedUrl);
+    const artifact = JSON.parse(await readFile(path.join(dir, "output", "rockharz.json"), "utf8"));
+    assert.equal(artifact.source.url, changedUrl);
+
+    await db.festivalSource.update({ where: { id: row.id }, data: { enabled: false } });
+    const beforeRuns = await db.ingestionRun.count();
+    const disabled = spawnSync(process.execPath, ["--experimental-strip-types", "scripts/ingest-festivals.mjs",
+      "--slug=rockharz", "--force", "--fixture=" + fixture, "--output=" + path.join(dir, "disabled")],
+      { encoding: "utf8", env: process.env });
+    assert.notEqual(disabled.status, 0);
+    assert.equal(await db.ingestionRun.count(), beforeRuns);
+
+    await db.festivalSource.update({ where: { id: row.id }, data: { enabled: true, parserKey: "unregistered-parser" } });
+    const invalid = spawnSync(process.execPath, ["--experimental-strip-types", "scripts/ingest-festivals.mjs",
+      "--slug=rockharz", "--force", "--fixture=" + fixture, "--output=" + path.join(dir, "invalid")],
+      { encoding: "utf8", env: process.env });
+    assert.notEqual(invalid.status, 0);
+    assert.equal(await db.ingestionRun.count(), beforeRuns);
+  } finally {
+    await db.festivalSource.update({ where: { id: row.id }, data: {
+      url: row.url, strategies: row.strategies, parserKey: row.parserKey,
+      refreshPolicy: row.refreshPolicy, cadenceSeconds: row.cadenceSeconds, enabled: row.enabled,
+    } });
+    if (runId) {
+      const candidates = await db.ingestionCandidate.findMany({ where: { runId }, select: { id: true } });
+      const ids = candidates.map(({ id }) => id);
+      await db.ingestionDiff.deleteMany({ where: { candidateId: { in: ids } } });
+      await db.ingestionEvidence.deleteMany({ where: { candidateId: { in: ids } } });
+      await db.ingestionCandidate.deleteMany({ where: { runId } });
+      await db.ingestionAttempt.deleteMany({ where: { runId } });
+      await db.ingestionRun.delete({ where: { id: runId } });
+    }
+    if (priorState) await db.ingestionSourceState.update({ where: { festivalSlug: source.festivalSlug }, data: {
+      lastSuccessfulCheck: priorState.lastSuccessfulCheck, lastAttemptId: priorState.lastAttemptId,
+    } });
+    else await db.ingestionSourceState.deleteMany({ where: { festivalSlug: source.festivalSlug } });
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("marked-row drift fails closed without repairing or writing unrelated rows", async () => {

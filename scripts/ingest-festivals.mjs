@@ -2,7 +2,7 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { festivals } from "../data/festivals.ts";
-import { festivalSources } from "../data/festival-sources.ts";
+import { listConfiguredSources } from "../lib/sources/repository.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 import { fetchSource } from "../lib/ingestion/fetch.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
@@ -28,11 +28,16 @@ const failureThresholdArg = process.argv.find((value) => value.startsWith("--fai
 const failureThreshold = Number(failureThresholdArg);
 if (!Number.isInteger(failureThreshold) || failureThreshold < 1) throw new Error(`Invalid consecutive failure threshold: ${failureThresholdArg}`);
 const persistenceEnabled = Boolean(process.env.DATABASE_URL);
+// The file catalogue is available only to explicit local fixtures. A live DB
+// failure must never select stale repository sources or publish from them.
+if (!persistenceEnabled && !fixturePath) throw new Error("Database-backed sources are required outside explicit local fixtures");
 const runtimeFestivals = persistenceEnabled ? (await readCatalog({ database: db })).festivals : festivals;
+const configuredSources = persistenceEnabled ? await listConfiguredSources(db) : (await import("../data/festival-sources.ts")).festivalSources;
+if (persistenceEnabled && configuredSources.length === 0) throw new Error("No configured database sources");
 const dueOnly = args.has("--due") && !force;
 const persistedStates = dueOnly && persistenceEnabled ? await ingestionQueries.sourceStates(db) : [];
 const lastSuccessfulChecks = new Map(persistedStates.map((state) => [state.festivalSlug, state.lastSuccessfulCheck?.toISOString()]));
-const hydratedSources = festivalSources.map((source) => ({ ...source, lastSuccessfulCheck: lastSuccessfulChecks.get(source.festivalSlug) ?? source.lastSuccessfulCheck }));
+const hydratedSources = configuredSources.map((source) => ({ ...source, lastSuccessfulCheck: lastSuccessfulChecks.get(source.festivalSlug) ?? source.lastSuccessfulCheck }));
 const eligible = dueOnly ? dueFestivalSources(hydratedSources) : hydratedSources.filter((source) => source.enabled);
 const selected = eligible.filter((source) => !slugArg || source.festivalSlug === slugArg);
 const notificationEndpoint = process.env.NOTIFICATION_EVENTS_URL || (process.env.APP_URL ? new URL("/api/notifications/events/", process.env.APP_URL).toString() : undefined);
