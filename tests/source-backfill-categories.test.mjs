@@ -15,6 +15,7 @@ function fakeDb(festivals = [festival], existing = [], failure) {
   return {
     $queryRaw: async () => [{ count: 1n }],
     $transaction: async (callback) => callback({
+      $queryRaw: async () => [],
       festival: { findMany: async () => { if (failure) throw failure; return festivals; } },
       festivalSource: { findMany: async () => existing, create: () => { throw new Error("unexpected write"); }, update: () => { throw new Error("unexpected write"); } },
     }),

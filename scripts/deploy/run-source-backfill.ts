@@ -54,7 +54,7 @@ export async function runSourceBackfill(db: PrismaClient, mode: Mode, nonce: str
   catch { return { ok: false, output: audit(mode, "migration-check-error", nonce) }; }
   if (!migrated) return { ok: false, output: audit(mode, "migration-missing", nonce) };
   let report: SourceBackfillReport;
-  try { report = await backfillSources(db, festivalSources, { dryRun: mode !== "apply", failOnDrift: true }); }
+  try { report = await backfillSources(db, festivalSources, { dryRun: mode !== "apply", failOnDrift: true, reconcileKnownLegacy: true }); }
   catch (error) {
     // Never serialize exception text, including Prisma's SQL and source URLs.
     const status = error instanceof SourceBackfillReject && errorStatuses.has(error.code) ? error.code : "database-or-unknown-error";
