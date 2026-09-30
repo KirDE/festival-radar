@@ -34,6 +34,7 @@ test("fixed-mode wrapper rejects privilege, extra arguments, wrong commit, and a
     assert.match(run([sha.slice(0, -1) + "z", "source-preview"]).stderr, /invalid commit/);
     const mock = path.join(temporary, "bin");
     const started = path.join(temporary, "started");
+    const journalCalls = path.join(temporary, "journal-calls");
     const previousId = "a".repeat(32);
     const currentId = "b".repeat(32);
     await mkdir(mock);
@@ -44,7 +45,7 @@ case "$1" in
     else printf '%s\n' "$MOCK_PREVIOUS_ID"; fi ;;
   start)
     touch "$MOCK_STARTED"
-    printf 'called:%s\n' "$*"
+    echo 'sensitive unit error' >&2
     if [ "$MOCK_SYSTEMCTL_FAIL" = 1 ]; then exit 1; fi ;;
 esac
 `);
@@ -54,39 +55,67 @@ esac
 case " $* " in
   *" --show-cursor "*) exit 1 ;;
   *" _SYSTEMD_INVOCATION_ID=$MOCK_CURRENT_ID "*)
-    if [ "$MOCK_AUDIT" = 1 ]; then echo 'SOURCE_BACKFILL_AUDIT {"mode":"preview","status":"ok"}'; fi ;;
+    count=0
+    if [ -f "$MOCK_JOURNAL_CALLS" ]; then count=$(cat "$MOCK_JOURNAL_CALLS"); fi
+    count=$((count + 1))
+    printf '%s\n' "$count" > "$MOCK_JOURNAL_CALLS"
+    if [ "$MOCK_JOURNAL_UNREADABLE" = 1 ]; then echo 'sensitive journal error' >&2; exit 1; fi
+    if [ "$MOCK_AUDIT" = 1 ] && [ "$count" -ge "$MOCK_AUDIT_AFTER" ]; then
+      echo 'SOURCE_BACKFILL_AUDIT {"mode":"preview","status":"ok"}'
+    elif [ "$MOCK_JOURNAL_NO_MARKER" = 1 ]; then echo 'sensitive journal entry'; fi ;;
   *) echo 'SOURCE_BACKFILL_AUDIT {"mode":"preview","status":"old"}' ;;
 esac
 `);
-    execFileSync("chmod", ["+x", path.join(mock, "systemctl"), path.join(mock, "journalctl")]);
-    const mockEnv = { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy", MOCK_STARTED: started, MOCK_PREVIOUS_ID: "", MOCK_CURRENT_ID: currentId, MOCK_AUDIT: "1", MOCK_SYSTEMCTL_FAIL: "0" };
+    await writeFile(path.join(mock, "sleep"), "#!/bin/sh\nexit 0\n");
+    execFileSync("chmod", ["+x", path.join(mock, "systemctl"), path.join(mock, "journalctl"), path.join(mock, "sleep")]);
+    const mockEnv = { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy", MOCK_STARTED: started, MOCK_JOURNAL_CALLS: journalCalls, MOCK_PREVIOUS_ID: "", MOCK_CURRENT_ID: currentId, MOCK_AUDIT: "1", MOCK_AUDIT_AFTER: "1", MOCK_SYSTEMCTL_FAIL: "0", MOCK_JOURNAL_NO_MARKER: "0", MOCK_JOURNAL_UNREADABLE: "0" };
     const runMock = async (env = {}) => {
       await rm(started, { force: true });
+      await rm(journalCalls, { force: true });
       return spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...mockEnv, ...env } });
     };
     const valid = await runMock();
     assert.equal(valid.status, 0, valid.stderr);
-    assert.match(valid.stdout, /called:start festival-radar-source-backfill@preview\.service/);
+    assert.doesNotMatch(valid.stderr, /sensitive/);
     assert.match(valid.stdout, /SOURCE_BACKFILL_AUDIT.*"status":"ok"/);
+    const delayed = await runMock({ MOCK_AUDIT_AFTER: "3", MOCK_PREVIOUS_ID: previousId });
+    assert.equal(delayed.status, 0, delayed.stderr);
+    assert.match(delayed.stdout, /SOURCE_BACKFILL_AUDIT.*"status":"ok"/);
+    assert.equal(await readFile(journalCalls, "utf8"), "3\n");
     const busy = spawnSync("flock", ["-x", lock, "bash", script, sha, "source-preview"], { encoding: "utf8", env: { ...process.env, SUDO_USER: "festival-radar-deploy" } });
     assert.equal(busy.status, 5);
     assert.match(busy.stderr, /already running/);
     const failed = await runMock({ MOCK_SYSTEMCTL_FAIL: "1" });
     assert.equal(failed.status, 6);
-    assert.match(failed.stdout, /SOURCE_BACKFILL_AUDIT/);
-    assert.match(failed.stderr, /source operation failed/);
+    assert.doesNotMatch(failed.stdout, /SOURCE_BACKFILL_AUDIT/);
+    assert.match(failed.stderr, /systemctl start failed/);
+    assert.doesNotMatch(failed.stderr, /sensitive/);
+    await assert.rejects(readFile(journalCalls, "utf8"));
     const noAudit = await runMock({ MOCK_AUDIT: "0" });
     assert.equal(noAudit.status, 6);
     assert.doesNotMatch(noAudit.stdout, /SOURCE_BACKFILL_AUDIT/);
-    assert.match(noAudit.stderr, /source operation audit unavailable/);
-    // A stale prior marker must not satisfy an invocation with no new audit.
+    assert.match(noAudit.stderr, /current invocation journal empty/);
+    assert.equal(await readFile(journalCalls, "utf8"), "10\n");
+    // An old marker cannot satisfy the fresh invocation, even after retries.
     const staleAudit = await runMock({ MOCK_PREVIOUS_ID: previousId, MOCK_AUDIT: "0" });
     assert.equal(staleAudit.status, 6);
     assert.doesNotMatch(staleAudit.stdout, /SOURCE_BACKFILL_AUDIT/);
-    assert.match(staleAudit.stderr, /source operation audit unavailable/);
+    assert.match(staleAudit.stderr, /current invocation journal empty/);
     const unchangedInvocation = await runMock({ MOCK_PREVIOUS_ID: previousId, MOCK_CURRENT_ID: previousId });
     assert.equal(unchangedInvocation.status, 6);
-    assert.match(unchangedInvocation.stderr, /source operation audit unavailable/);
+    assert.match(unchangedInvocation.stderr, /new invocation unchanged/);
+    await assert.rejects(readFile(journalCalls, "utf8"));
+    const absentInvocation = await runMock({ MOCK_CURRENT_ID: "" });
+    assert.equal(absentInvocation.status, 6);
+    assert.match(absentInvocation.stderr, /new invocation absent or invalid/);
+    const unreadable = await runMock({ MOCK_JOURNAL_UNREADABLE: "1" });
+    assert.equal(unreadable.status, 6);
+    assert.match(unreadable.stderr, /current invocation journal unreadable/);
+    assert.doesNotMatch(unreadable.stderr, /sensitive/);
+    const noMarker = await runMock({ MOCK_JOURNAL_NO_MARKER: "1", MOCK_AUDIT: "0" });
+    assert.equal(noMarker.status, 6);
+    assert.match(noMarker.stderr, /current invocation journal no marker/);
+    assert.doesNotMatch(noMarker.stderr, /sensitive/);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 

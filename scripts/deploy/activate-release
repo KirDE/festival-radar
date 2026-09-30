@@ -29,15 +29,38 @@ if [[ $# == 2 ]]; then
   # instead so an older audit can never satisfy this start.
   previous_invocation="$(systemctl show --property=InvocationID --value "$unit" 2>/dev/null)" || { echo "source operation invocation unavailable" >&2; exit 6; }
   [[ -z "$previous_invocation" || "$previous_invocation" =~ ^[0-9a-f]{32}$ ]] || { echo "source operation invocation unavailable" >&2; exit 6; }
-  if systemctl start "$unit"; then result=0; else result=6; fi
-  invocation="$(systemctl show --property=InvocationID --value "$unit" 2>/dev/null)" || invocation=""
-  audit=""
-  if [[ "$invocation" =~ ^[0-9a-f]{32}$ && "$invocation" != "$previous_invocation" ]]; then
-    audit="$(journalctl --no-pager -o cat -u "$unit" _SYSTEMD_INVOCATION_ID="$invocation" | grep '^SOURCE_BACKFILL_AUDIT ' | tail -n 1 || true)"
+  # systemctl may relay unit errors containing protected configuration.
+  if ! systemctl start "$unit" >/dev/null 2>&1; then
+    echo "source operation systemctl start failed" >&2
+    exit 6
   fi
-  if [[ -n "$audit" ]]; then echo "$audit"; else echo "source operation audit unavailable" >&2; result=6; fi
-  if [[ "$result" != 0 ]]; then echo "source operation failed" >&2; fi
-  exit "$result"
+  invocation="$(systemctl show --property=InvocationID --value "$unit" 2>/dev/null)" || invocation=""
+  if [[ ! "$invocation" =~ ^[0-9a-f]{32}$ ]]; then
+    echo "source operation new invocation absent or invalid" >&2
+    exit 6
+  fi
+  if [[ "$invocation" == "$previous_invocation" ]]; then
+    echo "source operation new invocation unchanged" >&2
+    exit 6
+  fi
+  # Journald may ingest a completed one-shot unit asynchronously. Retry only
+  # this fresh invocation; never fall back to an unscoped or previous journal.
+  for attempt in {1..10}; do
+    if entries="$(journalctl --no-pager -o cat -u "$unit" _SYSTEMD_INVOCATION_ID="$invocation" 2>/dev/null)"; then
+      if [[ -z "$entries" ]]; then
+        journal_state="empty"
+      else
+        audit="$(printf '%s\n' "$entries" | grep '^SOURCE_BACKFILL_AUDIT ' | tail -n 1 || true)"
+        if [[ -n "$audit" ]]; then echo "$audit"; exit 0; fi
+        journal_state="no marker"
+      fi
+    else
+      journal_state="unreadable"
+    fi
+    if (( attempt < 10 )); then sleep 1; fi
+  done
+  echo "source operation current invocation journal $journal_state" >&2
+  exit 6
 fi
 
 archive="$incoming/$commit.tar.gz"
