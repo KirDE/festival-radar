@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Festival, TimetableEntry } from "../data/festivals.ts";
+import type { Festival, TimetableEntry } from "./domain/festival.ts";
 
 export const timetableEntrySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {

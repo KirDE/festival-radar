@@ -1,24 +1,7 @@
-import { festivals, type Festival } from "./festivals.ts";
+import { festivals } from "./festivals.ts";
+import type { FestivalEdition } from "../lib/domain/edition.ts";
 
-export type EditionProvenance = Readonly<{
-  field: "edition" | "dates" | "lineup";
-  url: string;
-  checkedAt: string;
-  note: string;
-}>;
-
-export type FestivalEdition = Readonly<
-  Omit<Festival, "editionYear" | "headliners" | "lineup" | "timetable"> & {
-    headliners: readonly string[];
-    lineup: readonly string[];
-    timetable?: readonly Readonly<{ date: string; stage: string; start: string; artist: string }>[];
-    editionYear: number;
-    recordState: "archived" | "current" | "tracking";
-    completeness: "complete" | "partial" | "tba";
-    snapshotAt?: string;
-    provenance: readonly EditionProvenance[];
-  }
->;
+export type { EditionProvenance, FestivalEdition } from "../lib/domain/edition.ts";
 
 const wacken2026: FestivalEdition = Object.freeze({
   slug: "wacken-open-air",

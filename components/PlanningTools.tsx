@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { Festival } from "@/data/festivals";
+import type { Festival } from "@/lib/domain/festival";
 import { calendarUrls, similarFestivals } from "@/lib/planning";
 import { StageTimetable } from "./StageTimetable";
 

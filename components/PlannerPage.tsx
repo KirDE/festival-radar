@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import type { Festival } from "@/data/festivals";
+import type { Festival } from "@/lib/domain/festival";
 import { useLocalPlanner, type Attendance } from "./LocalPlanner";
 import { AccountSyncPanel } from "./AccountSyncPanel";
 import { FestivalViews } from "./FestivalViews";

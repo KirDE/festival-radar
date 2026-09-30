@@ -1,4 +1,4 @@
-import type { Festival } from "../../data/festivals.ts";
+import type { Festival } from "../domain/festival.ts";
 
 export const INGESTION_SCHEMA_VERSION = 1 as const;
 export type RefreshPolicy = "daily" | "every_3_days" | "weekly" | "archived";

@@ -1,4 +1,5 @@
-import { artistProfiles, type ArtistProfile } from "../../data/artists.ts";
+import { artistProfiles } from "../../data/artists.ts";
+import type { ArtistProfile } from "../domain/artist.ts";
 import { festivalEditions } from "../../data/editions.ts";
 import { festivalSources } from "../../data/festival-sources.ts";
 import { artistSlug, festivals } from "../../data/festivals.ts";

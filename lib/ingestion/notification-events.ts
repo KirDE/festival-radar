@@ -1,5 +1,5 @@
 import type { NotificationEventType } from "@prisma/client";
-import type { Festival } from "../../data/festivals.ts";
+import type { Festival } from "../domain/festival.ts";
 import type { FestivalChange } from "./types.ts";
 
 export type PublishedNotificationEvent = {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Festival } from "@/data/festivals";
+import type { Festival } from "@/lib/domain/festival";
 import { FestivalExplorer } from "./FestivalExplorer";
 import { useLanguage } from "./LanguageProvider";
 import { hasAnnouncedLineup } from "@/lib/festival-lineup";

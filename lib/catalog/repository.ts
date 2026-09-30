@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
-import type { ArtistProfile } from "../../data/artists.ts";
-import type { FestivalEdition } from "../../data/editions.ts";
-import type { Festival, PlaylistStatus } from "../../data/festivals.ts";
+import type { ArtistProfile } from "../domain/artist.ts";
+import type { FestivalEdition } from "../domain/edition.ts";
+import type { Festival, PlaylistStatus } from "../domain/festival.ts";
 
 export type CatalogSnapshot = Readonly<{
   festivals: Festival[];

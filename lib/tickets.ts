@@ -1,4 +1,4 @@
-import type { Festival } from "@/data/festivals";
+import type { Festival } from "@/lib/domain/festival";
 
 export type TicketPresentation =
   | { status: "available"; href: string; label: "officialTickets" }

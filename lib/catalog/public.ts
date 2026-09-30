@@ -1,4 +1,4 @@
-import type { Festival } from "../../data/festivals.ts";
+import type { Festival } from "../domain/festival.ts";
 
 export const supportedLanguages = ["en", "de", "ru"] as const;
 export type SupportedLanguage = (typeof supportedLanguages)[number];

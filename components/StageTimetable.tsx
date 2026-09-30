@@ -1,4 +1,4 @@
-import type { TimetableEntry } from "@/data/festivals";
+import type { TimetableEntry } from "@/lib/domain/festival";
 import { findTimetableConflicts, groupTimetable } from "@/lib/timetables";
 
 export function StageTimetable({ entries }: { entries?: TimetableEntry[] }) {

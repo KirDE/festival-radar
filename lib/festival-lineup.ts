@@ -1,4 +1,4 @@
-import type { Festival } from "@/data/festivals";
+import type { Festival } from "@/lib/domain/festival";
 
 type FestivalLineup = Pick<Festival, "headliners" | "lineup">;
 

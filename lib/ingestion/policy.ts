@@ -1,4 +1,4 @@
-import type { Festival } from "../../data/festivals.ts";
+import type { Festival } from "../domain/festival.ts";
 import type { FestivalCandidate, IngestionResult } from "./types.ts";
 import { INGESTION_SCHEMA_VERSION } from "./types.ts";
 import { diffFestival } from "./diff.ts";

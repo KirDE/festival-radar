@@ -1,4 +1,4 @@
-import type { Festival } from "../../data/festivals.ts";
+import type { Festival } from "../domain/festival.ts";
 import type { IngestionResult } from "./types.ts";
 
 export type PublicationStore = { schemaVersion: 1; festivals: Record<string, Partial<Pick<Festival, "city" | "ticketsUrl" | "status" | "ticketStatus" | "headliners" | "lineup">>> };
