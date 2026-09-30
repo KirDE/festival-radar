@@ -30,9 +30,10 @@ if [[ $# == 2 ]]; then
   previous_invocation="$(systemctl show --property=InvocationID --value "$unit" 2>/dev/null)" || { echo "source operation invocation unavailable" >&2; exit 6; }
   [[ -z "$previous_invocation" || "$previous_invocation" =~ ^[0-9a-f]{32}$ ]] || { echo "source operation invocation unavailable" >&2; exit 6; }
   # systemctl may relay unit errors containing protected configuration.
+  result=0
   if ! systemctl start "$unit" >/dev/null 2>&1; then
     echo "source operation systemctl start failed" >&2
-    exit 6
+    result=6
   fi
   invocation="$(systemctl show --property=InvocationID --value "$unit" 2>/dev/null)" || invocation=""
   if [[ ! "$invocation" =~ ^[0-9a-f]{32}$ ]]; then
@@ -43,15 +44,22 @@ if [[ $# == 2 ]]; then
     echo "source operation new invocation unchanged" >&2
     exit 6
   fi
-  # Journald may ingest a completed one-shot unit asynchronously. Retry only
-  # this fresh invocation; never fall back to an unscoped or previous journal.
+  # A marker is only accepted from this invocation's Node stdout stream in
+  # this unit, and only in the runner's fixed safe audit shape. Other journal
+  # messages (including ones beginning with the marker) cannot be relayed.
+  audit_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","status":"(ok|review-required|migration-missing|guard-or-data-error|disconnect-error|guard-rejected)"(,"counts":\{"insert":[0-9]+,"fill":[0-9]+,"preserve":[0-9]+\})?,"drift":[0-9]+\}$'
+  # Journald may ingest a completed one-shot unit asynchronously. Never fall
+  # back to an unscoped or previous journal, even after systemctl fails.
   for attempt in {1..10}; do
-    if entries="$(journalctl --no-pager -o cat -u "$unit" _SYSTEMD_INVOCATION_ID="$invocation" 2>/dev/null)"; then
+    if entries="$(journalctl --no-pager -o cat _SYSTEMD_UNIT="$unit" _SYSTEMD_INVOCATION_ID="$invocation" _TRANSPORT=stdout _COMM=node 2>/dev/null)"; then
       if [[ -z "$entries" ]]; then
         journal_state="empty"
       else
-        audit="$(printf '%s\n' "$entries" | grep '^SOURCE_BACKFILL_AUDIT ' | tail -n 1 || true)"
-        if [[ -n "$audit" ]]; then echo "$audit"; exit 0; fi
+        audit=""
+        while IFS= read -r line; do
+          if [[ "$line" =~ $audit_pattern ]]; then audit="$line"; fi
+        done <<< "$entries"
+        if [[ -n "$audit" ]]; then echo "$audit"; exit "$result"; fi
         journal_state="no marker"
       fi
     else

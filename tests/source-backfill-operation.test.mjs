@@ -49,26 +49,32 @@ case "$1" in
     if [ "$MOCK_SYSTEMCTL_FAIL" = 1 ]; then exit 1; fi ;;
 esac
 `);
-    // Unscoped journal reads contain an old audit; the new invocation only
-    // contains an audit when MOCK_AUDIT=1. No cursor is available in either case.
+    // Only the Node stdout stream of the current unit/invocation may supply
+    // an audit; other journal messages can contain spoofed marker text.
     await writeFile(path.join(mock, "journalctl"), String.raw`#!/bin/sh
 case " $* " in
   *" --show-cursor "*) exit 1 ;;
-  *" _SYSTEMD_INVOCATION_ID=$MOCK_CURRENT_ID "*)
+  *" _SYSTEMD_UNIT=festival-radar-source-backfill@preview.service _SYSTEMD_INVOCATION_ID=$MOCK_CURRENT_ID _TRANSPORT=stdout _COMM=node "*)
     count=0
     if [ -f "$MOCK_JOURNAL_CALLS" ]; then count=$(cat "$MOCK_JOURNAL_CALLS"); fi
     count=$((count + 1))
     printf '%s\n' "$count" > "$MOCK_JOURNAL_CALLS"
     if [ "$MOCK_JOURNAL_UNREADABLE" = 1 ]; then echo 'sensitive journal error' >&2; exit 1; fi
     if [ "$MOCK_AUDIT" = 1 ] && [ "$count" -ge "$MOCK_AUDIT_AFTER" ]; then
-      echo 'SOURCE_BACKFILL_AUDIT {"mode":"preview","status":"ok"}'
+      if [ "$MOCK_SYSTEMCTL_FAIL" = 1 ]; then
+        echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","status":"review-required","counts":{"insert":2,"fill":0,"preserve":3},"drift":1}'
+      else
+        echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","status":"ok","drift":0}'
+      fi
+    elif [ "$MOCK_SPOOF" = 1 ]; then
+      echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","status":"ok","url":"sensitive","drift":0}'
     elif [ "$MOCK_JOURNAL_NO_MARKER" = 1 ]; then echo 'sensitive journal entry'; fi ;;
-  *) echo 'SOURCE_BACKFILL_AUDIT {"mode":"preview","status":"old"}' ;;
+  *) echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","status":"ok","drift":0}' ;;
 esac
 `);
     await writeFile(path.join(mock, "sleep"), "#!/bin/sh\nexit 0\n");
     execFileSync("chmod", ["+x", path.join(mock, "systemctl"), path.join(mock, "journalctl"), path.join(mock, "sleep")]);
-    const mockEnv = { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy", MOCK_STARTED: started, MOCK_JOURNAL_CALLS: journalCalls, MOCK_PREVIOUS_ID: "", MOCK_CURRENT_ID: currentId, MOCK_AUDIT: "1", MOCK_AUDIT_AFTER: "1", MOCK_SYSTEMCTL_FAIL: "0", MOCK_JOURNAL_NO_MARKER: "0", MOCK_JOURNAL_UNREADABLE: "0" };
+    const mockEnv = { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy", MOCK_STARTED: started, MOCK_JOURNAL_CALLS: journalCalls, MOCK_PREVIOUS_ID: "", MOCK_CURRENT_ID: currentId, MOCK_AUDIT: "1", MOCK_AUDIT_AFTER: "1", MOCK_SYSTEMCTL_FAIL: "0", MOCK_JOURNAL_NO_MARKER: "0", MOCK_JOURNAL_UNREADABLE: "0", MOCK_SPOOF: "0" };
     const runMock = async (env = {}) => {
       await rm(started, { force: true });
       await rm(journalCalls, { force: true });
@@ -87,10 +93,14 @@ esac
     assert.match(busy.stderr, /already running/);
     const failed = await runMock({ MOCK_SYSTEMCTL_FAIL: "1" });
     assert.equal(failed.status, 6);
-    assert.doesNotMatch(failed.stdout, /SOURCE_BACKFILL_AUDIT/);
+    assert.match(failed.stdout, /SOURCE_BACKFILL_AUDIT.*"status":"review-required".*"insert":2/);
     assert.match(failed.stderr, /systemctl start failed/);
     assert.doesNotMatch(failed.stderr, /sensitive/);
-    await assert.rejects(readFile(journalCalls, "utf8"));
+    assert.equal(await readFile(journalCalls, "utf8"), "1\n");
+    const failedNoMarker = await runMock({ MOCK_SYSTEMCTL_FAIL: "1", MOCK_AUDIT: "0" });
+    assert.equal(failedNoMarker.status, 6);
+    assert.doesNotMatch(failedNoMarker.stdout, /SOURCE_BACKFILL_AUDIT/);
+    assert.match(failedNoMarker.stderr, /systemctl start failed[\s\S]*current invocation journal empty/);
     const noAudit = await runMock({ MOCK_AUDIT: "0" });
     assert.equal(noAudit.status, 6);
     assert.doesNotMatch(noAudit.stdout, /SOURCE_BACKFILL_AUDIT/);
@@ -116,6 +126,10 @@ esac
     assert.equal(noMarker.status, 6);
     assert.match(noMarker.stderr, /current invocation journal no marker/);
     assert.doesNotMatch(noMarker.stderr, /sensitive/);
+    const spoofed = await runMock({ MOCK_AUDIT: "0", MOCK_SPOOF: "1" });
+    assert.equal(spoofed.status, 6);
+    assert.doesNotMatch(spoofed.stdout, /SOURCE_BACKFILL_AUDIT|sensitive/);
+    assert.match(spoofed.stderr, /current invocation journal no marker/);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 
