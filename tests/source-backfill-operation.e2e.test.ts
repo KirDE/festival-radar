@@ -64,6 +64,7 @@ test("marked-row drift fails closed without repairing or writing unrelated rows"
   const preview = await runSourceBackfill(db, "preview", nonce);
   assert.equal(preview.ok, false);
   assert.equal(JSON.parse(preview.output).drift, 1);
+  assert.equal(JSON.parse(preview.output).counts.insert, 1); // the deleted unrelated source remains a pending insert
   assert.doesNotMatch(preview.output, /https?:\/\//);
   const rejected = await runSourceBackfill(db, "apply", nonce);
   assert.equal(rejected.ok, false);
@@ -115,6 +116,17 @@ test("three legacy DB conflicts emit numeric current values without changing any
 test("known historical rows transition after a pure preview and remain idempotent", async () => {
   const indices = [23, 41, 45];
   const oldPolicies = ["daily", "every_3_days", "weekly"];
+  // Earlier tests may have deleted an unrelated source. Normalize the
+  // disposable fixture before asserting exact counts for these three rows.
+  const keys = await db.festivalSource.findMany({ select: { festivalSlug: true, url: true } });
+  const knownKeys = new Set(keys.map((item) => JSON.stringify([item.festivalSlug, item.url])));
+  const missing = festivalSources.filter((item) => !knownKeys.has(JSON.stringify([item.festivalSlug, item.url])));
+  const baselinePreview = await runSourceBackfill(db, "preview", nonce);
+  assert.equal(baselinePreview.ok, true);
+  assert.equal(JSON.parse(baselinePreview.output).counts.insert, missing.length);
+  const baselineApply = await runSourceBackfill(db, "apply", nonce);
+  assert.equal(baselineApply.ok, true);
+  assert.equal((await db.festivalSource.count()), festivalSources.length);
   const originals = await Promise.all(indices.map((index) => db.festivalSource.findUniqueOrThrow({
     where: { festivalSlug_url: { festivalSlug: festivalSources[index].festivalSlug, url: festivalSources[index].url } },
   })));
