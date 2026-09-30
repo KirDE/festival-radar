@@ -23,6 +23,24 @@ test.after(async () => {
   await db.$disconnect();
 });
 
+test("initial enabled drift aborts apply before any source or marker write", async () => {
+  await db.festivalSource.update({ where: key(one), data: { enabled: false } });
+  const before = await db.festivalSource.findUniqueOrThrow({ where: key(one) });
+  assert.equal(before.parserKey, null);
+  assert.equal(before.configurationBackfilledAt, null);
+  // Put the insert first: a partial write would be visible if the guard ran
+  // inside the write loop instead of rejecting the complete plan up front.
+  const inventory = [two, one];
+  const preview = await backfillSources(db, inventory, { dryRun: true });
+  assert.equal(preview.ok, false);
+  assert.deepEqual(preview.counts, { insert: 1, fill: 1, preserve: 0 });
+  assert.deepEqual(preview.plan.find((entry) => entry.url === one.url)?.drift, ["enabled"]);
+  await assert.rejects(backfillSources(db, inventory), /Unresolved initial source drift:.*enabled/);
+  assert.deepEqual(await db.festivalSource.findUniqueOrThrow({ where: key(one) }), before);
+  assert.equal(await db.festivalSource.findUnique({ where: key(two) }), null);
+  await db.festivalSource.update({ where: key(one), data: { enabled: true } });
+});
+
 test("preview is read-only, fill legacy and insert additional URL, rerun preserves edits", async () => {
   const inventory = [one, two];
   await db.festivalSource.update({ where: key(one), data: { refreshPolicy: "weekly" } });
@@ -41,10 +59,12 @@ test("preview is read-only, fill legacy and insert additional URL, rerun preserv
   const edition = await db.festivalEdition.findFirstOrThrow({ where: { festival: { slug } } });
   assert.ok(rows.every((row) => row.editionId === edition.id));
   await db.festivalSource.update({ where: key(one), data: { fetchUrl: "https://example.test/operator", enabled: false, parserKey: "manual_review", strategies: ["manual_review"], nextRunAt: new Date("2027-01-01"), httpEtag: "operator", leaseOwner: "operator", consecutiveFailures: 2 } });
+  const operatorEdited = await db.festivalSource.findUniqueOrThrow({ where: key(one) });
   const repeated = await backfillSources(db, inventory);
   assert.equal(repeated.counts.preserve, 2);
   assert.equal(repeated.ok, false); // drift is reported, never repaired
   const edited = await db.festivalSource.findUniqueOrThrow({ where: key(one) });
+  assert.deepEqual(edited, operatorEdited);
   assert.equal(edited.fetchUrl, "https://example.test/operator");
   assert.equal(edited.enabled, false);
   assert.equal(edited.httpEtag, "operator");

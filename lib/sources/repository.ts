@@ -94,6 +94,16 @@ export async function backfillSources(db: PrismaClient, inventory: readonly Fest
       plan.push({ festivalSlug: source.festivalSlug, url: source.url, action, fields, drift });
       operations.push({ where: { festivalSlug_url: { festivalSlug: source.festivalSlug, url: source.url } }, create: { festival: { connect: { id: festival.id } }, ...(edition ? { edition: { connect: { id: edition.id } } } : {}), festivalSlug: source.festivalSlug, url: source.url, strategies: source.strategies, refreshPolicy: source.refreshPolicy, enabled: source.enabled, editionYear: source.editionYear, manualReviewReason: source.manualReviewReason, parserKey, fetchUrl: source.fetchUrl, followLinkPattern: source.followLinkPattern, requestHeaders: source.headers, cadenceSeconds: cadence[source.refreshPolicy], configurationBackfilledAt: new Date() }, patch: { ...patch, configurationBackfilledAt: new Date() }, action });
     }
+    // A first migration with drift is not an acknowledged migration. Reject the
+    // entire plan before inserts, fills, or configurationBackfilledAt updates.
+    // Marked rows are already DB-owned: their operator edits remain reportable
+    // drift, but must not prevent unrelated first-time configuration.
+    const initialDrift = plan.filter((entry) => entry.action === "fill" && entry.drift.length);
+    if (!options.dryRun && initialDrift.length) {
+      throw new Error("Unresolved initial source drift: " + initialDrift.map((entry) =>
+        JSON.stringify([entry.festivalSlug, entry.url]) + " (" + entry.drift.join(", ") + ")"
+      ).join("; "));
+    }
     if (!options.dryRun) for (const operation of operations) {
       if (operation.action === "insert") await tx.festivalSource.create({ data: operation.create });
       else if (operation.action === "fill") await tx.festivalSource.update({ where: operation.where, data: operation.patch });
