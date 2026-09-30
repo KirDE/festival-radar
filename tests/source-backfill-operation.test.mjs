@@ -33,29 +33,60 @@ test("fixed-mode wrapper rejects privilege, extra arguments, wrong commit, and a
     assert.match(run(["b".repeat(40), "source-preview"]).stderr, /deployed commit mismatch/);
     assert.match(run([sha.slice(0, -1) + "z", "source-preview"]).stderr, /invalid commit/);
     const mock = path.join(temporary, "bin");
+    const started = path.join(temporary, "started");
+    const previousId = "a".repeat(32);
+    const currentId = "b".repeat(32);
     await mkdir(mock);
-    await writeFile(path.join(mock, "systemctl"), "#!/bin/sh\nprintf 'called:%s\\n' \"$*\"\n");
-    // With no prior unit log, cursor lookup can exit 1; post-start audit must still run.
-    await writeFile(path.join(mock, "journalctl"), "#!/bin/sh\ncase \" $* \" in\n  *\" --show-cursor \"*) exit 1 ;;\nesac\necho 'SOURCE_BACKFILL_AUDIT {\"mode\":\"preview\",\"status\":\"ok\"}'\n");
+    await writeFile(path.join(mock, "systemctl"), String.raw`#!/bin/sh
+case "$1" in
+  show)
+    if [ -f "$MOCK_STARTED" ]; then printf '%s\n' "$MOCK_CURRENT_ID";
+    else printf '%s\n' "$MOCK_PREVIOUS_ID"; fi ;;
+  start)
+    touch "$MOCK_STARTED"
+    printf 'called:%s\n' "$*"
+    if [ "$MOCK_SYSTEMCTL_FAIL" = 1 ]; then exit 1; fi ;;
+esac
+`);
+    // Unscoped journal reads contain an old audit; the new invocation only
+    // contains an audit when MOCK_AUDIT=1. No cursor is available in either case.
+    await writeFile(path.join(mock, "journalctl"), String.raw`#!/bin/sh
+case " $* " in
+  *" --show-cursor "*) exit 1 ;;
+  *" _SYSTEMD_INVOCATION_ID=$MOCK_CURRENT_ID "*)
+    if [ "$MOCK_AUDIT" = 1 ]; then echo 'SOURCE_BACKFILL_AUDIT {"mode":"preview","status":"ok"}'; fi ;;
+  *) echo 'SOURCE_BACKFILL_AUDIT {"mode":"preview","status":"old"}' ;;
+esac
+`);
     execFileSync("chmod", ["+x", path.join(mock, "systemctl"), path.join(mock, "journalctl")]);
-    const valid = spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy" } });
+    const mockEnv = { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy", MOCK_STARTED: started, MOCK_PREVIOUS_ID: "", MOCK_CURRENT_ID: currentId, MOCK_AUDIT: "1", MOCK_SYSTEMCTL_FAIL: "0" };
+    const runMock = async (env = {}) => {
+      await rm(started, { force: true });
+      return spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...mockEnv, ...env } });
+    };
+    const valid = await runMock();
     assert.equal(valid.status, 0, valid.stderr);
     assert.match(valid.stdout, /called:start festival-radar-source-backfill@preview\.service/);
-    assert.match(valid.stdout, /SOURCE_BACKFILL_AUDIT/);
+    assert.match(valid.stdout, /SOURCE_BACKFILL_AUDIT.*"status":"ok"/);
     const busy = spawnSync("flock", ["-x", lock, "bash", script, sha, "source-preview"], { encoding: "utf8", env: { ...process.env, SUDO_USER: "festival-radar-deploy" } });
     assert.equal(busy.status, 5);
     assert.match(busy.stderr, /already running/);
-    await writeFile(path.join(mock, "systemctl"), "#!/bin/sh\nexit 1\n");
-    const failed = spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy" } });
+    const failed = await runMock({ MOCK_SYSTEMCTL_FAIL: "1" });
     assert.equal(failed.status, 6);
     assert.match(failed.stdout, /SOURCE_BACKFILL_AUDIT/);
     assert.match(failed.stderr, /source operation failed/);
-    await writeFile(path.join(mock, "systemctl"), "#!/bin/sh\nexit 0\n");
-    await writeFile(path.join(mock, "journalctl"), "#!/bin/sh\nexit 1\n");
-    const noAudit = spawnSync("bash", [script, sha, "source-preview"], { encoding: "utf8", env: { ...process.env, PATH: mock + ":" + process.env.PATH, SUDO_USER: "festival-radar-deploy" } });
+    const noAudit = await runMock({ MOCK_AUDIT: "0" });
     assert.equal(noAudit.status, 6);
+    assert.doesNotMatch(noAudit.stdout, /SOURCE_BACKFILL_AUDIT/);
     assert.match(noAudit.stderr, /source operation audit unavailable/);
-    assert.match(noAudit.stderr, /source operation failed/);
+    // A stale prior marker must not satisfy an invocation with no new audit.
+    const staleAudit = await runMock({ MOCK_PREVIOUS_ID: previousId, MOCK_AUDIT: "0" });
+    assert.equal(staleAudit.status, 6);
+    assert.doesNotMatch(staleAudit.stdout, /SOURCE_BACKFILL_AUDIT/);
+    assert.match(staleAudit.stderr, /source operation audit unavailable/);
+    const unchangedInvocation = await runMock({ MOCK_PREVIOUS_ID: previousId, MOCK_CURRENT_ID: previousId });
+    assert.equal(unchangedInvocation.status, 6);
+    assert.match(unchangedInvocation.stderr, /source operation audit unavailable/);
   } finally { await rm(temporary, { recursive: true, force: true }); }
 });
 
