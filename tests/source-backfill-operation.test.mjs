@@ -52,16 +52,24 @@ nonce=$(sed -n 's/^SOURCE_BACKFILL_NONCE=//p' "$MOCK_CAPTURED_ENV")
 # Simulate the service manager's append file descriptor (never journal stdout).
 if [ "$MOCK_EMPTY" != 1 ]; then
   echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"ok","counts":{"insert":0,"fill":0,"preserve":0},"drift":0}' >> "$MOCK_AUDIT_FILE"
+  if [ "$MOCK_STALE_CONFLICT" = 1 ]; then
+    echo 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"legacy-config-conflict","conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1},"drift":null}' >> "$MOCK_AUDIT_FILE"
+  fi
   if [ "$MOCK_SPOOF" = 1 ]; then
     printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"ok","url":"sensitive","counts":{"insert":0,"fill":0,"preserve":0},"drift":0}\n' "$nonce" >> "$MOCK_AUDIT_FILE"
   fi
   if [ "$MOCK_AUDIT" = 1 ]; then
-    if [ -n "$MOCK_STATUS" ]; then status="$MOCK_STATUS"; extra=''; drift=null;
+    if [ "$MOCK_STATUS" = legacy-config-conflict ]; then
+      status=legacy-config-conflict
+      extra=',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1}'
+      drift=null
+    elif [ -n "$MOCK_STATUS" ]; then status="$MOCK_STATUS"; extra=''; drift=null;
     elif [ "$MOCK_SYSTEMCTL_FAIL" = 1 ] && [ "$MOCK_FAIL_WITH_OK" != 1 ]; then status=review-required; extra=',"counts":{"insert":2,"fill":0,"preserve":3}'; drift=1;
     elif [ "$MOCK_REVIEW" = 1 ]; then status=review-required; extra=',"counts":{"insert":0,"fill":0,"preserve":3}'; drift=1;
     else status=ok; extra=',"counts":{"insert":0,"fill":0,"preserve":3}'; drift=0; fi
     if [ "$MOCK_ERROR_COUNTS" = 1 ]; then extra=',"counts":{"insert":0,"fill":0,"preserve":0}'; fi
     if [ "$MOCK_ERROR_ZERO_DRIFT" = 1 ]; then drift=0; fi
+    if [ -n "$MOCK_CONFLICT_OVERRIDE" ]; then extra="$MOCK_CONFLICT_OVERRIDE"; fi
     printf 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"preview","nonce":"%s","status":"%s"%s,"drift":%s}\n' "$nonce" "$status" "$extra" "$drift" >> "$MOCK_AUDIT_FILE"
     cp "$MOCK_AUDIT_FILE" "$MOCK_AUDIT_CAPTURE"
     if [ "$MOCK_DUPLICATE" = 1 ]; then tail -n 1 "$MOCK_AUDIT_FILE" >> "$MOCK_AUDIT_FILE"; fi
@@ -133,7 +141,8 @@ exec /usr/bin/head "$@"
     for (const category of ["migration-missing", "migration-check-error", "database-or-unknown-error", "guard-or-data-error", "disconnect-error", "seed-validation", "duplicate-source", "missing-enabled-festival", "missing-edition", "binding-conflict", "legacy-config-conflict", "unresolved-drift"]) {
       const result = await runMock({ MOCK_STATUS: category });
       assert.equal(result.status, 6, category);
-      assert.deepEqual(JSON.parse(result.stdout.slice("SOURCE_BACKFILL_AUDIT ".length)), { operation: "festival-source-backfill", mode: "preview", status: category, drift: null });
+      assert.deepEqual(JSON.parse(result.stdout.slice("SOURCE_BACKFILL_AUDIT ".length)), { operation: "festival-source-backfill", mode: "preview", status: category,
+        ...(category === "legacy-config-conflict" ? { conflictSummary: { affectedRows: 2, editionYear: 1, refreshPolicy: 1, strategies: 1 } } : {}), drift: null });
     }
     const failedWithOk = await runMock({ MOCK_SYSTEMCTL_FAIL: "1", MOCK_FAIL_WITH_OK: "1" });
     assert.equal(failedWithOk.status, 6);
@@ -141,8 +150,14 @@ exec /usr/bin/head "$@"
     for (const env of [
       { MOCK_STATUS: "not-a-status" }, { MOCK_STATUS: "missing-edition", MOCK_ERROR_COUNTS: "1" },
       { MOCK_STATUS: "seed-validation", MOCK_ERROR_ZERO_DRIFT: "1" },
+      { MOCK_STATUS: "legacy-config-conflict", MOCK_ERROR_COUNTS: "1" },
+      { MOCK_STATUS: "legacy-config-conflict", MOCK_ERROR_ZERO_DRIFT: "1" },
+      ...[',"conflictSummary":null', ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1},"url":"https://secret.example"',
+        ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1},"counts":{"insert":0,"fill":0,"preserve":0}',
+        ',"conflictSummary":{"affectedRows":2,"editionYear":"1","refreshPolicy":1,"strategies":1}',
+        ',"conflictSummary":{"affectedRows":2,"editionYear":1,"refreshPolicy":1,"strategies":1,"unexpected":1}'].map((MOCK_CONFLICT_OVERRIDE) => ({ MOCK_STATUS: "legacy-config-conflict", MOCK_CONFLICT_OVERRIDE })),
       { MOCK_MISSING_ENV: "1" }, { MOCK_EMPTY: "1" }, { MOCK_AUDIT: "0" },
-      { MOCK_AUDIT: "0", MOCK_SPOOF: "1" }, { MOCK_OVERSIZE: "1" },
+      { MOCK_AUDIT: "0", MOCK_SPOOF: "1" }, { MOCK_AUDIT: "0", MOCK_STALE_CONFLICT: "1" }, { MOCK_OVERSIZE: "1" },
       { MOCK_LONG_LINE: "1" }, { MOCK_UNREADABLE: "1" }, { MOCK_DUPLICATE: "1" },
       { MOCK_NUL: "1" }, { MOCK_MANY_LINES: "1" }, { MOCK_UNSAFE: "1" },
       { MOCK_MISSING_AUDIT: "1" },
