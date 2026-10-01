@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -136,6 +137,40 @@ test("rejects an edition mismatch before changing the catalog", async () => {
   await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix }), /does not match catalogue edition/);
   assert.equal((await db.ingestionCandidate.findUniqueOrThrow({ where: { attemptId: attempt.id } })).reviewState, "PENDING");
   assert.equal(await db.artist.count({ where: { name: artist } }), 0);
+});
+
+test("leased publication rejects an expired or reclaimed worker before catalog writes", async () => {
+  const artist = `Lease Publication ${suffix}`;
+  const value = result(artist);
+  const attempt = await persist(value);
+  const candidate = await db.ingestionCandidate.findUniqueOrThrow({ where: { attemptId: attempt.id } });
+  const festival = await db.festival.findUniqueOrThrow({ where: { slug: value.festivalSlug } });
+  const edition = await db.festivalEdition.findFirstOrThrow({ where: { festivalId: festival.id, recordState: "CURRENT" } });
+  const ownerA = randomUUID();
+  const ownerB = randomUUID();
+  const source = await db.festivalSource.create({ data: {
+    festivalSlug: value.festivalSlug, festivalId: festival.id, editionId: edition.id, url: value.sourceUrl,
+    strategies: ["manual_review"], parserKey: "manual_review", refreshPolicy: "daily", cadenceSeconds: 86400,
+    editionYear: edition.year, configurationBackfilledAt: new Date(), leaseOwner: ownerA,
+    leaseExpiresAt: new Date("2020-01-01T00:00:00.000Z"),
+  } });
+  const slug = encodeURIComponent(artist.toLocaleLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, ""));
+  createdArtists.push(slug);
+  try {
+    await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix,
+      sourceLease: { id: source.id, owner: ownerA } }), /lease is no longer active/);
+    assert.equal(await db.catalogPublication.count({ where: { sourceId: "ingestion:" + candidate.id } }), 0);
+    assert.equal(await db.artist.count({ where: { slug } }), 0);
+    await db.festivalSource.update({ where: { id: source.id }, data: { leaseOwner: ownerB, leaseExpiresAt: new Date(Date.now() + 300_000) } });
+    await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix,
+      sourceLease: { id: source.id, owner: ownerA } }), /lease is no longer active/);
+    const published = await publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix,
+      sourceLease: { id: source.id, owner: ownerB } });
+    assert.ok(published);
+    assert.equal(await db.catalogPublication.count({ where: { sourceId: "ingestion:" + candidate.id } }), 1);
+  } finally {
+    await db.festivalSource.delete({ where: { id: source.id } });
+  }
 });
 
 test("production Node exports playlist input from the committed database catalog", async () => {
