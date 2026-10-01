@@ -174,6 +174,34 @@ test("failure before attempt persistence records a safe category and releases th
   }
 });
 
+test("cleanup database error does not replace original failure or leave a RUNNING run", async () => {
+  const marker = "cleanup-" + randomUUID();
+  await db.festivalSource.update({ where: { id: sourceId }, data: {
+    enabled: true, strategies: ["manual_review"], parserKey: "manual_review",
+    nextRunAt: new Date(Date.now() - 1000), leaseOwner: null, leaseExpiresAt: null,
+  } });
+  const output = path.join(dir, "blocked-cleanup");
+  await mkdir(path.join(output, slug + ".json"), { recursive: true });
+  await db.$executeRawUnsafe(
+    "CREATE FUNCTION due_worker_reject_cleanup() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.\"festivalSlug\" = '" + slug + "' AND OLD.\"leaseOwner\" IS NOT NULL AND NEW.\"leaseOwner\" IS NULL THEN RAISE EXCEPTION 'test cleanup failure'; END IF; RETURN NEW; END $$",
+  );
+  await db.$executeRawUnsafe('CREATE TRIGGER due_worker_reject_cleanup BEFORE UPDATE ON "FestivalSource" FOR EACH ROW EXECUTE FUNCTION due_worker_reject_cleanup()');
+  try {
+    const failed = run([], output, { GITHUB_SHA: marker });
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /EISDIR/);
+    assert.doesNotMatch(failed.stderr, /test cleanup failure/, "the original file error stays primary");
+    const terminal = await db.ingestionRun.findFirstOrThrow({ where: { sourceCommit: marker } });
+    orphanRunIds.push(terminal.id);
+    assert.equal(terminal.status, "FAILED");
+    assert.ok(terminal.endedAt);
+  } finally {
+    await db.$executeRawUnsafe('DROP TRIGGER due_worker_reject_cleanup ON "FestivalSource"');
+    await db.$executeRawUnsafe('DROP FUNCTION due_worker_reject_cleanup()');
+    await db.festivalSource.update({ where: { id: sourceId }, data: { leaseOwner: null, leaseExpiresAt: null } });
+  }
+});
+
 test("publication survives notification failure and independent drain recovers once", async () => {
   const user = await db.user.create({ data: { email: slug + "@example.test", passwordHash: "unused", emailVerifiedAt: new Date() } });
   await db.notificationPreference.create({ data: {
@@ -271,7 +299,7 @@ test("in-flight fetch cannot publish after source edit or lease reclaim", async 
       assert.equal(await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } }), publicationsBefore);
       const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
       if (change === "reclaim") assert.notEqual(source.leaseOwner, null);
-      else assert.equal(source.cadenceSeconds, 172800);
+      else { assert.equal(source.cadenceSeconds, 172800); assert.equal(source.leaseOwner, null); assert.equal(source.leaseExpiresAt, null); }
       const latest = await db.ingestionRun.findFirstOrThrow({ where: { attempts: { some: { festivalSlug: slug } } }, orderBy: { startedAt: "desc" } });
       assert.equal(latest.status, "FAILED");
       const candidate = await db.ingestionCandidate.findFirstOrThrow({ where: { runId: latest.id } });

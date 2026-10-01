@@ -11,7 +11,7 @@ import { notificationEventsForChanges, uniqueNotificationEvents } from "../lib/i
 import { db } from "../lib/db.ts";
 import { publishIngestionResult } from "../lib/catalog/publication.ts";
 import { readCatalog } from "../lib/catalog/repository.ts";
-import { claimDueSources, completeSourceLease, startSourceLeaseRenewal } from "../lib/ingestion/lease.ts";
+import { claimDueSources, completeSourceLease, releaseOwnedSourceLease, startSourceLeaseRenewal } from "../lib/ingestion/lease.ts";
 import { randomUUID } from "node:crypto";
 import { createIngestionRun, finishIngestionRun, ingestionQueries, persistAttempt } from "../lib/ingestion/repository.ts";
 import { applyPublication, historyRecord } from "../lib/ingestion/publication.ts";
@@ -74,7 +74,14 @@ if (dbDue) {
     run = await createIngestionRun(db, { trigger: process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL", sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length });
   } catch (error) {
     try { await leaseRenewal?.stop(); } catch { /* retain the original setup error */ }
-    await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "pre_attempt_error" });
+    try {
+      if (run) await db.ingestionRun.update({ where: { id: run.id }, data: { status: "FAILED", endedAt: new Date(), failed: 1 } });
+    } catch { /* retain the original setup error */ }
+    try {
+      if (!await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "pre_attempt_error" })) {
+        await releaseOwnedSourceLease(db, sourceLease);
+      }
+    } catch { /* retain the original setup error */ }
     throw error;
   }
 }
@@ -188,9 +195,14 @@ for (const source of selected) {
     try { await leaseRenewal?.stop(); } catch { /* preserve the original error; cleanup remains fenced */ }
     try {
       if (run && sourceLease) await db.ingestionRun.update({ where: { id: run.id }, data: { status: "FAILED", endedAt: new Date(), failed: 1 } });
-    } finally {
-      if (sourceLease && !leaseCompleted) await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: publicationCommitted ? "success" : attemptPersisted ? "parser_error" : "pre_attempt_error" });
-    }
+    } catch { /* retain the original error and still attempt lease cleanup */ }
+    try {
+      if (sourceLease && !leaseCompleted && !await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: publicationCommitted ? "success" : attemptPersisted ? "parser_error" : "pre_attempt_error" })) {
+        // A changed revision must not strand our lease; a reclaimed owner is
+        // untouched by the owner-only CAS. Preserve the original failure.
+        await releaseOwnedSourceLease(db, sourceLease);
+      }
+    } catch { /* retain the original error if either cleanup query fails */ }
     throw error;
   }
 }

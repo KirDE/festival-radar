@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { claimDueSourceIds, claimDueSources, completeSourceLease, renewSourceLease, startSourceLeaseRenewal } from "../lib/ingestion/lease.ts";
+import { claimDueSourceIds, claimDueSources, completeSourceLease, releaseOwnedSourceLease, renewSourceLease, startSourceLeaseRenewal } from "../lib/ingestion/lease.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url || !/(?:test|integration)/i.test(new URL(url).pathname)) throw new Error("A disposable test/integration DATABASE_URL is required");
@@ -88,6 +88,32 @@ test("operator source edits prevent old worker schedule updates", async () => {
   const disabled = await second.festivalSource.update({ where: { id }, data: { enabled: false, updatedAt: new Date("2031-01-01T00:00:00.000Z") } });
   assert.equal(await completeSourceLease(first, { id, owner: ownerA, now: base, updatedAt: rescheduled.updatedAt, outcome: "fetch_error" }), false);
   assert.deepEqual(await first.festivalSource.findUniqueOrThrow({ where: { id } }), disabled);
+});
+
+test("release-only CAS preserves edited revision and schedule, but never clears a reclaimed owner", async () => {
+  await first.festivalSource.update({ where: { id }, data: {
+    enabled: true, parserKey: "manual_review", nextRunAt: base, leaseOwner: null, leaseExpiresAt: null,
+  } });
+  const [claim] = await claimDueSources(first, options(ownerA));
+  const edited = await second.festivalSource.update({ where: { id }, data: {
+    nextRunAt: new Date("2027-05-01T00:00:00.000Z"), updatedAt: new Date("2030-05-01T00:00:00.000Z"),
+  } });
+  assert.equal(await completeSourceLease(first, { ...claim, owner: ownerA, now: base, outcome: "parser_error" }), false);
+  assert.equal(await releaseOwnedSourceLease(first, { ...claim, owner: ownerA }), true);
+  const released = await first.festivalSource.findUniqueOrThrow({ where: { id } });
+  assert.deepEqual(released, { ...edited, leaseOwner: null, leaseExpiresAt: null });
+  assert.equal(await releaseOwnedSourceLease(first, { ...claim, owner: ownerA }), false);
+
+  await first.festivalSource.update({ where: { id }, data: { nextRunAt: base } });
+  const [secondClaim] = await claimDueSources(first, options(ownerA));
+  assert.equal(secondClaim.id, id);
+  await first.festivalSource.update({ where: { id }, data: { leaseExpiresAt: new Date("2027-02-28T00:00:00.000Z") } });
+  const [reclaimed] = await claimDueSources(second, options(ownerB));
+  assert.equal(reclaimed.id, id);
+  const before = await second.festivalSource.findUniqueOrThrow({ where: { id } });
+  assert.equal(await releaseOwnedSourceLease(first, { ...secondClaim, owner: ownerA }), false);
+  assert.deepEqual(await first.festivalSource.findUniqueOrThrow({ where: { id } }), before);
+  assert.equal(await completeSourceLease(second, { ...reclaimed, owner: ownerB, now: base, outcome: "success" }), true);
 });
 
 test("invalid claim arguments fail before database access", async () => {

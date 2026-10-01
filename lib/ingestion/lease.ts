@@ -126,3 +126,16 @@ export async function completeSourceLease(db: PrismaClient, { id, owner, now, up
   `;
   return rows.length === 1;
 }
+
+/** Cleanup after fenced completion fails: remove only this worker's lease.
+ * Never advance the schedule, overwrite an operator edit, or clear a reclaimed owner. */
+export async function releaseOwnedSourceLease(db: PrismaClient, lease: Pick<LeaseIdentity, "id" | "owner">): Promise<boolean> {
+  validateOwner(lease.owner);
+  if (!lease.id) throw new Error("Invalid ingestion lease release");
+  const rows = await db.$queryRaw<Array<{ id: string }>>`
+    UPDATE "FestivalSource" SET "leaseOwner" = NULL, "leaseExpiresAt" = NULL
+    WHERE id = ${lease.id} AND "leaseOwner" = ${lease.owner}
+    RETURNING id
+  `;
+  return rows.length === 1;
+}
