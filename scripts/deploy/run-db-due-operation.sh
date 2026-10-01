@@ -16,7 +16,9 @@ case "$mode" in
   ingest)
     output="$(mktemp -d /opt/festival-radar/shared/.db-due.XXXXXXXX)"
     trap 'rm -rf -- "$output"' EXIT
-    "$release/.runtime/node" scripts/ingest-festivals.mjs --db-due --publish --max-fetch-errors=0 "--output=$output" >/dev/null 2>&1 || { echo 'DB due ingestion failed' >&2; exit 1; }
+    # systemd does not inherit the GitHub dispatch environment. Pin provenance to
+    # the release SHA already checked against current and DEPLOYED_COMMIT.
+    GITHUB_SHA="$commit" "$release/.runtime/node" scripts/ingest-festivals.mjs --db-due --publish --max-fetch-errors=0 "--output=$output" >/dev/null 2>&1 || { echo 'DB due ingestion failed' >&2; exit 1; }
     "$release/.runtime/node" scripts/report-db-due-pilot.mjs "$output/summary.json" || { echo 'DB due pilot audit failed' >&2; exit 1; } ;;
   drain)
     "$release/.runtime/node" scripts/drain-ingestion-notifications.mjs --db-due >/dev/null 2>&1 || { echo 'DB due outbox drain failed' >&2; exit 1; } ;;

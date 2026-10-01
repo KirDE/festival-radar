@@ -113,23 +113,36 @@ test('systemd runner executes one DB-due mode and sanitizes its private artifact
     await writeFile(path.join(release, 'scripts/report-db-due-health.mjs'), '');
     await writeFile(path.join(release, 'scripts/report-db-due-pilot.mjs'), await readFile('scripts/report-db-due-pilot.mjs'));
     const stub = path.join(release, '.runtime/node');
-    await writeFile(stub, '#!/bin/sh\nif [ "$1" = scripts/ingest-festivals.mjs ]; then printf "%s\\n" "$*" >> "$TEST_CALLS"; for arg do case "$arg" in --output=*) output="${arg#--output=}";; esac; done; printf "%s\\n" "$TEST_SUMMARY" > "$output/summary.json"; exit 0; fi\nexec "$TEST_REAL_NODE" "$@"\n', { mode: 0o755 });
+    await writeFile(stub, '#!/bin/sh\nif [ "$1" = scripts/ingest-festivals.mjs ]; then printf "%s\\n" "$*" >> "$TEST_CALLS"; printf "%s\\n" "${GITHUB_SHA:-local}" >> "$TEST_COMMITS"; for arg do case "$arg" in --output=*) output="${arg#--output=}";; esac; done; printf "%s\\n" "$TEST_SUMMARY" > "$output/summary.json"; exit 0; fi\nexec "$TEST_REAL_NODE" "$@"\n', { mode: 0o755 });
     let runner = await readFile('scripts/deploy/run-db-due-operation.sh', 'utf8');
     runner = runner.replace('root=/opt/festival-radar', 'root=' + root)
       .replace('/opt/festival-radar/shared/.db-due.', root + '/shared/.db-due.');
     const file = path.join(dir, 'runner');
     await writeFile(file, runner, { mode: 0o755 });
     const calls = path.join(dir, 'calls');
+    const commits = path.join(dir, 'commits');
+    const ingestion = await readFile('scripts/ingest-festivals.mjs', 'utf8');
+    assert.match(ingestion, /createIngestionRun\(db, \{[^}]*sourceCommit: process\.env\.GITHUB_SHA \|\| "local"/);
     const base = { status: 'COMPLETED', dryRun: false, totalSources: 1, attempted: 1,
       processed: 1, published: 0, reviewRequired: 0, fetchErrors: 0, results: [{ url: 'PRIVATE_URL' }] };
-    const run = (summary) => spawnSync('bash', [file, 'ingest', sha], { encoding: 'utf8',
-      env: { ...process.env, TEST_REAL_NODE: process.execPath, TEST_CALLS: calls, TEST_SUMMARY: JSON.stringify(summary) } });
+    const run = (summary, commit = sha, inheritedSha = 'f'.repeat(40)) => spawnSync('bash', [file, 'ingest', commit], { encoding: 'utf8',
+      env: { ...process.env, GITHUB_SHA: inheritedSha ?? undefined, TEST_REAL_NODE: process.execPath,
+        TEST_CALLS: calls, TEST_COMMITS: commits, TEST_SUMMARY: JSON.stringify(summary) } });
     const result = run(base);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout, audit + '\n');
     const args = await readFile(calls, 'utf8');
     assert.match(args, /--db-due --publish --max-fetch-errors=0/);
     assert.doesNotMatch(args, /--slug=|--force|playlist|drain/);
+    // The DB run uses GITHUB_SHA for sourceCommit; systemd has no GitHub env,
+    // and even a forged inherited value must be replaced by the pinned SHA.
+    assert.equal(run(base, sha, null).status, 0);
+    assert.equal(await readFile(commits, 'utf8'), sha + '\n' + sha + '\n');
+    assert.equal(run(base, 'c'.repeat(40)).status, 4);
+    await writeFile(path.join(release, 'DEPLOYED_COMMIT'), 'c'.repeat(40));
+    assert.equal(run(base).status, 4);
+    assert.equal(await readFile(commits, 'utf8'), sha + '\n' + sha + '\n');
+    await writeFile(path.join(release, 'DEPLOYED_COMMIT'), sha);
     assert.equal(run({ ...base, attempted: 0 }).status, 1);
     assert.doesNotMatch(result.stdout + result.stderr, /PRIVATE_URL/);
   } finally { await rm(dir, { recursive: true, force: true }); }
