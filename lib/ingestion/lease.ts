@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 type ClaimOptions = { owner: string; now: Date; limit: number; ttlMs: number };
-type Completion = { id: string; owner: string; now: Date; outcome: "success" | "fetch_error" | "parser_error" };
+type Completion = { id: string; owner: string; now: Date; updatedAt: Date; outcome: "success" | "fetch_error" | "parser_error" };
 
 function validateOwner(owner: string) {
   // Per-run random UUID, never a stable hostname or user-supplied source value.
@@ -39,9 +39,10 @@ export async function claimDueSourceIds(db: PrismaClient, { owner, now, limit, t
 }
 
 /** Fenced acknowledgement; expired/reclaimed work may not advance the schedule or clear a new lease. */
-export async function completeSourceLease(db: PrismaClient, { id, owner, now, outcome }: Completion): Promise<boolean> {
+export async function completeSourceLease(db: PrismaClient, { id, owner, now, updatedAt, outcome }: Completion): Promise<boolean> {
   validateOwner(owner);
   validateNow(now);
+  validateNow(updatedAt);
   if (!id || !["success", "fetch_error", "parser_error"].includes(outcome)) throw new Error("Invalid ingestion completion");
   const success = outcome === "success";
   const rows = await db.$queryRaw<Array<{ id: string }>>`
@@ -57,6 +58,7 @@ export async function completeSourceLease(db: PrismaClient, { id, owner, now, ou
         END,
         "updatedAt" = ${now}
     WHERE id = ${id} AND "leaseOwner" = ${owner} AND "leaseExpiresAt" > ${now}
+      AND enabled = true AND "configurationBackfilledAt" IS NOT NULL AND "updatedAt" = ${updatedAt}
     RETURNING id
   `;
   return rows.length === 1;
