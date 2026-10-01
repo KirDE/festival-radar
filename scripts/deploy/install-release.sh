@@ -33,6 +33,12 @@ had_previous_env=false
 test -s "$archive"
 test -s "$env_source"
 install -d -m 0755 "$app_root/releases" "$shared"
+install -d -o www-data -g www-data -m 0750 "$shared/ingestion"
+if [[ ! -e "$shared/ingestion/source-fetch.lock" && ! -L "$shared/ingestion/source-fetch.lock" ]]; then
+  install -o www-data -g www-data -m 0640 /dev/null "$shared/ingestion/source-fetch.lock"
+fi
+[[ -f "$shared/ingestion/source-fetch.lock" && ! -L "$shared/ingestion/source-fetch.lock" &&
+   "$(stat -c %U:%a -- "$shared/ingestion/source-fetch.lock")" == www-data:640 ]] || { echo 'ingestion lock unsafe' >&2; exit 4; }
 install -m 0600 "$env_source" "$staged_env"
 
 rm -rf "$release"
