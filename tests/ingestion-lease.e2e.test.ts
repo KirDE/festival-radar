@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { claimDueSourceIds, completeSourceLease } from "../lib/ingestion/lease.ts";
+import { claimDueSourceIds, claimDueSources, completeSourceLease } from "../lib/ingestion/lease.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url || !/(?:test|integration)/i.test(new URL(url).pathname)) throw new Error("A disposable test/integration DATABASE_URL is required");
@@ -96,4 +96,13 @@ test("disabled and unconfigured rows cannot be claimed", async () => {
   assert.deepEqual(await claimDueSourceIds(first, options(ownerA)), []);
   await first.festivalSource.update({ where: { id }, data: { enabled: true, parserKey: null } });
   assert.deepEqual(await claimDueSourceIds(second, options(ownerB)), []);
+});
+
+test("claim returns the exact revision used by publication and completion fences", async () => {
+  await first.festivalSource.update({ where: { id }, data: { enabled: true, parserKey: "manual_review", nextRunAt: base, leaseOwner: null, leaseExpiresAt: null } });
+  const [claim] = await claimDueSources(first, options(ownerA));
+  assert.equal(claim.id, id);
+  const row = await first.festivalSource.findUniqueOrThrow({ where: { id } });
+  assert.equal(claim.updatedAt.toISOString(), row.updatedAt.toISOString());
+  assert.equal(await completeSourceLease(first, { ...claim, owner: ownerA, now: base, outcome: "success" }), true);
 });

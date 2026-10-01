@@ -13,13 +13,13 @@ function validateNow(now: Date) {
 }
 
 /** One atomic PostgreSQL statement: no worker may claim the same source while another holds its row lock. */
-export async function claimDueSourceIds(db: PrismaClient, { owner, now, limit, ttlMs }: ClaimOptions): Promise<string[]> {
+export async function claimDueSources(db: PrismaClient, { owner, now, limit, ttlMs }: ClaimOptions): Promise<Array<{ id: string; updatedAt: Date }>> {
   validateOwner(owner);
   validateNow(now);
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error("Invalid ingestion batch size");
   if (!Number.isInteger(ttlMs) || ttlMs < 30_000 || ttlMs > 30 * 60_000) throw new Error("Invalid ingestion lease duration");
   const expires = new Date(now.getTime() + ttlMs);
-  const rows = await db.$queryRaw<Array<{ id: string }>>`
+  const rows = await db.$queryRaw<Array<{ id: string; updatedAt: Date }>>`
     WITH due AS (
       SELECT id FROM "FestivalSource"
       WHERE enabled = true AND "configurationBackfilledAt" IS NOT NULL
@@ -33,9 +33,14 @@ export async function claimDueSourceIds(db: PrismaClient, { owner, now, limit, t
     UPDATE "FestivalSource" AS source
     SET "leaseOwner" = ${owner}, "leaseExpiresAt" = ${expires}, "updatedAt" = ${now}
     FROM due WHERE source.id = due.id
-    RETURNING source.id
+    RETURNING source.id, source."updatedAt"
   `;
-  return rows.map(({ id }) => id);
+  return rows;
+}
+
+/** Compatibility for existing callers needing just IDs. */
+export async function claimDueSourceIds(db: PrismaClient, options: ClaimOptions): Promise<string[]> {
+  return (await claimDueSources(db, options)).map(({ id }) => id);
 }
 
 /** Fenced acknowledgement; expired/reclaimed work may not advance the schedule or clear a new lease. */

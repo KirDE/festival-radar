@@ -40,6 +40,7 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npm run test:catalog-db
       - run: npm run catalog:backfill
+      - run: npm run test:due-worker
       - run: npm run test:integration
       - run: npm run test:admin:integration
       - run: npx prisma migrate reset --force
