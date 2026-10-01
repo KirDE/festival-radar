@@ -57,6 +57,22 @@ if [[ "$pilot" == true ]]; then
   printf 'DB_DUE_PREFLIGHT %s\n' "$health_record"
 fi
 if ! systemctl start "festival-radar-db-due@$mode.service" >/dev/null 2>&1; then
+  if [[ "$pilot" == true && -f "$audit" && ! -L "$audit" && "$(stat -c %u:%a -- "$audit" 2>/dev/null)" == 0:600 ]]; then
+    # The failed unit's stdout audit may contain only a runner-allowlisted
+    # stage. Compare exact bytes, including one newline: never relay raw audit.
+    failure_size="$(stat -c %s -- "$audit" 2>/dev/null || true)"
+    if [[ "$failure_size" =~ ^[0-9]+$ ]] && (( failure_size > 0 && failure_size <= 64 )); then
+      failure_record="$(cat -- "$audit" 2>/dev/null || true)"
+      failure_pattern='^DB_DUE_FAILURE_STAGE (claim|source_setup|source_lookup|fetch|extraction|attempt_persistence|artifact_write|publication|lease_completion|result_recording|run_finalization)$'
+      if [[ "$failure_record" =~ $failure_pattern ]]; then
+        stage="${BASH_REMATCH[1]}"
+        if [[ "$(stat -c %s -- "$audit" 2>/dev/null)" == "$failure_size" ]] &&
+          printf 'DB_DUE_FAILURE_STAGE %s\n' "$stage" | cmp -s -- "$audit" -; then
+          printf 'DB_DUE_FAILURE_STAGE %s\n' "$stage" >&2
+        fi
+      fi
+    fi
+  fi
   echo 'DB due operation failed' >&2
   exit 6
 fi

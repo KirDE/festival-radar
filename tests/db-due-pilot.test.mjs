@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir, userInfo } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -24,6 +24,7 @@ test('fixed dispatch shares deploy lock and has no source, mode or shell input',
   assert.match(starter, /flock -n 8/);
   assert.match(starter, /systemctl show --property=ActiveState --value festival-radar-collection@ingestion.service/);
   assert.match(installer, /source-fetch.lock/);
+  assert.match(installer, /StandardOutput=append:\/run\/festival-radar-db-due\/%i\.audit\nStandardError=null/);
   assert.match(runner, /--db-due --publish --max-fetch-errors=0/);
   assert.match(packager, /scripts\/report-db-due-pilot.mjs/);
   assert.doesNotMatch(installer, /db-due-ingest.*timer/);
@@ -66,7 +67,7 @@ test('root path rejects active legacy, held fetch lock, unhealthy preflight and 
     await writeFile(lock, '', { mode: 0o640 });
     await writeFile(unit, 'unit');
     await writeFile(path.join(bin, 'id'), '#!/bin/sh\necho 0\n', { mode: 0o755 });
-    await writeFile(path.join(bin, 'systemctl'), '#!/bin/sh\nif [ "$1" = show ]; then echo "${TEST_ACTIVE:-inactive}"; exit 0; fi\nprintf "%s\\n" "$2" >> "$TEST_LOG"\nif [ "$2" = festival-radar-db-due@health.service ]; then printf "%s\\n" "$TEST_HEALTH" > "$TEST_AUDIT_DIR/health.audit"; else printf "%s\\n" "$TEST_INGEST" > "$TEST_AUDIT_DIR/ingest.audit"; fi\n', { mode: 0o755 });
+    await writeFile(path.join(bin, 'systemctl'), '#!/bin/sh\nif [ "$1" = show ]; then echo "${TEST_ACTIVE:-inactive}"; exit 0; fi\nprintf "%s\\n" "$2" >> "$TEST_LOG"\nif [ "$2" = festival-radar-db-due@health.service ]; then printf "%s\\n" "$TEST_HEALTH" > "$TEST_AUDIT_DIR/health.audit"; else printf "%s\\n" "$TEST_INGEST" > "$TEST_AUDIT_DIR/ingest.audit"; exit "${TEST_INGEST_EXIT:-0}"; fi\n', { mode: 0o755 });
     let wrapper = await readFile('scripts/deploy/start-db-due', 'utf8');
     wrapper = wrapper.replace('root=/opt/festival-radar', 'root=' + root)
       .replace('/run/festival-radar-activation.lock', path.join(dir, 'activation.lock'))
@@ -91,6 +92,22 @@ test('root path rejects active legacy, held fetch lock, unhealthy preflight and 
     assert.equal(malformed.status, 6);
     assert.equal(malformed.stdout, 'DB_DUE_PREFLIGHT ' + good + '\n');
     assert.doesNotMatch(malformed.stdout + malformed.stderr, /PRIVATE_URL/);
+    const stage = run({ TEST_INGEST_EXIT: '1', TEST_INGEST: 'DB_DUE_FAILURE_STAGE lease_completion' });
+    assert.equal(stage.status, 6);
+    assert.equal(stage.stdout, 'DB_DUE_PREFLIGHT ' + good + '\n');
+    assert.equal(stage.stderr, 'DB_DUE_FAILURE_STAGE lease_completion\nDB due operation failed\n');
+    for (const record of [
+      'DB_DUE_FAILURE_STAGE PRIVATE_URL',
+      'DB_DUE_FAILURE_STAGE publication\nDB_DUE_FAILURE_STAGE publication',
+      'DB_DUE_FAILURE_STAGE publication\nPRIVATE_URL',
+      'DB_DUE_FAILURE_STAGE publication' + 'x'.repeat(512),
+      'PRIVATE_URL exception=secret',
+    ]) {
+      const rejected = run({ TEST_INGEST_EXIT: '1', TEST_INGEST: record });
+      assert.equal(rejected.status, 6);
+      assert.equal(rejected.stdout, 'DB_DUE_PREFLIGHT ' + good + '\n');
+      assert.equal(rejected.stderr, 'DB due operation failed\n');
+    }
     const held = spawn('flock', ['-x', lock, 'sh', '-c', 'echo ready; sleep 2'], { stdio: ['ignore', 'pipe', 'ignore'] });
     await new Promise((resolve) => held.stdout.once('data', resolve));
     assert.equal(run().status, 5);
@@ -113,7 +130,7 @@ test('systemd runner executes one DB-due mode and sanitizes its private artifact
     await writeFile(path.join(release, 'scripts/report-db-due-health.mjs'), '');
     await writeFile(path.join(release, 'scripts/report-db-due-pilot.mjs'), await readFile('scripts/report-db-due-pilot.mjs'));
     const stub = path.join(release, '.runtime/node');
-    await writeFile(stub, '#!/bin/sh\nif [ "$1" = scripts/ingest-festivals.mjs ]; then printf "%s\\n" "$*" >> "$TEST_CALLS"; printf "%s\\n" "${GITHUB_SHA:-local}" >> "$TEST_COMMITS"; for arg do case "$arg" in --output=*) output="${arg#--output=}";; esac; done; printf "%s\\n" "$TEST_SUMMARY" > "$output/summary.json"; exit 0; fi\nexec "$TEST_REAL_NODE" "$@"\n', { mode: 0o755 });
+    await writeFile(stub, '#!/bin/sh\nif [ "$1" = scripts/ingest-festivals.mjs ]; then printf "%s\\n" "$*" >> "$TEST_CALLS"; printf "%s\\n" "${GITHUB_SHA:-local}" >> "$TEST_COMMITS"; for arg do case "$arg" in --output=*) output="${arg#--output=}";; esac; done; stat -c "%a" "$output" "$output/worker.stderr" >> "$TEST_PERMS"; if [ "${TEST_WORKER_FAIL:-0}" = 1 ]; then printf "%s" "$TEST_WORKER_STDERR" >&2; exit 9; fi; printf "%s\\n" "$TEST_SUMMARY" > "$output/summary.json"; exit 0; fi\nexec "$TEST_REAL_NODE" "$@"\n', { mode: 0o755 });
     let runner = await readFile('scripts/deploy/run-db-due-operation.sh', 'utf8');
     runner = runner.replace('root=/opt/festival-radar', 'root=' + root)
       .replace('/opt/festival-radar/shared/.db-due.', root + '/shared/.db-due.');
@@ -121,13 +138,14 @@ test('systemd runner executes one DB-due mode and sanitizes its private artifact
     await writeFile(file, runner, { mode: 0o755 });
     const calls = path.join(dir, 'calls');
     const commits = path.join(dir, 'commits');
+    const perms = path.join(dir, 'perms');
     const ingestion = await readFile('scripts/ingest-festivals.mjs', 'utf8');
     assert.match(ingestion, /createIngestionRun\(db, \{[^}]*sourceCommit: process\.env\.GITHUB_SHA \|\| "local"/);
     const base = { status: 'COMPLETED', dryRun: false, totalSources: 1, attempted: 1,
       processed: 1, published: 0, reviewRequired: 0, fetchErrors: 0, results: [{ url: 'PRIVATE_URL' }] };
-    const run = (summary, commit = sha, inheritedSha = 'f'.repeat(40)) => spawnSync('bash', [file, 'ingest', commit], { encoding: 'utf8',
+    const run = (summary, commit = sha, inheritedSha = 'f'.repeat(40), extra = {}) => spawnSync('bash', [file, 'ingest', commit], { encoding: 'utf8',
       env: { ...process.env, GITHUB_SHA: inheritedSha ?? undefined, TEST_REAL_NODE: process.execPath,
-        TEST_CALLS: calls, TEST_COMMITS: commits, TEST_SUMMARY: JSON.stringify(summary) } });
+        TEST_CALLS: calls, TEST_COMMITS: commits, TEST_PERMS: perms, TEST_SUMMARY: JSON.stringify(summary), ...extra } });
     const result = run(base);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout, audit + '\n');
@@ -145,6 +163,26 @@ test('systemd runner executes one DB-due mode and sanitizes its private artifact
     await writeFile(path.join(release, 'DEPLOYED_COMMIT'), sha);
     assert.equal(run({ ...base, attempted: 0 }).status, 1);
     assert.doesNotMatch(result.stdout + result.stderr, /PRIVATE_URL/);
+    const sensitive = 'https://private.example/SECRET?token=abc ID=123 exception=PRIVATE\n';
+    const fail = (workerStderr) => run(base, sha, null, { TEST_WORKER_FAIL: '1', TEST_WORKER_STDERR: workerStderr });
+    const valid = fail(sensitive + 'db_due_failure_stage=artifact_write\n');
+    assert.equal(valid.status, 1);
+    assert.equal(valid.stdout, 'DB_DUE_FAILURE_STAGE artifact_write\n');
+    assert.equal(valid.stderr, 'DB due ingestion failed\n');
+    for (const unsafe of [
+      sensitive, sensitive + 'db_due_failure_stage=secret\n',
+      'db_due_failure_stage=artifact_write EXTRA\n' + sensitive,
+      'db_due_failure_stage=artifact_write\ndb_due_failure_stage=publication\n',
+      'db_due_failure_stage=artifact_write\ndb_due_failure_stage=secret\n',
+      'db_due_failure_stage=artifact_write\n' + 'x'.repeat(65536),
+    ]) {
+      const failed = fail(unsafe);
+      assert.equal(failed.status, 1);
+      assert.equal(failed.stdout, '');
+      assert.equal(failed.stderr, 'DB due ingestion failed\n');
+    }
+    assert.match(await readFile(perms, 'utf8'), /^(700\n600\n)+$/);
+    assert.deepEqual(await readdir(path.join(root, 'shared')), []);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

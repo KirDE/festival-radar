@@ -80,10 +80,48 @@ test("opt-in worker acknowledges exactly one due source and leaves non-due runs 
   assert.deepEqual(JSON.parse(idle.stdout), { status: "NO_DUE_SOURCES", attempted: 0 });
 });
 
+test("UNCHANGED attempt and candidate complete their lease and run without publication", async () => {
+  const marker = "unchanged-" + randomUUID();
+  const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+  const publicationsBefore = await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } });
+  await db.festivalEdition.update({ where: { id: source.editionId }, data: { startDate: new Date("2027-07-07T00:00:00.000Z") } });
+  try {
+    await db.festivalSource.update({ where: { id: sourceId }, data: {
+      strategies: ["json_ld_event"], parserKey: "json_ld_event", nextRunAt: new Date(Date.now() - 1000),
+    } });
+    const completed = run([], undefined, { GITHUB_SHA: marker });
+    assert.equal(completed.status, 0, completed.stderr);
+    const summary = JSON.parse(completed.stdout);
+    assert.equal(summary.status, "COMPLETED");
+    assert.equal(summary.attempted, 1);
+    assert.equal(summary.published, 0);
+    assert.equal(summary.results[0].status, "unchanged");
+    const terminal = await db.ingestionRun.findFirstOrThrow({ where: { sourceCommit: marker } });
+    assert.equal(terminal.status, "COMPLETED");
+    assert.ok(terminal.endedAt);
+    const attempt = await db.ingestionAttempt.findFirstOrThrow({ where: { runId: terminal.id, festivalSlug: slug }, include: { candidate: { include: { diffs: true } } } });
+    assert.equal(attempt.status, "UNCHANGED");
+    assert.ok(attempt.candidate);
+    assert.equal(attempt.candidate.diffs.length, 0);
+    const released = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+    assert.equal(released.leaseOwner, null);
+    assert.equal(released.leaseExpiresAt, null);
+    assert.equal(released.lastError, null);
+    assert.equal(released.consecutiveFailures, 0);
+    assert.ok(released.lastAttemptAt);
+    assert.ok(released.lastSuccessAt);
+    assert.ok(released.nextRunAt > new Date());
+    assert.equal(await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } }), publicationsBefore);
+  } finally {
+    await db.festivalEdition.update({ where: { id: source.editionId }, data: { startDate: null } });
+  }
+});
+
 test("fetch failure persists an attempt and backs off before next claim", async () => {
   await db.festivalSource.update({ where: { id: sourceId }, data: { nextRunAt: new Date(Date.now() - 1000) } });
   const failed = run(["--fixture=" + path.join(dir, "missing.html")]);
   assert.equal(failed.status, 2, failed.stderr);
+  assert.match(failed.stderr, /db_due_failure_stage=fetch/);
   const summary = JSON.parse(failed.stdout);
   assert.equal(summary.fetchErrors, 1);
   const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
@@ -106,6 +144,8 @@ test("post-UNCHANGED artifact failure uses bounded post_attempt_error, not parse
     const failed = run([], output);
     assert.notEqual(failed.status, 0);
     assert.match(failed.stderr, /EISDIR/);
+    assert.match(failed.stderr, /db_due_failure_stage=artifact_write/);
+    assert.doesNotMatch(failed.stderr, /db_due_failure_stage=extraction/);
     const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
     assert.equal(row.leaseOwner, null);
     assert.equal(row.lastError, "post_attempt_error");
@@ -171,6 +211,7 @@ test("run creation failure releases claimed source without a RUNNING run", async
     const failed = run([], undefined, { GITHUB_SHA: marker });
     assert.notEqual(failed.status, 0);
     assert.match(failed.stderr, /test run insert failure/);
+    assert.match(failed.stderr, /db_due_failure_stage=source_setup/);
     const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
     assert.equal(source.leaseOwner, null);
     assert.equal(source.lastError, "pre_attempt_error");
@@ -202,6 +243,7 @@ test("setup failure releases owned lease even when completion UPDATE throws", as
     const failed = run([], undefined, { GITHUB_SHA: marker });
     assert.notEqual(failed.status, 0);
     assert.match(failed.stderr, /test setup insert failure/);
+    assert.match(failed.stderr, /db_due_failure_stage=source_setup/);
     assert.doesNotMatch(failed.stderr, /test setup completion failure/);
     assert.equal(await db.ingestionRun.count({ where: { sourceCommit: marker } }), 0);
     const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
@@ -372,10 +414,10 @@ async function within(promise, ms, message) {
   } finally { clearTimeout(timer); }
 }
 
-test("in-flight fetch cannot publish after source edit or lease reclaim", async () => {
+test("in-flight source edit or reclaim rejects publication and unchanged lease completion", async () => {
   const publicationsBefore = await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } });
-  for (const change of ["edit", "reclaim"]) {
-    await db.festivalEdition.updateMany({ where: { festivalId: (await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } })).festivalId }, data: { startDate: null } });
+  for (const change of ["edit", "reclaim", "unchanged-edit"]) {
+    await db.festivalEdition.updateMany({ where: { festivalId: (await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } })).festivalId }, data: { startDate: change === "unchanged-edit" ? new Date("2027-07-07T00:00:00.000Z") : null } });
     let respond;
     let requested;
     const request = new Promise((resolve) => { requested = resolve; });
@@ -395,7 +437,7 @@ test("in-flight fetch cannot publish after source edit or lease reclaim", async 
     child.stderr.on("data", (chunk) => { stderr += chunk; });
     try {
       await within(request, 10_000, "Worker fetch did not start");
-      if (change === "edit") {
+      if (change === "edit" || change === "unchanged-edit") {
         await db.festivalSource.update({ where: { id: sourceId }, data: { cadenceSeconds: 172800, updatedAt: new Date(Date.now() + 60_000) } });
       } else {
         await db.festivalSource.update({ where: { id: sourceId }, data: { leaseExpiresAt: new Date(Date.now() - 1000) } });
@@ -406,6 +448,7 @@ test("in-flight fetch cannot publish after source edit or lease reclaim", async 
       const [code] = await within(once(child, "close"), 10_000, "Worker did not exit");
       assert.notEqual(code, 0, stderr);
       assert.match(stderr, /Ingestion source lease is no longer active/);
+      assert.match(stderr, new RegExp(`db_due_failure_stage=${change === "unchanged-edit" ? "lease_completion" : "publication"}`));
       assert.equal(await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } }), publicationsBefore);
       const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
       if (change === "reclaim") assert.notEqual(source.leaseOwner, null);
@@ -413,7 +456,12 @@ test("in-flight fetch cannot publish after source edit or lease reclaim", async 
       const latest = await db.ingestionRun.findFirstOrThrow({ where: { attempts: { some: { festivalSlug: slug } } }, orderBy: { startedAt: "desc" } });
       assert.equal(latest.status, "FAILED");
       const candidate = await db.ingestionCandidate.findFirstOrThrow({ where: { runId: latest.id } });
-      assert.equal(candidate.publishable, true);
+      assert.equal(candidate.publishable, change !== "unchanged-edit");
+      if (change === "unchanged-edit") {
+        const attempt = await db.ingestionAttempt.findFirstOrThrow({ where: { runId: latest.id, festivalSlug: slug } });
+        assert.equal(attempt.status, "UNCHANGED");
+        assert.equal(source.lastError, null);
+      }
     } finally {
       child.kill();
       server.closeAllConnections();
