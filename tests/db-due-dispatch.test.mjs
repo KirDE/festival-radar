@@ -35,6 +35,9 @@ test('manual unit is fixed-mode, read-only except private temporary output, and 
   ].map((file) => readFile(file, 'utf8')));
   assert.ok(installer.includes('$service-db-due@.service'));
   assert.match(installer, /db_due_restore_assets.*systemctl daemon-reload/s);
+  assert.ok(installer.includes("trap cleanup_install EXIT"));
+  assert.ok(installer.includes("db_due_assets_armed=true"));
+  assert.ok(installer.includes(`"$db_due_assets_armed" == true && "$status" -ne 0`));
   assert.ok(installer.includes('ExecStart=$release/scripts/deploy/run-db-due-operation.sh %i $commit'));
   assert.ok(!installer.includes('db-due.timer'));
   assert.ok(installer.includes('User=www-data') && installer.includes('ProtectSystem=strict'));

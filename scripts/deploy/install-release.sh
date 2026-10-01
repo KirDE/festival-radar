@@ -5,7 +5,17 @@ archive="${1:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
 commit="${2:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
 env_source="${3:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
 db_due_backup=""
-trap 'rm -f "$archive" "$env_source"; if [[ -n "$db_due_backup" ]]; then rm -rf -- "$db_due_backup"; fi' EXIT
+db_due_assets_armed=false
+cleanup_install() {
+  local status=$?
+  if [[ "$db_due_assets_armed" == true && "$status" -ne 0 ]]; then
+    db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
+    systemctl daemon-reload
+  fi
+  rm -f "$archive" "$env_source"
+  if [[ -n "$db_due_backup" ]]; then rm -rf -- "$db_due_backup"; fi
+}
+trap cleanup_install EXIT
 app_root="${APP_ROOT:-/opt/festival-radar}"
 service="${SERVICE_NAME:-festival-radar}"
 domain="${APP_DOMAIN:-festivals.kir-it.de}"
@@ -34,6 +44,7 @@ db_due_unit="/etc/systemd/system/$service-db-due@.service"
 db_due_wrapper=/usr/local/libexec/festival-radar/start-db-due
 db_due_backup="$(mktemp -d /run/festival-radar-db-due.XXXXXXXX)"
 db_due_snapshot_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
+db_due_assets_armed=true
 
 cd "$release"
 test -x "$release/.runtime/node"
@@ -321,6 +332,7 @@ if [[ "$healthy" != true ]]; then
   fi
   db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
   systemctl daemon-reload
+  db_due_assets_armed=false
   if [[ "$had_previous_env" == true ]]; then
     mv -f "$previous_env" "$env_file"
   else
@@ -333,6 +345,7 @@ if [[ "$healthy" != true ]]; then
   exit 1
 fi
 
+db_due_assets_armed=false
 rm -f "$previous_env"
 
 find "$app_root/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \
