@@ -184,6 +184,40 @@ test("run creation failure releases claimed source without a RUNNING run", async
   }
 });
 
+test("setup failure releases owned lease even when completion UPDATE throws", async () => {
+  const marker = "setup-completion-" + randomUUID();
+  await db.festivalSource.update({ where: { id: sourceId }, data: {
+    enabled: true, nextRunAt: new Date(Date.now() - 1000), leaseOwner: null, leaseExpiresAt: null,
+  } });
+  const before = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+  await db.$executeRawUnsafe(
+    "CREATE FUNCTION due_worker_setup_reject_run() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.\"sourceCommit\" = '" + marker + "' THEN RAISE EXCEPTION 'test setup insert failure'; END IF; RETURN NEW; END $$",
+  );
+  await db.$executeRawUnsafe('CREATE TRIGGER due_worker_setup_reject_run BEFORE INSERT ON "IngestionRun" FOR EACH ROW EXECUTE FUNCTION due_worker_setup_reject_run()');
+  await db.$executeRawUnsafe(
+    "CREATE FUNCTION due_worker_setup_reject_completion() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.\"festivalSlug\" = '" + slug + "' AND NEW.\"lastAttemptAt\" IS DISTINCT FROM OLD.\"lastAttemptAt\" THEN RAISE EXCEPTION 'test setup completion failure'; END IF; RETURN NEW; END $$",
+  );
+  await db.$executeRawUnsafe('CREATE TRIGGER due_worker_setup_reject_completion BEFORE UPDATE ON "FestivalSource" FOR EACH ROW EXECUTE FUNCTION due_worker_setup_reject_completion()');
+  try {
+    const failed = run([], undefined, { GITHUB_SHA: marker });
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /test setup insert failure/);
+    assert.doesNotMatch(failed.stderr, /test setup completion failure/);
+    assert.equal(await db.ingestionRun.count({ where: { sourceCommit: marker } }), 0);
+    const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+    assert.equal(source.leaseOwner, null);
+    assert.equal(source.leaseExpiresAt, null);
+    assert.equal(source.consecutiveFailures, before.consecutiveFailures);
+    assert.equal(source.lastAttemptAt?.getTime() ?? null, before.lastAttemptAt?.getTime() ?? null);
+    assert.equal(source.nextRunAt?.getTime(), before.nextRunAt?.getTime());
+  } finally {
+    await db.$executeRawUnsafe('DROP TRIGGER due_worker_setup_reject_completion ON "FestivalSource"');
+    await db.$executeRawUnsafe('DROP FUNCTION due_worker_setup_reject_completion()');
+    await db.$executeRawUnsafe('DROP TRIGGER due_worker_setup_reject_run ON "IngestionRun"');
+    await db.$executeRawUnsafe('DROP FUNCTION due_worker_setup_reject_run()');
+  }
+});
+
 test("failure before attempt persistence records a safe category and releases the lease", async () => {
   const marker = "fail-" + randomUUID();
   await db.festivalSource.update({ where: { id: sourceId }, data: { nextRunAt: new Date(Date.now() - 1000) } });
@@ -213,7 +247,42 @@ test("failure before attempt persistence records a safe category and releases th
   }
 });
 
-test("cleanup database error does not replace original failure or leave a RUNNING run", async () => {
+test("completion UPDATE exception falls back to owner-only release while preserving FAILED run", async () => {
+  const marker = "completion-" + randomUUID();
+  await db.festivalSource.update({ where: { id: sourceId }, data: {
+    enabled: true, strategies: ["manual_review"], parserKey: "manual_review",
+    nextRunAt: new Date(Date.now() - 1000), leaseOwner: null, leaseExpiresAt: null,
+  } });
+  const before = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+  const output = path.join(dir, "blocked-completion");
+  await mkdir(path.join(output, slug + ".json"), { recursive: true });
+  await db.$executeRawUnsafe(
+    "CREATE FUNCTION due_worker_reject_completion() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.\"festivalSlug\" = '" + slug + "' AND NEW.\"lastAttemptAt\" IS DISTINCT FROM OLD.\"lastAttemptAt\" THEN RAISE EXCEPTION 'test completion write failure'; END IF; RETURN NEW; END $$",
+  );
+  await db.$executeRawUnsafe('CREATE TRIGGER due_worker_reject_completion BEFORE UPDATE ON "FestivalSource" FOR EACH ROW EXECUTE FUNCTION due_worker_reject_completion()');
+  try {
+    const failed = run([], output, { GITHUB_SHA: marker });
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /EISDIR/);
+    assert.doesNotMatch(failed.stderr, /test completion write failure/);
+    const terminal = await db.ingestionRun.findFirstOrThrow({ where: { sourceCommit: marker } });
+    orphanRunIds.push(terminal.id);
+    assert.equal(terminal.status, "FAILED");
+    assert.ok(terminal.endedAt);
+    const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+    assert.equal(source.leaseOwner, null);
+    assert.equal(source.leaseExpiresAt, null);
+    assert.equal(source.lastAttemptAt?.getTime() ?? null, before.lastAttemptAt?.getTime() ?? null);
+    assert.equal(source.lastError, before.lastError);
+    assert.equal(source.consecutiveFailures, before.consecutiveFailures);
+    assert.equal(source.nextRunAt?.getTime(), before.nextRunAt?.getTime());
+  } finally {
+    await db.$executeRawUnsafe('DROP TRIGGER due_worker_reject_completion ON "FestivalSource"');
+    await db.$executeRawUnsafe('DROP FUNCTION due_worker_reject_completion()');
+  }
+});
+
+test("both cleanup writes failing preserve the original error and terminal run", async () => {
   const marker = "cleanup-" + randomUUID();
   await db.festivalSource.update({ where: { id: sourceId }, data: {
     enabled: true, strategies: ["manual_review"], parserKey: "manual_review",
@@ -234,6 +303,8 @@ test("cleanup database error does not replace original failure or leave a RUNNIN
     orphanRunIds.push(terminal.id);
     assert.equal(terminal.status, "FAILED");
     assert.ok(terminal.endedAt);
+    const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+    assert.notEqual(source.leaseOwner, null, "both cleanup writes were rejected; TTL still fences the abandoned owner");
   } finally {
     await db.$executeRawUnsafe('DROP TRIGGER due_worker_reject_cleanup ON "FestivalSource"');
     await db.$executeRawUnsafe('DROP FUNCTION due_worker_reject_cleanup()');

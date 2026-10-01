@@ -52,6 +52,16 @@ if (publish && !dbDue && notificationDeliveryEnabled && (!notificationEndpoint |
 // should strand a claimed source until its TTL expires.
 if (dbDue && maxFetchErrorsArg !== undefined && (!Number.isInteger(Number(maxFetchErrorsArg)) || Number(maxFetchErrorsArg) < 0)) throw new Error("Invalid maximum fetch error count");
 if (dbDue) await mkdir(outputDirectory, { recursive: true });
+// On failed work, acknowledge only a still-current revision. If completion
+// returns false OR throws, release only our owner without touching schedule or counters.
+// Both queries are bounded and best-effort so the work failure remains primary.
+async function recoverSourceLease(lease, outcome) {
+  try {
+    if (await completeSourceLease(db, { ...lease, now: new Date(), outcome })) return;
+  } catch { /* completion may fail while a release-only write still succeeds */ }
+  try { await releaseOwnedSourceLease(db, lease); } catch { /* retain the original failure */ }
+}
+
 let sourceLease = null;
 let leaseRenewal = null;
 let run = null;
@@ -77,11 +87,7 @@ if (dbDue) {
     try {
       if (run) await db.ingestionRun.update({ where: { id: run.id }, data: { status: "FAILED", endedAt: new Date(), failed: 1 } });
     } catch { /* retain the original setup error */ }
-    try {
-      if (!await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "pre_attempt_error" })) {
-        await releaseOwnedSourceLease(db, sourceLease);
-      }
-    } catch { /* retain the original setup error */ }
+    await recoverSourceLease(sourceLease, "pre_attempt_error");
     throw error;
   }
 }
@@ -203,13 +209,7 @@ for (const source of selected) {
     try {
       if (run && sourceLease) await db.ingestionRun.update({ where: { id: run.id }, data: { status: "FAILED", endedAt: new Date(), failed: 1 } });
     } catch { /* retain the original error and still attempt lease cleanup */ }
-    try {
-      if (sourceLease && !leaseCompleted && !await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: publicationCommitted ? "success" : failureOutcome })) {
-        // A changed revision must not strand our lease; a reclaimed owner is
-        // untouched by the owner-only CAS. Preserve the original failure.
-        await releaseOwnedSourceLease(db, sourceLease);
-      }
-    } catch { /* retain the original error if either cleanup query fails */ }
+    if (sourceLease && !leaseCompleted) await recoverSourceLease(sourceLease, publicationCommitted ? "success" : failureOutcome);
     throw error;
   }
 }
