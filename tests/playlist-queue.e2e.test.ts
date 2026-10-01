@@ -145,8 +145,9 @@ test("expired sibling cannot be claimed beside a RUNNING festival row; legacy ro
   assert.equal(await claimPlaylistRefresh(first, input(ownerA, new Date(base.getTime() + 60_003))), null);
 });
 
-test("a held festival transaction lock does not block another festival", async () => {
-  const lockedSlug = `queue-locked-${randomUUID()}`;
+test("claiming A while its transaction is paused does not lock B", async () => {
+  const slugA = `queue-locked-${randomUUID()}`;
+  const slugB = `queue-available-${randomUUID()}`;
   async function queue(slug: string, ms: number) {
     const pub = await first.catalogPublication.create({ data: {
       source: "INGESTION", sourceId: `playlist-lock:${randomUUID()}`,
@@ -156,15 +157,65 @@ test("a held festival transaction lock does not block another festival", async (
     await first.catalogPlaylistRefresh.update({ where: { id: job.id }, data: { requestedAt: new Date(base.getTime() + ms) } });
     return job.id;
   }
-  const lockedId = await queue(lockedSlug, 1);
-  const availableId = await queue(`queue-available-${randomUUID()}`, 2);
+  const lockedId = await queue(slugA, 1);
+  // More jobs in A than a candidate page: B must still be reachable.
+  for (let i = 2; i <= 35; i++) await queue(slugA, i);
+  const availableId = await queue(slugB, 36);
+  let release!: () => void;
+  let held!: () => void;
+  const untilReleased = new Promise<void>((resolve) => { release = resolve; });
+  const lockHeld = new Promise<void>((resolve) => { held = resolve; });
+  const holding = claimPlaylistRefresh(first, input(ownerA), async (festivalSlug) => {
+    assert.equal(festivalSlug, slugA);
+    held();
+    await untilReleased;
+  });
+  let next: Awaited<ReturnType<typeof claimPlaylistRefresh>>;
+  try {
+    await lockHeld;
+    // A has not updated its job yet. This tests the precise lock window,
+    // rather than depending on whether an ordinary claim commits quickly.
+    assert.equal((await second.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: lockedId } })).status, "PENDING");
+    const claim = await claimPlaylistRefresh(second, input(ownerB));
+    assert.equal(claim?.id, availableId);
+    assert.equal(await finishPlaylistRefresh(second, claim!, new Date(base.getTime() + 1_000), "SUCCEEDED"), true);
+  } finally {
+    release();
+    next = await holding;
+  }
+  assert.equal(next?.id, lockedId);
+  // While the first A lease runs, its other 34 jobs must not be claimable.
+  assert.equal(await claimPlaylistRefresh(second, input(ownerB)), null);
+  assert.equal(await finishPlaylistRefresh(first, next!, new Date(base.getTime() + 1_001), "SUCCEEDED"), true);
+  // This disposable suite shares one database; leave no A siblings claimable.
+  await first.catalogPlaylistRefresh.updateMany({
+    where: { festivalSlug: slugA, status: "PENDING" }, data: { status: "SUCCEEDED" },
+  });
+});
+
+test("a full page of contended festivals cannot starve a later festival", async () => {
+  const blocked = Array.from({ length: 33 }, () => `queue-busy-${randomUUID()}`);
+  const availableSlug = `queue-page-${randomUUID()}`;
+  let ms = 1;
+  let availableId = "";
+  for (const slug of [...blocked, availableSlug]) {
+    const pub = await first.catalogPublication.create({ data: {
+      source: "INGESTION", sourceId: `playlist-page:${randomUUID()}`,
+      festivalSlug: slug, editionYear: 2027, actorLabel: "test", fields: ["lineup"], lineupChanged: true,
+    } });
+    const job = await enqueuePlaylistRefresh(first, pub.id);
+    await first.catalogPlaylistRefresh.update({ where: { id: job.id }, data: { requestedAt: new Date(base.getTime() + ms++) } });
+    if (slug === availableSlug) availableId = job.id;
+  }
   let release!: () => void;
   let held!: () => void;
   const untilReleased = new Promise<void>((resolve) => { release = resolve; });
   const lockHeld = new Promise<void>((resolve) => { held = resolve; });
   const holding = first.$transaction(async (tx) => {
-    const [{ acquired }] = await tx.$queryRaw<{ acquired: boolean }[]>`SELECT pg_try_advisory_xact_lock(210, hashtext(${lockedSlug})) AS acquired`;
-    assert.equal(acquired, true);
+    for (const slug of blocked) {
+      const [{ acquired }] = await tx.$queryRaw<{ acquired: boolean }[]>`SELECT pg_try_advisory_xact_lock(210, hashtext(${slug})) AS acquired`;
+      assert.equal(acquired, true);
+    }
     held();
     await untilReleased;
   });
@@ -177,7 +228,4 @@ test("a held festival transaction lock does not block another festival", async (
     release();
     await holding;
   }
-  const next = await claimPlaylistRefresh(second, input(ownerB));
-  assert.equal(next?.id, lockedId);
-  assert.equal(await finishPlaylistRefresh(second, next!, new Date(base.getTime() + 1_001), "SUCCEEDED"), true);
 });
