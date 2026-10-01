@@ -43,6 +43,13 @@ jobs:
       - run: npm run test:catalog-db
       - run: npm run catalog:backfill
       - run: npm run test:due-worker
+      # Prisma binds Date as timestamptz; exercise the source lease and fenced
+      # publication against UTC-naive columns with a non-UTC database session.
+      - run: printf "ALTER DATABASE festival_integration SET TimeZone TO 'Europe/Berlin';" | npx prisma db execute --stdin --schema prisma/schema.prisma
+      - run: node --import tsx --test tests/ingestion-lease.e2e.test.ts && node --import tsx --test tests/ingestion-due-worker.e2e.test.mjs
+        env:
+          TEST_DB_TIMEZONE: Europe/Berlin
+      - run: printf "ALTER DATABASE festival_integration SET TimeZone TO 'UTC';" | npx prisma db execute --stdin --schema prisma/schema.prisma
       - run: npm run test:integration
       - run: npm run test:admin:integration
       - run: npx prisma migrate reset --force

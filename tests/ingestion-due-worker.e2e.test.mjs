@@ -18,6 +18,7 @@ const slug = "due-worker-" + randomUUID().slice(0, 8);
 let sourceId;
 let dir;
 let runIds = [];
+const orphanRunIds = [];
 const fixture = '<html><script type="application/ld+json">{"@type":"MusicEvent","startDate":"2027-07-07"}</script></html>';
 
 function run(extra = [], output = path.join(dir, "out-" + randomUUID()), envExtra = {}) {
@@ -28,6 +29,10 @@ function run(extra = [], output = path.join(dir, "out-" + randomUUID()), envExtr
 }
 
 test.before(async () => {
+  if (process.env.TEST_DB_TIMEZONE) {
+    const [session] = await db.$queryRaw`SELECT current_setting('TimeZone') AS "TimeZone"`;
+    assert.equal(session.TimeZone, process.env.TEST_DB_TIMEZONE);
+  }
   dir = await mkdtemp(path.join(tmpdir(), "due-worker-"));
   await writeFile(path.join(dir, "fixture.html"), fixture);
   const festival = await db.festival.create({ data: {
@@ -43,7 +48,7 @@ test.before(async () => {
   sourceId = source.id;
 });
 test.after(async () => {
-  runIds = (await db.ingestionRun.findMany({ where: { attempts: { some: { festivalSlug: slug } } }, select: { id: true } })).map((row) => row.id);
+  runIds = [...orphanRunIds, ...(await db.ingestionRun.findMany({ where: { attempts: { some: { festivalSlug: slug } } }, select: { id: true } })).map((row) => row.id)];
   const candidates = await db.ingestionCandidate.findMany({ where: { runId: { in: runIds } }, select: { id: true } });
   const ids = candidates.map((row) => row.id);
   await db.ingestionDiff.deleteMany({ where: { candidateId: { in: ids } } });
@@ -122,16 +127,50 @@ test("run creation failure releases claimed source without a RUNNING run", async
   await db.$executeRawUnsafe("CREATE FUNCTION due_worker_reject_run() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.\"sourceCommit\" = '" + marker + "' THEN RAISE EXCEPTION 'test run insert failure'; END IF; RETURN NEW; END $$");
   await db.$executeRawUnsafe('CREATE TRIGGER due_worker_reject_run BEFORE INSERT ON "IngestionRun" FOR EACH ROW EXECUTE FUNCTION due_worker_reject_run()');
   try {
+    const publicationsBefore = await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } });
+    const failuresBefore = (await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } })).consecutiveFailures;
     const failed = run([], undefined, { GITHUB_SHA: marker });
     assert.notEqual(failed.status, 0);
     assert.match(failed.stderr, /test run insert failure/);
     const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
     assert.equal(source.leaseOwner, null);
-    assert.equal(source.lastError, "parser_error");
+    assert.equal(source.lastError, "pre_attempt_error");
+    assert.equal(source.consecutiveFailures, failuresBefore + 1);
+    assert.ok(source.nextRunAt > new Date(), "pre-attempt failure backs off instead of retaining the lease");
     assert.equal(await db.ingestionRun.count({ where: { sourceCommit: marker } }), 0);
+    assert.equal(await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } }), publicationsBefore);
   } finally {
     await db.$executeRawUnsafe('DROP TRIGGER due_worker_reject_run ON "IngestionRun"');
     await db.$executeRawUnsafe('DROP FUNCTION due_worker_reject_run()');
+  }
+});
+
+test("failure before attempt persistence records a safe category and releases the lease", async () => {
+  const marker = "fail-" + randomUUID();
+  await db.festivalSource.update({ where: { id: sourceId }, data: { nextRunAt: new Date(Date.now() - 1000) } });
+  await db.$executeRawUnsafe("CREATE FUNCTION due_worker_reject_attempt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'test attempt insert failure'; END $$");
+  await db.$executeRawUnsafe('CREATE TRIGGER due_worker_reject_attempt BEFORE INSERT ON "IngestionAttempt" FOR EACH ROW EXECUTE FUNCTION due_worker_reject_attempt()');
+  try {
+    const publicationsBefore = await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } });
+    const failuresBefore = (await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } })).consecutiveFailures;
+    const failed = run([], undefined, { GITHUB_SHA: marker });
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /test attempt insert failure/);
+    const terminal = await db.ingestionRun.findFirstOrThrow({ where: { sourceCommit: marker } });
+    orphanRunIds.push(terminal.id);
+    assert.equal(terminal.status, "FAILED");
+    assert.ok(terminal.endedAt);
+    assert.equal(await db.ingestionAttempt.count({ where: { runId: terminal.id } }), 0);
+    const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+    assert.equal(source.leaseOwner, null);
+    assert.equal(source.leaseExpiresAt, null);
+    assert.equal(source.lastError, "pre_attempt_error", "never infer a parser failure or persist raw errors/URLs before an attempt");
+    assert.equal(source.consecutiveFailures, failuresBefore + 1);
+    assert.ok(source.nextRunAt > new Date());
+    assert.equal(await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } }), publicationsBefore);
+  } finally {
+    await db.$executeRawUnsafe('DROP TRIGGER due_worker_reject_attempt ON "IngestionAttempt"');
+    await db.$executeRawUnsafe('DROP FUNCTION due_worker_reject_attempt()');
   }
 });
 
