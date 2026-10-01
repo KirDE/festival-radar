@@ -1,16 +1,30 @@
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 import test from 'node:test';
 import { PrismaClient } from '@prisma/client';
 import { auditReviewedLogos, applyReviewedLogos, previewReviewedLogos, verifyReviewedLogos } from '../lib/catalog/logo-import.ts';
+import { requireLocalDisposableLogoDatabase } from './logo-import-db-guard.ts';
 
-const url = process.env.DATABASE_URL;
-if (!url || !/(?:test|integration)/i.test(new URL(url).pathname)) throw new Error('Disposable test/integration DATABASE_URL required');
+requireLocalDisposableLogoDatabase(process.env.DATABASE_URL);
 const db = new PrismaClient();
 const rows = await auditReviewedLogos();
+const objectName = `logo_import_test_failure_${randomBytes(12).toString('hex')}`;
+let functionCreated = false;
+let triggerCreated = false;
+
+async function cleanupFailureInjection() {
+  if (triggerCreated) {
+    await db.$executeRawUnsafe(`DROP TRIGGER "${objectName}" ON "FestivalLogo"`);
+    triggerCreated = false;
+  }
+  if (functionCreated) {
+    await db.$executeRawUnsafe(`DROP FUNCTION "${objectName}"()`);
+    functionCreated = false;
+  }
+}
+
 test.after(async () => {
-  await db.$executeRawUnsafe('DROP TRIGGER IF EXISTS logo_import_test_failure ON "FestivalLogo"');
-  await db.$executeRawUnsafe('DROP FUNCTION IF EXISTS logo_import_test_failure()');
-  await db.$disconnect();
+  try { await cleanupFailureInjection(); } finally { await db.$disconnect(); }
 });
 
 test('source/DB preflight, transactional rollback, idempotency and exact hash/byte parity', async () => {
@@ -23,15 +37,16 @@ test('source/DB preflight, transactional rollback, idempotency and exact hash/by
   await assert.rejects(applyReviewedLogos(db, rows.map((row, index) => index === 46 ? { ...row, bytes: rows[0].bytes } : row)), /content changed/);
   assert.equal(await db.assetBlob.count(), beforeBlobs);
   assert.equal(await db.festivalLogo.count(), 0);
-  await db.$executeRawUnsafe("CREATE FUNCTION logo_import_test_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.\"assetHash\" = '__HASH__' THEN RAISE EXCEPTION 'injected partial import failure'; END IF; RETURN NEW; END $$".replace('__HASH__', rows[46].sha256));
-  await db.$executeRawUnsafe('CREATE TRIGGER logo_import_test_failure BEFORE INSERT ON "FestivalLogo" FOR EACH ROW EXECUTE FUNCTION logo_import_test_failure()');
   try {
+    await db.$executeRawUnsafe(`CREATE FUNCTION "${objectName}"() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."assetHash" = '${rows[46].sha256}' THEN RAISE EXCEPTION 'injected partial import failure'; END IF; RETURN NEW; END $$`);
+    functionCreated = true;
+    await db.$executeRawUnsafe(`CREATE TRIGGER "${objectName}" BEFORE INSERT ON "FestivalLogo" FOR EACH ROW EXECUTE FUNCTION "${objectName}"()`);
+    triggerCreated = true;
     await assert.rejects(applyReviewedLogos(db, rows), /injected partial import failure/);
     assert.equal(await db.festivalLogo.count(), 0);
     assert.equal(await db.assetBlob.count(), beforeBlobs);
   } finally {
-    await db.$executeRawUnsafe('DROP TRIGGER logo_import_test_failure ON "FestivalLogo"');
-    await db.$executeRawUnsafe('DROP FUNCTION logo_import_test_failure()');
+    await cleanupFailureInjection();
   }
   const applied = await applyReviewedLogos(db, rows);
   assert.equal(applied.bound, 47);

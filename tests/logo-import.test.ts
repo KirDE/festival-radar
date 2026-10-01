@@ -8,6 +8,23 @@ import sharp from 'sharp';
 import { auditReviewedLogos, decodeReviewedLogo, inventoryDigest, LOGO_DIRECTORY } from '../lib/catalog/logo-import.ts';
 import { festivalLogoPath, festivalLogoFallbacks } from '../data/festival-logos.ts';
 import { festivals } from '../data/festivals.ts';
+import { requireLocalDisposableLogoDatabase } from './logo-import-db-guard.ts';
+
+test('logo E2E guard accepts only unambiguous local disposable databases', () => {
+  for (const host of ['localhost', '127.0.0.1', '[::1]']) {
+    assert.equal(requireLocalDisposableLogoDatabase(`postgresql://user@${host}:5432/festival_integration_test`), 'festival_integration_test');
+  }
+  for (const url of [
+    undefined,
+    'postgresql://db.example.com/festival_integration_test',
+    'postgresql://localhost/production',
+    'postgresql://localhost/festival_test/other',
+    'postgresql://localhost/festival_test%2Fother',
+    'postgresql://localhost/festival_test?host=db.example.com',
+    'postgresql://localhost/festival_test?hostaddr=10.0.0.2',
+    'https://localhost/festival_test',
+  ]) assert.throws(() => requireLocalDisposableLogoDatabase(url), /Local disposable test\/integration DATABASE_URL required/);
+});
 
 const rows = await auditReviewedLogos();
 test('reviewed inventory fully decodes, hashes and covers exact static binding', () => {
