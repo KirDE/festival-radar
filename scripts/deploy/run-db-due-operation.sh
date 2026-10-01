@@ -31,7 +31,7 @@ case "$mode" in
         while IFS= read -r line || [[ -n "$line" ]]; do
           if [[ "$line" == *db_due_failure_stage=* ]]; then
             case "$line" in
-              db_due_failure_stage=source_lookup|db_due_failure_stage=fetch|db_due_failure_stage=extraction|db_due_failure_stage=attempt_persistence|db_due_failure_stage=artifact_write|db_due_failure_stage=publication|db_due_failure_stage=lease_completion|db_due_failure_stage=result_recording|db_due_failure_stage=run_finalization)
+              db_due_failure_stage=claim|db_due_failure_stage=source_setup|db_due_failure_stage=source_lookup|db_due_failure_stage=fetch|db_due_failure_stage=extraction|db_due_failure_stage=attempt_persistence|db_due_failure_stage=artifact_write|db_due_failure_stage=publication|db_due_failure_stage=lease_completion|db_due_failure_stage=result_recording|db_due_failure_stage=run_finalization)
                 stage="${line#db_due_failure_stage=}"; (( stage_count += 1 ));;
               *) invalid_stage=true;;
             esac
@@ -40,7 +40,8 @@ case "$mode" in
         [[ "$(stat -c %s -- "$worker_stderr" 2>/dev/null)" == "$stderr_size" ]] || invalid_stage=true
       fi
       if [[ "$invalid_stage" == false && "$stage_count" == 1 ]]; then
-        printf 'DB_DUE_FAILURE_STAGE %s\n' "$stage" >&2
+        # systemd appends stdout to the root-owned audit; stderr is /dev/null.
+        printf 'DB_DUE_FAILURE_STAGE %s\n' "$stage"
       fi
       echo 'DB due ingestion failed' >&2
       exit 1

@@ -24,6 +24,7 @@ test('fixed dispatch shares deploy lock and has no source, mode or shell input',
   assert.match(starter, /flock -n 8/);
   assert.match(starter, /systemctl show --property=ActiveState --value festival-radar-collection@ingestion.service/);
   assert.match(installer, /source-fetch.lock/);
+  assert.match(installer, /StandardOutput=append:\/run\/festival-radar-db-due\/%i\.audit\nStandardError=null/);
   assert.match(runner, /--db-due --publish --max-fetch-errors=0/);
   assert.match(packager, /scripts\/report-db-due-pilot.mjs/);
   assert.doesNotMatch(installer, /db-due-ingest.*timer/);
@@ -66,7 +67,7 @@ test('root path rejects active legacy, held fetch lock, unhealthy preflight and 
     await writeFile(lock, '', { mode: 0o640 });
     await writeFile(unit, 'unit');
     await writeFile(path.join(bin, 'id'), '#!/bin/sh\necho 0\n', { mode: 0o755 });
-    await writeFile(path.join(bin, 'systemctl'), '#!/bin/sh\nif [ "$1" = show ]; then echo "${TEST_ACTIVE:-inactive}"; exit 0; fi\nprintf "%s\\n" "$2" >> "$TEST_LOG"\nif [ "$2" = festival-radar-db-due@health.service ]; then printf "%s\\n" "$TEST_HEALTH" > "$TEST_AUDIT_DIR/health.audit"; else printf "%s\\n" "$TEST_INGEST" > "$TEST_AUDIT_DIR/ingest.audit"; fi\n', { mode: 0o755 });
+    await writeFile(path.join(bin, 'systemctl'), '#!/bin/sh\nif [ "$1" = show ]; then echo "${TEST_ACTIVE:-inactive}"; exit 0; fi\nprintf "%s\\n" "$2" >> "$TEST_LOG"\nif [ "$2" = festival-radar-db-due@health.service ]; then printf "%s\\n" "$TEST_HEALTH" > "$TEST_AUDIT_DIR/health.audit"; else printf "%s\\n" "$TEST_INGEST" > "$TEST_AUDIT_DIR/ingest.audit"; exit "${TEST_INGEST_EXIT:-0}"; fi\n', { mode: 0o755 });
     let wrapper = await readFile('scripts/deploy/start-db-due', 'utf8');
     wrapper = wrapper.replace('root=/opt/festival-radar', 'root=' + root)
       .replace('/run/festival-radar-activation.lock', path.join(dir, 'activation.lock'))
@@ -91,6 +92,22 @@ test('root path rejects active legacy, held fetch lock, unhealthy preflight and 
     assert.equal(malformed.status, 6);
     assert.equal(malformed.stdout, 'DB_DUE_PREFLIGHT ' + good + '\n');
     assert.doesNotMatch(malformed.stdout + malformed.stderr, /PRIVATE_URL/);
+    const stage = run({ TEST_INGEST_EXIT: '1', TEST_INGEST: 'DB_DUE_FAILURE_STAGE lease_completion' });
+    assert.equal(stage.status, 6);
+    assert.equal(stage.stdout, 'DB_DUE_PREFLIGHT ' + good + '\n');
+    assert.equal(stage.stderr, 'DB_DUE_FAILURE_STAGE lease_completion\nDB due operation failed\n');
+    for (const record of [
+      'DB_DUE_FAILURE_STAGE PRIVATE_URL',
+      'DB_DUE_FAILURE_STAGE publication\nDB_DUE_FAILURE_STAGE publication',
+      'DB_DUE_FAILURE_STAGE publication\nPRIVATE_URL',
+      'DB_DUE_FAILURE_STAGE publication' + 'x'.repeat(512),
+      'PRIVATE_URL exception=secret',
+    ]) {
+      const rejected = run({ TEST_INGEST_EXIT: '1', TEST_INGEST: record });
+      assert.equal(rejected.status, 6);
+      assert.equal(rejected.stdout, 'DB_DUE_PREFLIGHT ' + good + '\n');
+      assert.equal(rejected.stderr, 'DB due operation failed\n');
+    }
     const held = spawn('flock', ['-x', lock, 'sh', '-c', 'echo ready; sleep 2'], { stdio: ['ignore', 'pipe', 'ignore'] });
     await new Promise((resolve) => held.stdout.once('data', resolve));
     assert.equal(run().status, 5);
@@ -150,8 +167,8 @@ test('systemd runner executes one DB-due mode and sanitizes its private artifact
     const fail = (workerStderr) => run(base, sha, null, { TEST_WORKER_FAIL: '1', TEST_WORKER_STDERR: workerStderr });
     const valid = fail(sensitive + 'db_due_failure_stage=artifact_write\n');
     assert.equal(valid.status, 1);
-    assert.equal(valid.stdout, '');
-    assert.equal(valid.stderr, 'DB_DUE_FAILURE_STAGE artifact_write\nDB due ingestion failed\n');
+    assert.equal(valid.stdout, 'DB_DUE_FAILURE_STAGE artifact_write\n');
+    assert.equal(valid.stderr, 'DB due ingestion failed\n');
     for (const unsafe of [
       sensitive, sensitive + 'db_due_failure_stage=secret\n',
       'db_due_failure_stage=artifact_write EXTRA\n' + sensitive,

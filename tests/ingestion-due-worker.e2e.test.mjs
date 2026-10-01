@@ -121,6 +121,7 @@ test("fetch failure persists an attempt and backs off before next claim", async 
   await db.festivalSource.update({ where: { id: sourceId }, data: { nextRunAt: new Date(Date.now() - 1000) } });
   const failed = run(["--fixture=" + path.join(dir, "missing.html")]);
   assert.equal(failed.status, 2, failed.stderr);
+  assert.match(failed.stderr, /db_due_failure_stage=fetch/);
   const summary = JSON.parse(failed.stdout);
   assert.equal(summary.fetchErrors, 1);
   const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
@@ -210,6 +211,7 @@ test("run creation failure releases claimed source without a RUNNING run", async
     const failed = run([], undefined, { GITHUB_SHA: marker });
     assert.notEqual(failed.status, 0);
     assert.match(failed.stderr, /test run insert failure/);
+    assert.match(failed.stderr, /db_due_failure_stage=source_setup/);
     const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
     assert.equal(source.leaseOwner, null);
     assert.equal(source.lastError, "pre_attempt_error");
@@ -241,6 +243,7 @@ test("setup failure releases owned lease even when completion UPDATE throws", as
     const failed = run([], undefined, { GITHUB_SHA: marker });
     assert.notEqual(failed.status, 0);
     assert.match(failed.stderr, /test setup insert failure/);
+    assert.match(failed.stderr, /db_due_failure_stage=source_setup/);
     assert.doesNotMatch(failed.stderr, /test setup completion failure/);
     assert.equal(await db.ingestionRun.count({ where: { sourceCommit: marker } }), 0);
     const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
