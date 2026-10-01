@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
 type ClaimOptions = { owner: string; now: Date; limit: number; ttlMs: number };
+type LeaseIdentity = { id: string; owner: string; updatedAt: Date };
 type Completion = { id: string; owner: string; now: Date; updatedAt: Date; outcome: "success" | "fetch_error" | "parser_error" };
 
 function validateOwner(owner: string) {
@@ -41,6 +42,56 @@ export async function claimDueSources(db: PrismaClient, { owner, now, limit, ttl
 /** Compatibility for existing callers needing just IDs. */
 export async function claimDueSourceIds(db: PrismaClient, options: ClaimOptions): Promise<string[]> {
   return (await claimDueSources(db, options)).map(({ id }) => id);
+}
+
+
+/** Extend only expiry, never updatedAt: that revision fences operator edits and publication. */
+export async function renewSourceLease(db: PrismaClient, lease: LeaseIdentity, ttlMs: number): Promise<boolean> {
+  validateOwner(lease.owner);
+  validateNow(lease.updatedAt);
+  if (!lease.id || !Number.isInteger(ttlMs) || ttlMs < 30_000 || ttlMs > 30 * 60_000) throw new Error("Invalid ingestion lease renewal");
+  const rows = await db.$queryRaw<Array<{ id: string }>>`
+    UPDATE "FestivalSource"
+    SET "leaseExpiresAt" = clock_timestamp() + (${ttlMs}::int * interval '1 millisecond')
+    WHERE id = ${lease.id} AND "leaseOwner" = ${lease.owner}
+      AND "updatedAt" = ${lease.updatedAt} AND "leaseExpiresAt" > clock_timestamp()
+      AND enabled = true AND "configurationBackfilledAt" IS NOT NULL
+      AND "festivalId" IS NOT NULL AND "editionId" IS NOT NULL
+      AND "parserKey" IS NOT NULL AND "cadenceSeconds" > 0
+    RETURNING id
+  `;
+  return rows.length === 1;
+}
+
+/** A failed/missed heartbeat fails closed; no timer can revive an expired lease. */
+export function startSourceLeaseRenewal(
+  db: PrismaClient, lease: LeaseIdentity,
+  { intervalMs = 5 * 60_000, ttlMs = 30 * 60_000, maxLifetimeMs = 2 * 60 * 60_000 } = {},
+) {
+  if (!Number.isInteger(ttlMs) || ttlMs < 30_000 || ttlMs > 30 * 60_000 ||
+      !Number.isInteger(intervalMs) || intervalMs < 1 || intervalMs >= ttlMs / 2 ||
+      !Number.isInteger(maxLifetimeMs) || maxLifetimeMs < ttlMs) throw new Error("Invalid ingestion lease heartbeat");
+  const deadline = Date.now() + maxLifetimeMs;
+  let stopped = false;
+  let lost = false;
+  let pending: Promise<void> | undefined;
+  const timer = setInterval(() => {
+    if (stopped || lost || pending) return;
+    if (Date.now() >= deadline) { lost = true; return; }
+    pending = renewSourceLease(db, lease, ttlMs).then((active) => { if (!active) lost = true; }, () => { lost = true; })
+      .finally(() => { pending = undefined; });
+  }, intervalMs);
+  return {
+    assertActive() {
+      if (lost || Date.now() >= deadline) throw new Error("Ingestion source lease renewal failed or lifetime exceeded");
+    },
+    async stop() {
+      stopped = true;
+      clearInterval(timer);
+      if (pending) await pending;
+      if (lost || Date.now() >= deadline) throw new Error("Ingestion source lease renewal failed or lifetime exceeded");
+    },
+  };
 }
 
 /** Fenced acknowledgement; expired/reclaimed work may not advance the schedule or clear a new lease. */

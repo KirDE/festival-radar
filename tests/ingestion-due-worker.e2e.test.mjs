@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
+import { once } from "node:events";
+import { claimDueSources } from "../lib/ingestion/lease.ts";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -150,4 +153,62 @@ test("failed notification cannot retry committed publication", async () => {
   assert.ok(latest.endedAt);
   assert.equal(await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } }), 1);
   assert.deepEqual(JSON.parse(run().stdout), { status: "NO_DUE_SOURCES", attempted: 0 });
+});
+
+
+async function within(promise, ms, message) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })]);
+  } finally { clearTimeout(timer); }
+}
+
+test("in-flight fetch cannot publish after source edit or lease reclaim", async () => {
+  const publicationsBefore = await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } });
+  for (const change of ["edit", "reclaim"]) {
+    await db.festivalEdition.updateMany({ where: { festivalId: (await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } })).festivalId }, data: { startDate: null } });
+    let respond;
+    let requested;
+    const request = new Promise((resolve) => { requested = resolve; });
+    const server = createServer((_req, res) => { respond = () => { res.writeHead(200, { "content-type": "text/html" }); res.end(fixture); }; requested(); });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    await db.festivalSource.update({ where: { id: sourceId }, data: {
+      strategies: ["json_ld_event"], parserKey: "json_ld_event", fetchUrl: "http://127.0.0.1:" + address.port + "/fixture",
+      nextRunAt: new Date(Date.now() - 1000), leaseOwner: null, leaseExpiresAt: null,
+    } });
+    const child = spawn(process.execPath, ["scripts/ingest-festivals.mjs", "--db-due", "--publish", "--output=" + path.join(dir, "concurrent-" + change)], {
+      env: { ...process.env, APP_URL: "", NOTIFICATION_EVENTS_URL: "", INTERNAL_API_SECRET: "", NOTIFICATION_DELIVERY_REQUIRED: "false" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    try {
+      await within(request, 10_000, "Worker fetch did not start");
+      if (change === "edit") {
+        await db.festivalSource.update({ where: { id: sourceId }, data: { cadenceSeconds: 172800, updatedAt: new Date(Date.now() + 60_000) } });
+      } else {
+        await db.festivalSource.update({ where: { id: sourceId }, data: { leaseExpiresAt: new Date(Date.now() - 1000) } });
+        const [reclaimed] = await claimDueSources(db, { owner: randomUUID(), now: new Date(), limit: 1, ttlMs: 30_000 });
+        assert.equal(reclaimed.id, sourceId);
+      }
+      respond();
+      const [code] = await within(once(child, "close"), 10_000, "Worker did not exit");
+      assert.notEqual(code, 0, stderr);
+      assert.match(stderr, /Ingestion source lease is no longer active/);
+      assert.equal(await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } }), publicationsBefore);
+      const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+      if (change === "reclaim") assert.notEqual(source.leaseOwner, null);
+      else assert.equal(source.cadenceSeconds, 172800);
+      const latest = await db.ingestionRun.findFirstOrThrow({ where: { attempts: { some: { festivalSlug: slug } } }, orderBy: { startedAt: "desc" } });
+      assert.equal(latest.status, "FAILED");
+      const candidate = await db.ingestionCandidate.findFirstOrThrow({ where: { runId: latest.id } });
+      assert.equal(candidate.publishable, true);
+    } finally {
+      child.kill();
+      server.closeAllConnections();
+      server.close();
+    }
+  }
 });
