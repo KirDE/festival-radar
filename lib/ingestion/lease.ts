@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 type ClaimOptions = { owner: string; now: Date; limit: number; ttlMs: number };
 type LeaseIdentity = { id: string; owner: string; updatedAt: Date };
-type Completion = { id: string; owner: string; now: Date; updatedAt: Date; outcome: "success" | "fetch_error" | "parser_error" | "pre_attempt_error" };
+type Completion = { id: string; owner: string; now: Date; updatedAt: Date; outcome: "success" | "fetch_error" | "parser_error" | "pre_attempt_error" | "infrastructure_error" };
 
 function validateOwner(owner: string) {
   // Per-run random UUID, never a stable hostname or user-supplied source value.
@@ -104,7 +104,7 @@ export async function completeSourceLease(db: PrismaClient, { id, owner, now, up
   validateOwner(owner);
   validateNow(now);
   validateNow(updatedAt);
-  if (!id || !["success", "fetch_error", "parser_error", "pre_attempt_error"].includes(outcome)) throw new Error("Invalid ingestion completion");
+  if (!id || !["success", "fetch_error", "parser_error", "pre_attempt_error", "infrastructure_error"].includes(outcome)) throw new Error("Invalid ingestion completion");
   const success = outcome === "success";
   const rows = await db.$queryRaw<Array<{ id: string }>>`
     UPDATE "FestivalSource"

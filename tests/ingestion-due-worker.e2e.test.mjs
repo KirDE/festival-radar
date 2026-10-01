@@ -94,20 +94,59 @@ test("fetch failure persists an attempt and backs off before next claim", async 
   assert.equal(run().status, 0);
 });
 
-test("post-fetch local failure releases lease with parser backoff", async () => {
-  await db.festivalSource.update({ where: { id: sourceId }, data: { nextRunAt: new Date(Date.now() - 1000) } });
-  const output = path.join(dir, "blocked");
-  await mkdir(path.join(output, slug + ".json"), { recursive: true });
-  const failed = run([], output);
-  assert.notEqual(failed.status, 0);
-  const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
-  assert.equal(row.leaseOwner, null);
-  assert.equal(row.lastError, "parser_error");
-  assert.equal(row.consecutiveFailures, 2);
-  assert.ok(row.nextRunAt > new Date());
-  const latest = await db.ingestionRun.findFirstOrThrow({ where: { attempts: { some: { festivalSlug: slug } } }, orderBy: { startedAt: "desc" } });
-  assert.equal(latest.status, "FAILED");
-  assert.ok(latest.endedAt);
+test("post-UNCHANGED artifact failure uses bounded infrastructure category, not parser error", async () => {
+  const festivalId = (await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } })).festivalId;
+  await db.festivalEdition.updateMany({ where: { festivalId }, data: { startDate: new Date("2027-07-07T00:00:00.000Z") } });
+  try {
+    await db.festivalSource.update({ where: { id: sourceId }, data: {
+      strategies: ["json_ld_event"], parserKey: "json_ld_event", nextRunAt: new Date(Date.now() - 1000),
+    } });
+    const output = path.join(dir, "blocked");
+    await mkdir(path.join(output, slug + ".json"), { recursive: true });
+    const failed = run([], output);
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /EISDIR/);
+    const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+    assert.equal(row.leaseOwner, null);
+    assert.equal(row.lastError, "infrastructure_error");
+    assert.equal(row.consecutiveFailures, 2);
+    assert.ok(row.nextRunAt > new Date());
+    const latest = await db.ingestionRun.findFirstOrThrow({ where: { attempts: { some: { festivalSlug: slug } } }, orderBy: { startedAt: "desc" } });
+    assert.equal(latest.status, "FAILED");
+    assert.ok(latest.endedAt);
+    const attempt = await db.ingestionAttempt.findFirstOrThrow({ where: { runId: latest.id, festivalSlug: slug }, include: { candidate: { include: { diffs: true } } } });
+    assert.equal(attempt.status, "UNCHANGED");
+    assert.equal(attempt.candidate.diffs.length, 0);
+    assert.doesNotMatch(row.lastError, /https?:|EISDIR/i);
+  } finally {
+    await db.festivalEdition.updateMany({ where: { festivalId }, data: { startDate: null } });
+  }
+});
+
+test("real extraction exception before attempt uses parser category without leaking source data", async () => {
+  const marker = "parser-" + randomUUID();
+  const invalidEntity = path.join(dir, "invalid-entity.html");
+  await writeFile(invalidEntity, '<meta name="event:start_date" content="&#1114112;">');
+  await db.festivalSource.update({ where: { id: sourceId }, data: {
+    strategies: ["html_fallback"], parserKey: "html_fallback", nextRunAt: new Date(Date.now() - 1000),
+  } });
+  try {
+    const failed = run(["--fixture=" + invalidEntity], undefined, { GITHUB_SHA: marker });
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /Invalid code point/);
+    const terminal = await db.ingestionRun.findFirstOrThrow({ where: { sourceCommit: marker } });
+    orphanRunIds.push(terminal.id);
+    assert.equal(terminal.status, "FAILED");
+    assert.ok(terminal.endedAt);
+    assert.equal(await db.ingestionAttempt.count({ where: { runId: terminal.id } }), 0);
+    const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+    assert.equal(row.leaseOwner, null);
+    assert.equal(row.lastError, "parser_error");
+    assert.doesNotMatch(row.lastError, /https?:|Invalid code point/i);
+    assert.ok(row.nextRunAt > new Date());
+  } finally {
+    await db.festivalSource.update({ where: { id: sourceId }, data: { strategies: ["manual_review"], parserKey: "manual_review" } });
+  }
 });
 
 

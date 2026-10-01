@@ -99,7 +99,7 @@ const history = [];
 for (const source of selected) {
   let leaseCompleted = false;
   let publicationCommitted = false;
-  let attemptPersisted = false;
+  let failureOutcome = "pre_attempt_error";
   try {
   summary.attempted += 1;
   const current = runtimeFestivals.find(({ slug }) => slug === source.festivalSlug);
@@ -119,7 +119,7 @@ for (const source of selected) {
     const attempts = Number(error?.attempts) || 1;
     if (run) {
       await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, httpStatus: Number(error?.httpStatus) || undefined, durationMs: Date.now() - startedAt.getTime(), retryCount: attempts - 1, startedAt, endedAt: new Date(), error: error instanceof Error ? error.message : String(error) });
-      attemptPersisted = true;
+      failureOutcome = "infrastructure_error";
     }
     const consecutiveFailures = persistenceEnabled ? await ingestionQueries.consecutiveFailures(db, source.festivalSlug) : 1;
     const escalated = consecutiveFailures >= failureThreshold;
@@ -132,12 +132,19 @@ for (const source of selected) {
     continue;
   }
 
-  const candidate = extractFestivalCandidate(html, source, fetchedAt);
-  const result = evaluateCandidate(current, candidate);
+  let candidate;
+  let result;
+  try {
+    candidate = extractFestivalCandidate(html, source, fetchedAt);
+    result = evaluateCandidate(current, candidate);
+  } catch (error) {
+    failureOutcome = "parser_error";
+    throw error;
+  }
   const status = result.reviewReasons.length ? "review" : result.publishable ? "publishable" : "unchanged";
   const artifact = { status, source: { ...source, httpStatus: response?.status ?? null, finalUrl: response?.url ?? source.url }, result };
   const attempt = run ? await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, finalUrl: response?.url ?? source.url, httpStatus: response?.status ?? null, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), result }) : null;
-  if (attempt) attemptPersisted = true;
+  if (attempt) failureOutcome = "infrastructure_error";
   await writeFile(path.join(outputDirectory, `${source.festivalSlug}.json`), `${JSON.stringify(artifact, null, 2)}\n`);
   summary.processed += 1;
   if (result.changes.length) summary.changed += 1;
@@ -197,7 +204,7 @@ for (const source of selected) {
       if (run && sourceLease) await db.ingestionRun.update({ where: { id: run.id }, data: { status: "FAILED", endedAt: new Date(), failed: 1 } });
     } catch { /* retain the original error and still attempt lease cleanup */ }
     try {
-      if (sourceLease && !leaseCompleted && !await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: publicationCommitted ? "success" : attemptPersisted ? "parser_error" : "pre_attempt_error" })) {
+      if (sourceLease && !leaseCompleted && !await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: publicationCommitted ? "success" : failureOutcome })) {
         // A changed revision must not strand our lease; a reclaimed owner is
         // untouched by the owner-only CAS. Preserve the original failure.
         await releaseOwnedSourceLease(db, sourceLease);
