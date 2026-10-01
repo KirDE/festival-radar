@@ -21,30 +21,50 @@ export async function enqueuePlaylistRefresh(db: PrismaClient, publicationId: st
   return db.catalogPlaylistRefresh.findUniqueOrThrow({ where: { publicationId } });
 }
 
-// SKIP LOCKED and an atomic UPDATE guarantee a single owner per publication.
-// A claim's attempts revision fences stale owners, including same-owner reuse.
+// Transaction-scoped advisory locks serialize *festivals*, not just publication rows.
+// Try-lock in the ordered scan lets a contended festival be skipped while
+// another festival proceeds. Hash collisions only reduce concurrency.
+// The second query gets a fresh READ COMMITTED snapshot after the lock is held:
+// a competing transaction may have committed after the scan began.
 export async function claimPlaylistRefresh(db: PrismaClient, input: { owner: string; now: Date; ttlMs: number }): Promise<Claim | null> {
   validate(input.owner, input.now, input.ttlMs);
   const expiry = new Date(input.now.getTime() + input.ttlMs);
-  const rows = await db.$queryRaw<Claim[]>`
-    WITH candidate AS (
-      SELECT id FROM "CatalogPlaylistRefresh"
-      WHERE status = 'PENDING'
-        OR (status = 'FAILED' AND "retryAt" <= ${input.now})
-        OR (status = 'RUNNING' AND "leaseExpiresAt" <= ${input.now})
-      ORDER BY "requestedAt", id
-      LIMIT 1 FOR UPDATE SKIP LOCKED
-    )
-    UPDATE "CatalogPlaylistRefresh" AS job
-      SET status = 'RUNNING', attempts = job.attempts + 1,
-          "leaseOwner" = ${input.owner}, "leaseExpiresAt" = ${expiry},
-          "startedAt" = ${input.now}, "completedAt" = NULL, "retryAt" = NULL,
-          "lastError" = NULL, "updatedAt" = ${input.now}
-    FROM candidate WHERE job.id = candidate.id
-    RETURNING job.id, job."publicationId", job."festivalSlug", job.attempts,
-              job."leaseOwner", job."leaseExpiresAt"
-  `;
-  return rows[0] ?? null;
+  return db.$transaction(async (tx) => {
+    const candidates = await tx.$queryRaw<{ id: string; festivalSlug: string }[]>`
+      SELECT job.id, job."festivalSlug"
+      FROM "CatalogPlaylistRefresh" AS job
+      WHERE (job.status = 'PENDING'
+        OR (job.status = 'FAILED' AND job."retryAt" <= ${input.now})
+        OR (job.status = 'RUNNING' AND job."leaseExpiresAt" <= ${input.now}))
+        AND NOT EXISTS (
+          SELECT 1 FROM "CatalogPlaylistRefresh" AS sibling
+          WHERE sibling."festivalSlug" = job."festivalSlug"
+            AND sibling.id <> job.id AND sibling.status = 'RUNNING'
+        )
+        AND pg_try_advisory_xact_lock(210, hashtext(job."festivalSlug"))
+      ORDER BY job."requestedAt", job.id
+      LIMIT 1 FOR UPDATE OF job SKIP LOCKED
+    `;
+    const candidate = candidates[0];
+    if (!candidate) return null;
+    // Recheck under the festival lock using a new statement snapshot. Legacy
+    // unleased RUNNING rows also block claims, irrespective of startedAt.
+    const active = await tx.catalogPlaylistRefresh.count({
+      where: { festivalSlug: candidate.festivalSlug, status: "RUNNING", id: { not: candidate.id } },
+    });
+    if (active) return null;
+    const rows = await tx.$queryRaw<Claim[]>`
+      UPDATE "CatalogPlaylistRefresh" AS job
+        SET status = 'RUNNING', attempts = job.attempts + 1,
+            "leaseOwner" = ${input.owner}, "leaseExpiresAt" = ${expiry},
+            "startedAt" = ${input.now}, "completedAt" = NULL, "retryAt" = NULL,
+            "lastError" = NULL, "updatedAt" = ${input.now}
+      WHERE job.id = ${candidate.id}
+      RETURNING job.id, job."publicationId", job."festivalSlug", job.attempts,
+                job."leaseOwner", job."leaseExpiresAt"
+    `;
+    return rows[0] ?? null;
+  });
 }
 
 export async function finishPlaylistRefresh(db: PrismaClient, claim: Claim, now: Date, outcome: "SUCCEEDED" | "FAILED") {
