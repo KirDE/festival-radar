@@ -7,23 +7,55 @@ set -euo pipefail
 commit="$1"
 mode="$2"
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo 'invalid commit' >&2; exit 2; }
-case "$mode" in health|ingest|drain) ;; *) echo 'invalid mode' >&2; exit 2 ;; esac
+case "$mode" in health|ingest|drain|ingest-pilot) ;; *) echo 'invalid mode' >&2; exit 2 ;; esac
 root=/opt/festival-radar
 release="$root/releases/$commit"
 exec 9>/run/festival-radar-activation.lock
 flock -n 9 || { echo 'deployment or due operation busy' >&2; exit 5; }
 [[ "$(readlink -f "$root/current" 2>/dev/null || true)" == "$release" && -f "$release/DEPLOYED_COMMIT" && "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" ]] || { echo 'deployed commit mismatch' >&2; exit 4; }
 [[ -f /etc/systemd/system/festival-radar-db-due@.service ]] || { echo 'manual unit not installed' >&2; exit 4; }
+pilot=false
+if [[ "$mode" == ingest-pilot ]]; then
+  pilot=true
+  lock="$root/shared/ingestion/source-fetch.lock"
+  [[ -f "$lock" && ! -L "$lock" && "$(stat -c %U:%a -- "$lock" 2>/dev/null)" == www-data:640 ]] || { echo 'ingestion lock unavailable' >&2; exit 6; }
+  exec 8<"$lock" || { echo 'ingestion lock unavailable' >&2; exit 6; }
+  flock -n 8 || { echo 'source fetch already running' >&2; exit 5; }
+  [[ "$(systemctl show --property=ActiveState --value festival-radar-collection@ingestion.service 2>/dev/null)" == inactive ]] || { echo 'legacy ingestion service not inactive' >&2; exit 6; }
+  mode=ingest
+fi
 audit_dir=/run/festival-radar-db-due
 if [[ ! -e "$audit_dir" && ! -L "$audit_dir" ]]; then
   mkdir -m 0700 -- "$audit_dir" 2>/dev/null || { echo 'DB due audit unavailable' >&2; exit 6; }
 fi
 [[ -d "$audit_dir" && ! -L "$audit_dir" && "$(stat -c %u:%a -- "$audit_dir" 2>/dev/null)" == 0:700 ]] || { echo 'DB due audit unsafe' >&2; exit 6; }
 audit="$audit_dir/$mode.audit"
+preflight_audit=
 temporary="$(mktemp "$audit_dir/.$mode.XXXXXXXX" 2>/dev/null)" || { echo 'DB due audit unavailable' >&2; exit 6; }
-trap 'rm -f -- "$temporary" "$audit"' EXIT
+trap 'rm -f -- "$temporary" "$audit"; if [[ -n "$preflight_audit" ]]; then rm -f -- "$preflight_audit"; fi' EXIT
 [[ "$(stat -c %u:%a -- "$temporary" 2>/dev/null)" == 0:600 ]] || { echo 'DB due audit unsafe' >&2; exit 6; }
 mv -fT -- "$temporary" "$audit" 2>/dev/null || { echo 'DB due audit unavailable' >&2; exit 6; }
+if [[ "$pilot" == true ]]; then
+  # Both locks span preflight and the one-source fetch; the legacy HTTP path
+  # takes the same source lock even for independent GitHub dispatches.
+  preflight_audit="$audit_dir/health.audit"
+  health_temp="$(mktemp "$audit_dir/.health.XXXXXXXX" 2>/dev/null)" || { echo 'DB due preflight unavailable' >&2; exit 6; }
+  mv -fT -- "$health_temp" "$preflight_audit" 2>/dev/null || { echo 'DB due preflight unavailable' >&2; exit 6; }
+  if ! systemctl start festival-radar-db-due@health.service >/dev/null 2>&1; then echo 'DB due preflight failed' >&2; exit 6; fi
+  [[ -f "$preflight_audit" && ! -L "$preflight_audit" && "$(stat -c %u:%a -- "$preflight_audit" 2>/dev/null)" == 0:600 ]] || { echo 'DB due preflight unsafe' >&2; exit 6; }
+  health_size="$(stat -c %s -- "$preflight_audit" 2>/dev/null)" || { echo 'DB due preflight invalid' >&2; exit 6; }
+  [[ "$health_size" =~ ^[0-9]+$ ]] && (( health_size > 0 && health_size <= 512 )) || { echo 'DB due preflight invalid' >&2; exit 6; }
+  if ! (tr -d '\000' < "$preflight_audit" | cmp -s -- "$preflight_audit" -) 2>/dev/null; then echo 'DB due preflight binary' >&2; exit 6; fi
+  health_record="$(cat -- "$preflight_audit")" || { echo 'DB due preflight invalid' >&2; exit 6; }
+  [[ "$(stat -c %s -- "$preflight_audit" 2>/dev/null)" == "$health_size" ]] || { echo 'DB due preflight changed' >&2; exit 6; }
+  number='(0|[1-9][0-9]{0,15})'
+  health_pattern='^\{"due":([1-9][0-9]{0,15}),"queueLaggedOverHour":'"$number"',"active":0,"expired":0,"error":0,"outboxPending":'"$number"',"outboxLaggedOverHour":'"$number"',"unknownParserKeys":0\}$'
+  [[ "$health_record" =~ $health_pattern ]] || { echo 'DB due preflight unhealthy' >&2; exit 6; }
+  [[ "$(systemctl show --property=ActiveState --value festival-radar-collection@ingestion.service 2>/dev/null)" == inactive ]] || { echo 'legacy ingestion service not inactive' >&2; exit 6; }
+  # Read-only count snapshot evidence, strictly validated before any DB claim.
+  # It is not a database backup or a substitute for a verified restore.
+  printf 'DB_DUE_PREFLIGHT %s\n' "$health_record"
+fi
 if ! systemctl start "festival-radar-db-due@$mode.service" >/dev/null 2>&1; then
   echo 'DB due operation failed' >&2
   exit 6
@@ -42,6 +74,18 @@ if [[ "$mode" == health ]]; then
   pattern='^\{"due":'"$number"',"queueLaggedOverHour":'"$number"',"active":'"$number"',"expired":'"$number"',"error":'"$number"',"outboxPending":'"$number"',"outboxLaggedOverHour":'"$number"',"unknownParserKeys":'"$number"'\}$'
   [[ "$record" =~ $pattern ]] || { echo 'DB due health audit invalid' >&2; exit 6; }
   printf 'DB_DUE_HEALTH %s\n' "$record"
+  exit 0
+fi
+if [[ "$pilot" == true ]]; then
+  [[ -f "$audit" && ! -L "$audit" && "$(stat -c %u:%a -- "$audit" 2>/dev/null)" == 0:600 ]] || { echo 'DB due pilot audit unsafe' >&2; exit 6; }
+  size="$(stat -c %s -- "$audit" 2>/dev/null)" || { echo 'DB due pilot audit invalid' >&2; exit 6; }
+  [[ "$size" =~ ^[0-9]+$ ]] && (( size > 0 && size <= 256 )) || { echo 'DB due pilot audit invalid' >&2; exit 6; }
+  if ! (tr -d '\000' < "$audit" | cmp -s -- "$audit" -) 2>/dev/null; then echo 'DB due pilot audit binary' >&2; exit 6; fi
+  record="$(cat -- "$audit")" || { echo 'DB due pilot audit invalid' >&2; exit 6; }
+  [[ "$(stat -c %s -- "$audit" 2>/dev/null)" == "$size" ]] || { echo 'DB due pilot audit changed' >&2; exit 6; }
+  pattern='^\{"attempted":1,"processed":[01],"published":[01],"reviewRequired":[01],"fetchErrors":0\}$'
+  [[ "$record" =~ $pattern ]] || { echo 'DB due pilot audit invalid' >&2; exit 6; }
+  printf 'DB_DUE_PILOT %s\n' "$record"
   exit 0
 fi
 echo 'DB due operation completed'
