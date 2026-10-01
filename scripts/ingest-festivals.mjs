@@ -119,7 +119,7 @@ for (const source of selected) {
     const attempts = Number(error?.attempts) || 1;
     if (run) {
       await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, httpStatus: Number(error?.httpStatus) || undefined, durationMs: Date.now() - startedAt.getTime(), retryCount: attempts - 1, startedAt, endedAt: new Date(), error: error instanceof Error ? error.message : String(error) });
-      failureOutcome = "infrastructure_error";
+      failureOutcome = "post_attempt_error";
     }
     const consecutiveFailures = persistenceEnabled ? await ingestionQueries.consecutiveFailures(db, source.festivalSlug) : 1;
     const escalated = consecutiveFailures >= failureThreshold;
@@ -144,7 +144,7 @@ for (const source of selected) {
   const status = result.reviewReasons.length ? "review" : result.publishable ? "publishable" : "unchanged";
   const artifact = { status, source: { ...source, httpStatus: response?.status ?? null, finalUrl: response?.url ?? source.url }, result };
   const attempt = run ? await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, finalUrl: response?.url ?? source.url, httpStatus: response?.status ?? null, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), result }) : null;
-  if (attempt) failureOutcome = "infrastructure_error";
+  if (attempt) failureOutcome = "post_attempt_error";
   await writeFile(path.join(outputDirectory, `${source.festivalSlug}.json`), `${JSON.stringify(artifact, null, 2)}\n`);
   summary.processed += 1;
   if (result.changes.length) summary.changed += 1;

@@ -94,7 +94,7 @@ test("fetch failure persists an attempt and backs off before next claim", async 
   assert.equal(run().status, 0);
 });
 
-test("post-UNCHANGED artifact failure uses bounded infrastructure category, not parser error", async () => {
+test("post-UNCHANGED artifact failure uses bounded post_attempt_error, not parser_error", async () => {
   const festivalId = (await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } })).festivalId;
   await db.festivalEdition.updateMany({ where: { festivalId }, data: { startDate: new Date("2027-07-07T00:00:00.000Z") } });
   try {
@@ -108,7 +108,7 @@ test("post-UNCHANGED artifact failure uses bounded infrastructure category, not 
     assert.match(failed.stderr, /EISDIR/);
     const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
     assert.equal(row.leaseOwner, null);
-    assert.equal(row.lastError, "infrastructure_error");
+    assert.equal(row.lastError, "post_attempt_error");
     assert.equal(row.consecutiveFailures, 2);
     assert.ok(row.nextRunAt > new Date());
     const latest = await db.ingestionRun.findFirstOrThrow({ where: { attempts: { some: { festivalSlug: slug } } }, orderBy: { startedAt: "desc" } });
