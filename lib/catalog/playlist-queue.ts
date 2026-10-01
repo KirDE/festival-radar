@@ -5,6 +5,9 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 // the legacy route, serialize jobs for the same festival, and reconcile old
 // RUNNING rows with no lease before invoking a DB-backed worker.
 type Claim = { id: string; publicationId: string; festivalSlug: string; attempts: number; leaseOwner: string; leaseExpiresAt: Date };
+export type PlaylistClaimCursor = { requestedAt: Date; id: string };
+export type PlaylistClaimPage = { claim: Claim; nextCursor: null } | { claim: null; nextCursor: PlaylistClaimCursor | null };
+const CLAIM_PAGE_SIZE = 16;
 
 function validate(owner: string, now: Date, ttlMs: number) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(owner)) throw new Error("Invalid playlist lease owner");
@@ -21,84 +24,91 @@ export async function enqueuePlaylistRefresh(db: PrismaClient, publicationId: st
   return db.catalogPlaylistRefresh.findUniqueOrThrow({ where: { publicationId } });
 }
 
+// Each call examines at most one page in one transaction. On contention,
+// pass nextCursor to the next call. Null nextCursor means the scan is exhausted;
+// start again from the beginning on the next poll or after a successful claim.
+// This is a scan position, not a durable queue offset: changes behind it are
+// found on the next poll. No loop spans multiple pages inside Prisma's tx.
 // Read a bounded page of distinct festivals before taking any advisory locks.
 // Filtering with pg_try_advisory_xact_lock before ORDER BY/LIMIT could lock
 // every eligible festival, so only call it for one chosen festival at a time.
 // The optional hook is used to synchronize transaction-boundary E2E tests.
 export async function claimPlaylistRefresh(
   db: PrismaClient,
-  input: { owner: string; now: Date; ttlMs: number },
+  input: { owner: string; now: Date; ttlMs: number; cursor?: PlaylistClaimCursor | null },
   afterFestivalLock?: (festivalSlug: string) => Promise<void>,
-): Promise<Claim | null> {
+): Promise<PlaylistClaimPage> {
   validate(input.owner, input.now, input.ttlMs);
+  if (input.cursor && (!(input.cursor.requestedAt instanceof Date) || !Number.isFinite(input.cursor.requestedAt.getTime())
+    || typeof input.cursor.id !== "string" || !/^[a-z0-9]{20,40}$/.test(input.cursor.id))) {
+    throw new Error("Invalid playlist claim cursor");
+  }
   const expiry = new Date(input.now.getTime() + input.ttlMs);
   return db.$transaction(async (tx) => {
-    let cursor: { requestedAt: Date; id: string } | null = null;
-    for (;;) {
-      // DISTINCT ON runs before keyset pagination: even thousands of jobs
-      // for the oldest festival use just one of the 32 candidate slots.
-      const after: Prisma.Sql = cursor
-        ? Prisma.sql`WHERE (candidate."requestedAt", candidate.id) > (${cursor.requestedAt}, ${cursor.id})`
-        : Prisma.empty;
-      const candidates: { id: string; festivalSlug: string; requestedAt: Date }[] = await tx.$queryRaw`
-        SELECT candidate.id, candidate."festivalSlug", candidate."requestedAt"
-        FROM (
-          SELECT DISTINCT ON (job."festivalSlug") job.id, job."festivalSlug", job."requestedAt"
-          FROM "CatalogPlaylistRefresh" AS job
-          WHERE (job.status = 'PENDING'
+    let cursor = input.cursor ?? null;
+    // DISTINCT ON runs before keyset pagination: even thousands of jobs
+    // for the oldest festival use just one of the 16 candidate slots.
+    const after: Prisma.Sql = cursor
+      ? Prisma.sql`WHERE (candidate."requestedAt", candidate.id) > (${cursor.requestedAt}, ${cursor.id})`
+      : Prisma.empty;
+    const candidates: { id: string; festivalSlug: string; requestedAt: Date }[] = await tx.$queryRaw`
+      SELECT candidate.id, candidate."festivalSlug", candidate."requestedAt"
+      FROM (
+        SELECT DISTINCT ON (job."festivalSlug") job.id, job."festivalSlug", job."requestedAt"
+        FROM "CatalogPlaylistRefresh" AS job
+        WHERE (job.status = 'PENDING'
+          OR (job.status = 'FAILED' AND job."retryAt" <= ${input.now})
+          OR (job.status = 'RUNNING' AND job."leaseExpiresAt" <= ${input.now}))
+          AND NOT EXISTS (
+            SELECT 1 FROM "CatalogPlaylistRefresh" AS sibling
+            WHERE sibling."festivalSlug" = job."festivalSlug"
+              AND sibling.id <> job.id AND sibling.status = 'RUNNING'
+          )
+        ORDER BY job."festivalSlug", job."requestedAt", job.id
+      ) AS candidate
+      ${after}
+      ORDER BY candidate."requestedAt", candidate.id
+      LIMIT ${CLAIM_PAGE_SIZE}
+    `;
+    if (!candidates.length) return { claim: null, nextCursor: null };
+    for (const candidate of candidates) {
+      cursor = { requestedAt: candidate.requestedAt, id: candidate.id };
+      const [{ acquired }] = await tx.$queryRaw<{ acquired: boolean }[]>`
+        SELECT pg_try_advisory_xact_lock(210, hashtext(${candidate.festivalSlug})) AS acquired
+      `;
+      if (!acquired) continue;
+      await afterFestivalLock?.(candidate.festivalSlug);
+      // New READ COMMITTED statement snapshot after the festival lock.
+      // The row lock guards UPDATE; any RUNNING sibling (even expired or
+      // unleased legacy rows) blocks another job in the same festival.
+      const jobs = await tx.$queryRaw<{ id: string }[]>`
+        SELECT job.id FROM "CatalogPlaylistRefresh" AS job
+        WHERE job."festivalSlug" = ${candidate.festivalSlug}
+          AND (job.status = 'PENDING'
             OR (job.status = 'FAILED' AND job."retryAt" <= ${input.now})
             OR (job.status = 'RUNNING' AND job."leaseExpiresAt" <= ${input.now}))
-            AND NOT EXISTS (
-              SELECT 1 FROM "CatalogPlaylistRefresh" AS sibling
-              WHERE sibling."festivalSlug" = job."festivalSlug"
-                AND sibling.id <> job.id AND sibling.status = 'RUNNING'
-            )
-          ORDER BY job."festivalSlug", job."requestedAt", job.id
-        ) AS candidate
-        ${after}
-        ORDER BY candidate."requestedAt", candidate.id
-        LIMIT 32
+          AND NOT EXISTS (
+            SELECT 1 FROM "CatalogPlaylistRefresh" AS sibling
+            WHERE sibling."festivalSlug" = job."festivalSlug"
+              AND sibling.id <> job.id AND sibling.status = 'RUNNING'
+          )
+        ORDER BY job."requestedAt", job.id
+        LIMIT 1 FOR UPDATE OF job SKIP LOCKED
       `;
-      if (!candidates.length) return null;
-      for (const candidate of candidates) {
-        cursor = { requestedAt: candidate.requestedAt, id: candidate.id };
-        const [{ acquired }] = await tx.$queryRaw<{ acquired: boolean }[]>`
-          SELECT pg_try_advisory_xact_lock(210, hashtext(${candidate.festivalSlug})) AS acquired
-        `;
-        if (!acquired) continue;
-        await afterFestivalLock?.(candidate.festivalSlug);
-        // New READ COMMITTED statement snapshot after the festival lock.
-        // The row lock guards UPDATE; any RUNNING sibling (even expired or
-        // unleased legacy rows) blocks another job in the same festival.
-        const jobs = await tx.$queryRaw<{ id: string }[]>`
-          SELECT job.id FROM "CatalogPlaylistRefresh" AS job
-          WHERE job."festivalSlug" = ${candidate.festivalSlug}
-            AND (job.status = 'PENDING'
-              OR (job.status = 'FAILED' AND job."retryAt" <= ${input.now})
-              OR (job.status = 'RUNNING' AND job."leaseExpiresAt" <= ${input.now}))
-            AND NOT EXISTS (
-              SELECT 1 FROM "CatalogPlaylistRefresh" AS sibling
-              WHERE sibling."festivalSlug" = job."festivalSlug"
-                AND sibling.id <> job.id AND sibling.status = 'RUNNING'
-            )
-          ORDER BY job."requestedAt", job.id
-          LIMIT 1 FOR UPDATE OF job SKIP LOCKED
-        `;
-        if (!jobs.length) continue;
-        const rows = await tx.$queryRaw<Claim[]>`
-          UPDATE "CatalogPlaylistRefresh" AS job
-            SET status = 'RUNNING', attempts = job.attempts + 1,
-                "leaseOwner" = ${input.owner}, "leaseExpiresAt" = ${expiry},
-                "startedAt" = ${input.now}, "completedAt" = NULL, "retryAt" = NULL,
-                "lastError" = NULL, "updatedAt" = ${input.now}
-          WHERE job.id = ${jobs[0].id}
-          RETURNING job.id, job."publicationId", job."festivalSlug", job.attempts,
-                    job."leaseOwner", job."leaseExpiresAt"
-        `;
-        return rows[0] ?? null;
-      }
-      if (candidates.length < 32) return null;
+      if (!jobs.length) continue;
+      const rows = await tx.$queryRaw<Claim[]>`
+        UPDATE "CatalogPlaylistRefresh" AS job
+          SET status = 'RUNNING', attempts = job.attempts + 1,
+              "leaseOwner" = ${input.owner}, "leaseExpiresAt" = ${expiry},
+              "startedAt" = ${input.now}, "completedAt" = NULL, "retryAt" = NULL,
+              "lastError" = NULL, "updatedAt" = ${input.now}
+        WHERE job.id = ${jobs[0].id}
+        RETURNING job.id, job."publicationId", job."festivalSlug", job.attempts,
+                  job."leaseOwner", job."leaseExpiresAt"
+      `;
+      if (rows[0]) return { claim: rows[0], nextCursor: null };
     }
+    return { claim: null, nextCursor: candidates.length === CLAIM_PAGE_SIZE ? cursor : null };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }
 

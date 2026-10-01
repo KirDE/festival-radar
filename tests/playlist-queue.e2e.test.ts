@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { claimPlaylistRefresh, enqueuePlaylistRefresh, finishPlaylistRefresh } from "../lib/catalog/playlist-queue.ts";
+import { claimPlaylistRefresh as claimPage, enqueuePlaylistRefresh, finishPlaylistRefresh } from "../lib/catalog/playlist-queue.ts";
+import type { PlaylistClaimCursor } from "../lib/catalog/playlist-queue.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url || !/(?:test|integration)/i.test(new URL(url).pathname)) throw new Error("A disposable test/integration DATABASE_URL is required");
@@ -12,6 +13,19 @@ const ownerA = randomUUID();
 const ownerB = randomUUID();
 const base = new Date("2027-03-01T00:00:00.000Z");
 const input = (owner: string, now = base) => ({ owner, now, ttlMs: 60_000 });
+// Convenience for older scenarios; production callers own this continuation
+// across calls, never inside a single interactive transaction.
+async function claimPlaylistRefresh(
+  db: PrismaClient, options: ReturnType<typeof input>, hook?: (slug: string) => Promise<void>,
+) {
+  let cursor: PlaylistClaimCursor | null = null;
+  for (let page = 0; page < 16; page++) {
+    const result = await claimPage(db, { ...options, cursor }, hook);
+    if (result.claim || !result.nextCursor) return result.claim;
+    cursor = result.nextCursor;
+  }
+  throw new Error("Test exceeded claim scan page budget");
+}
 let publicationId: string;
 let jobId: string;
 
@@ -83,6 +97,7 @@ test("malformed claims fail before any DB access", async () => {
   const unavailable = { $queryRaw: () => { throw new Error("database accessed"); } } as unknown as PrismaClient;
   await assert.rejects(claimPlaylistRefresh(unavailable, input("invalid")), /Invalid playlist lease owner/);
   await assert.rejects(claimPlaylistRefresh(unavailable, { ...input(ownerA), ttlMs: 1 }), /Invalid playlist lease duration/);
+  await assert.rejects(claimPage(unavailable, { ...input(ownerA), cursor: { requestedAt: new Date("invalid"), id: randomUUID() } }), /Invalid playlist claim cursor/);
 });
 
 // Two publications of the same festival must not overlap, even when a third
@@ -193,11 +208,40 @@ test("claiming A while its transaction is paused does not lock B", async () => {
   });
 });
 
-test("a full page of contended festivals cannot starve a later festival", async () => {
-  const blocked = Array.from({ length: 33 }, () => `queue-busy-${randomUUID()}`);
+test("a newly RUNNING sibling after advisory lock blocks a stale candidate", async () => {
+  const slug = "queue-snapshot-" + randomUUID();
+  const ids: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const pub = await first.catalogPublication.create({ data: {
+      source: "INGESTION", sourceId: "playlist-snapshot:" + randomUUID(),
+      festivalSlug: slug, editionYear: 2027, actorLabel: "test", fields: ["lineup"], lineupChanged: true,
+    } });
+    const job = await enqueuePlaylistRefresh(first, pub.id);
+    ids.push(job.id);
+    await first.catalogPlaylistRefresh.update({ where: { id: job.id }, data: { requestedAt: new Date(base.getTime() + i) } });
+  }
+  const page = await claimPage(first, input(ownerA), async (lockedSlug) => {
+    assert.equal(lockedSlug, slug);
+    // Separate connection commits between advisory lock and fresh-snapshot
+    // SELECT FOR UPDATE. An earlier candidate snapshot still saw both PENDING.
+    await second.catalogPlaylistRefresh.update({ where: { id: ids[1] }, data: {
+      status: "RUNNING", startedAt: base, leaseOwner: ownerB,
+      leaseExpiresAt: new Date(base.getTime() + 60_000),
+    } });
+  });
+  assert.equal(page.claim, null);
+  assert.equal(page.nextCursor, null);
+  assert.equal((await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: ids[0] } })).status, "PENDING");
+  assert.equal(await first.catalogPlaylistRefresh.count({ where: { festivalSlug: slug, status: "RUNNING" } }), 1);
+  await second.catalogPlaylistRefresh.updateMany({ where: { id: { in: ids } }, data: { status: "SUCCEEDED" } });
+});
+
+test("multiple bounded calls resume past >32 contended festivals", async () => {
+  const blocked = Array.from({ length: 65 }, () => `queue-busy-${randomUUID()}`);
   const availableSlug = `queue-page-${randomUUID()}`;
   let ms = 1;
   let availableId = "";
+  const blockedIds: string[] = [];
   for (const slug of [...blocked, availableSlug]) {
     const pub = await first.catalogPublication.create({ data: {
       source: "INGESTION", sourceId: `playlist-page:${randomUUID()}`,
@@ -206,6 +250,7 @@ test("a full page of contended festivals cannot starve a later festival", async 
     const job = await enqueuePlaylistRefresh(first, pub.id);
     await first.catalogPlaylistRefresh.update({ where: { id: job.id }, data: { requestedAt: new Date(base.getTime() + ms++) } });
     if (slug === availableSlug) availableId = job.id;
+    else blockedIds.push(job.id);
   }
   let release!: () => void;
   let held!: () => void;
@@ -221,11 +266,20 @@ test("a full page of contended festivals cannot starve a later festival", async 
   });
   try {
     await lockHeld;
-    const claim = await claimPlaylistRefresh(second, input(ownerB));
-    assert.equal(claim?.id, availableId);
-    assert.equal(await finishPlaylistRefresh(second, claim!, new Date(base.getTime() + 1_000), "SUCCEEDED"), true);
+    let cursor: PlaylistClaimCursor | null = null;
+    for (const lastIndex of [15, 31, 47, 63]) {
+      const page = await claimPage(second, { ...input(ownerB), cursor });
+      assert.equal(page.claim, null);
+      assert.equal(page.nextCursor?.id, blockedIds[lastIndex]);
+      cursor = page.nextCursor;
+    }
+    const page = await claimPage(second, { ...input(ownerB), cursor });
+    assert.equal(page.claim?.id, availableId);
+    assert.equal(page.nextCursor, null);
+    assert.equal(await finishPlaylistRefresh(second, page.claim!, new Date(base.getTime() + 1_000), "SUCCEEDED"), true);
   } finally {
     release();
     await holding;
+    await first.catalogPlaylistRefresh.updateMany({ where: { festivalSlug: { in: blocked } }, data: { status: "SUCCEEDED" } });
   }
 });
