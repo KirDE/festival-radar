@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Root operator only. No sudoers grant or scheduled invocation is installed.
+# Supported operator trigger requires root; not a DB security boundary against
+# www-data, which already owns the release and application DB credentials.
+# No sudoers grant or scheduled invocation is installed.
 [[ "$(id -u)" == 0 && $# == 2 ]] || { echo 'operator arguments rejected' >&2; exit 2; }
 commit="$1"
 mode="$2"

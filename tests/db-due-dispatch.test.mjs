@@ -10,15 +10,17 @@ test('health emits numeric aggregates only and partitions due, live, expired and
     festivalSource: {
       count: async (query) => { queries.push(query); return queries.length; },
       groupBy: async () => [
-        { parserKey: 'manual_review', _count: { _all: 4 } },
-        { parserKey: 'untrusted:private-festival', _count: { _all: 3 } },
-        { parserKey: null, _count: { _all: 1 } },
+        { festivalSlug: 'fixture', strategies: ['manual_review'], parserKey: 'manual_review', _count: { _all: 4 } },
+        { festivalSlug: 'fixture', strategies: ['manual_review'], parserKey: 'untrusted:private-festival', _count: { _all: 3 } },
+        { festivalSlug: 'fixture', strategies: ['manual_review'], parserKey: null, _count: { _all: 1 } },
+        { festivalSlug: 'fixture', strategies: ['json_ld_event'], parserKey: 'manual_review', _count: { _all: 2 } },
+        { festivalSlug: 'fixture', strategies: ['official_markup'], parserKey: 'official_markup:wacken', _count: { _all: 1 } },
       ],
     },
     ingestionNotificationOutbox: { count: async (query) => { queries.push(query); return queries.length; } },
   };
   const result = await dueWorkerHealth(db, now);
-  assert.deepEqual(result, { due: 1, queueLaggedOverHour: 2, active: 3, expired: 4, error: 5, outboxPending: 6, outboxLaggedOverHour: 7, unknownParserKeys: 4 });
+  assert.deepEqual(result, { due: 1, queueLaggedOverHour: 2, active: 3, expired: 4, error: 5, outboxPending: 6, outboxLaggedOverHour: 7, unknownParserKeys: 7 });
   assert.equal(queries[0].where.OR[1].nextRunAt.lte, now);
   assert.equal(queries[2].where.leaseExpiresAt.gt, now);
   assert.equal(queries[3].where.leaseExpiresAt.lte, now);
@@ -32,6 +34,7 @@ test('manual unit is fixed-mode, read-only except private temporary output, and 
     'scripts/deploy/run-db-due-operation.sh', 'scripts/deploy/package-release.sh',
   ].map((file) => readFile(file, 'utf8')));
   assert.ok(installer.includes('$service-db-due@.service'));
+  assert.match(installer, /db_due_restore_assets.*systemctl daemon-reload/s);
   assert.ok(installer.includes('ExecStart=$release/scripts/deploy/run-db-due-operation.sh %i $commit'));
   assert.ok(!installer.includes('db-due.timer'));
   assert.ok(installer.includes('User=www-data') && installer.includes('ProtectSystem=strict'));
@@ -42,4 +45,5 @@ test('manual unit is fixed-mode, read-only except private temporary output, and 
   assert.ok(runner.includes('--output=$output'));
   assert.match(runner, /trap 'rm -rf/);
   assert.ok(packageScript.includes('cp scripts/report-db-due-health.mjs'));
+  assert.ok(packageScript.includes('scripts/deploy/db-due-assets.sh'));
 });

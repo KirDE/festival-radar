@@ -30,6 +30,9 @@ test('disposable PostgreSQL reports due, active, expired, error and unknown pars
         strategies: ['manual_review'], parserKey: 'manual_review', refreshPolicy: 'daily', cadenceSeconds: 86400,
         enabled: true, editionYear: 2027, configurationBackfilledAt: now, nextRunAt: new Date(now.getTime() - 7200000),
         leaseOwner: randomUUID(), leaseExpiresAt: new Date(now.getTime() - 60000) },
+      { festivalSlug: slug, festivalId: festival.id, editionId: edition.id, url: 'https://example.test/four',
+        strategies: ['json_ld_event'], parserKey: 'manual_review', refreshPolicy: 'daily', cadenceSeconds: 86400,
+        enabled: true, editionYear: 2027, configurationBackfilledAt: now, nextRunAt: new Date(now.getTime() + 7200000) },
     ] });
     const after = await dueWorkerHealth(db, now);
     assert.equal(after.due - before.due, 2);
@@ -37,7 +40,7 @@ test('disposable PostgreSQL reports due, active, expired, error and unknown pars
     assert.equal(after.active - before.active, 1);
     assert.equal(after.expired - before.expired, 1);
     assert.equal(after.error - before.error, 1);
-    assert.equal(after.unknownParserKeys - before.unknownParserKeys, 1);
+    assert.equal(after.unknownParserKeys - before.unknownParserKeys, 2);
     assert.equal(after.outboxPending - before.outboxPending, 0);
     assert.equal(after.outboxLaggedOverHour - before.outboxLaggedOverHour, 0);
     assert.doesNotMatch(JSON.stringify(after), /private-unexpected-key/);

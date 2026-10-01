@@ -4,7 +4,8 @@ set -euo pipefail
 archive="${1:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
 commit="${2:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
 env_source="${3:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
-trap 'rm -f "$archive" "$env_source"' EXIT
+db_due_backup=""
+trap 'rm -f "$archive" "$env_source"; if [[ -n "$db_due_backup" ]]; then rm -rf -- "$db_due_backup"; fi' EXIT
 app_root="${APP_ROOT:-/opt/festival-radar}"
 service="${SERVICE_NAME:-festival-radar}"
 domain="${APP_DOMAIN:-festivals.kir-it.de}"
@@ -28,6 +29,11 @@ rm -rf "$release"
 install -d -m 0755 "$release"
 tar -xzf "$archive" --strip-components=1 -C "$release"
 test "$(cat "$release/DEPLOYED_COMMIT")" = "$commit"
+source "$release/scripts/deploy/db-due-assets.sh"
+db_due_unit="/etc/systemd/system/$service-db-due@.service"
+db_due_wrapper=/usr/local/libexec/festival-radar/start-db-due
+db_due_backup="$(mktemp -d /run/festival-radar-db-due.XXXXXXXX)"
+db_due_snapshot_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
 
 cd "$release"
 test -x "$release/.runtime/node"
@@ -93,8 +99,10 @@ ProtectSystem=strict
 TimeoutStartSec=120
 UNIT
 
-# Manual-only, root-triggered, fixed-mode DB due operation. No timer or enablement.
-cat > "/etc/systemd/system/$service-db-due@.service" <<UNIT
+# Manual-only, operator-triggered, fixed-mode DB due operation. The application
+# user still owns the release and database credentials: this is NOT a DB access
+# security boundary. No timer or enablement.
+cat > "$db_due_unit" <<UNIT
 [Unit]
 Description=Manual Festival Radar DB due operation %i
 After=postgresql.service
@@ -116,7 +124,7 @@ ProtectHome=true
 ReadWritePaths=$shared
 TimeoutStartSec=7500
 UNIT
-install -o root -g root -m 0755 "$release/scripts/deploy/start-db-due" /usr/local/libexec/festival-radar/start-db-due
+install -o root -g root -m 0755 "$release/scripts/deploy/start-db-due" "$db_due_wrapper"
 
 cat > "/etc/systemd/system/$service-collection@.service" <<UNIT
 [Unit]
@@ -311,6 +319,8 @@ if [[ "$healthy" != true ]]; then
   if [[ -n "$previous" && -d "$previous" ]]; then
     ln -sfn "$previous" "$app_root/current"
   fi
+  db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
+  systemctl daemon-reload
   if [[ "$had_previous_env" == true ]]; then
     mv -f "$previous_env" "$env_file"
   else

@@ -1,9 +1,9 @@
 import type { PrismaClient } from '@prisma/client';
-import { festivalSources } from '../../data/festival-sources.ts';
 import { sourceParserKey } from '../sources/repository.ts';
 
 // Aggregate only; never expose source identifiers, URLs, parser keys, errors or event payloads.
-const knownKeys = new Set(festivalSources.map(sourceParserKey));
+// A parser key is valid only for this row's slug and ordered strategy list,
+// as in mapSource. Inventory membership alone does not validate a DB row.
 
 export async function dueWorkerHealth(db: PrismaClient, now = new Date()) {
   if (!Number.isFinite(now.getTime())) throw new Error('Invalid health clock');
@@ -17,8 +17,15 @@ export async function dueWorkerHealth(db: PrismaClient, now = new Date()) {
     db.festivalSource.count({ where: { enabled: true, consecutiveFailures: { gt: 0 } } }),
     db.ingestionNotificationOutbox.count({ where: { deliveredAt: null } }),
     db.ingestionNotificationOutbox.count({ where: { deliveredAt: null, createdAt: { lte: hourAgo } } }),
-    db.festivalSource.groupBy({ by: ['parserKey'], where: { enabled: true }, _count: { _all: true } }),
+    db.festivalSource.groupBy({ by: ['festivalSlug', 'strategies', 'parserKey'], where: { enabled: true }, _count: { _all: true } }),
   ]);
-  const unknownParserKeys = parserKeys.reduce((sum, row) => sum + (!row.parserKey || !knownKeys.has(row.parserKey) ? row._count._all : 0), 0);
+  const unknownParserKeys = parserKeys.reduce((sum, row) => {
+    let valid = false;
+    try {
+      valid = !!row.parserKey &&
+        sourceParserKey({ festivalSlug: row.festivalSlug, strategies: row.strategies as Parameters<typeof sourceParserKey>[0]['strategies'] }) === row.parserKey;
+    } catch { /* invalid strategy or festival/adapter pairing */ }
+    return sum + (valid ? 0 : row._count._all);
+  }, 0);
   return { due, queueLaggedOverHour: queueLagged, active, expired, error, outboxPending: pending, outboxLaggedOverHour: lagged, unknownParserKeys };
 }
