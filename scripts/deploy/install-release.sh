@@ -126,7 +126,7 @@ WorkingDirectory=$release
 EnvironmentFile=$shared/production.env
 Environment=NODE_ENV=production
 ExecStart=$release/scripts/deploy/run-db-due-operation.sh %i $commit
-StandardOutput=journal
+StandardOutput=append:/run/festival-radar-db-due/%i.audit
 StandardError=null
 NoNewPrivileges=true
 PrivateTmp=true

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-commit="${1:?usage: activate-release COMMIT [source-preview|source-apply|source-verify|source-diagnose]}"
+commit="${1:?usage: activate-release COMMIT [source-preview|source-apply|source-verify|source-diagnose|due-health]}"
 deploy_user="festival-radar-deploy"
 incoming="/var/lib/festival-radar-deploy/incoming"
 installer="/usr/local/libexec/festival-radar/install-release.sh"
@@ -14,6 +14,12 @@ installer="/usr/local/libexec/festival-radar/install-release.sh"
 exec 9>/run/festival-radar-activation.lock
 flock -n 9 || { echo "activation or source operation already running" >&2; exit 5; }
 if [[ $# == 2 ]]; then
+  if [[ "$2" == due-health ]]; then
+    # The existing sudo grant permits only this root-owned entrypoint. Release
+    # the deployment lock; the operator wrapper retakes it and checks the SHA.
+    flock -u 9
+    exec /usr/local/libexec/festival-radar/start-db-due "$commit" health
+  fi
   case "$2" in
     source-preview|source-apply|source-verify|source-diagnose) mode="${2#source-}" ;;
     *) echo "invalid source operation" >&2; exit 2 ;;
