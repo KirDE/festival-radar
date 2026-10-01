@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { claimDueSourceIds, claimDueSources, completeSourceLease, renewSourceLease, startSourceLeaseRenewal } from "../lib/ingestion/lease.ts";
+import { claimDueSourceIds, claimDueSources, completeSourceLease, releaseOwnedSourceLease, renewSourceLease, startSourceLeaseRenewal } from "../lib/ingestion/lease.ts";
 
 const url = process.env.DATABASE_URL;
 if (!url || !/(?:test|integration)/i.test(new URL(url).pathname)) throw new Error("A disposable test/integration DATABASE_URL is required");
@@ -16,6 +16,12 @@ let id: string;
 
 const options = (owner: string, now = base) => ({ owner, now, limit: 1, ttlMs: 60_000 });
 test.before(async () => {
+  if (process.env.TEST_DB_TIMEZONE) {
+    for (const client of [first, second]) {
+      const [session] = await client.$queryRaw<Array<{ TimeZone: string }>>`SELECT current_setting('TimeZone') AS "TimeZone"`;
+      assert.equal(session.TimeZone, process.env.TEST_DB_TIMEZONE);
+    }
+  }
   const festival = await first.festival.create({ data: {
     slug, name: "Lease Fixture", country: "Test", countryCode: "DE", officialUrl: "https://example.test/lease", genres: [],
     editions: { create: { year: 2027, status: "TBA", ticketStatus: "UNKNOWN", recordState: "TRACKING", completeness: "TBA", sourceUpdatedAt: base } },
@@ -84,6 +90,32 @@ test("operator source edits prevent old worker schedule updates", async () => {
   assert.deepEqual(await first.festivalSource.findUniqueOrThrow({ where: { id } }), disabled);
 });
 
+test("release-only CAS preserves edited revision and schedule, but never clears a reclaimed owner", async () => {
+  await first.festivalSource.update({ where: { id }, data: {
+    enabled: true, parserKey: "manual_review", nextRunAt: base, leaseOwner: null, leaseExpiresAt: null,
+  } });
+  const [claim] = await claimDueSources(first, options(ownerA));
+  const edited = await second.festivalSource.update({ where: { id }, data: {
+    nextRunAt: new Date("2027-05-01T00:00:00.000Z"), updatedAt: new Date("2030-05-01T00:00:00.000Z"),
+  } });
+  assert.equal(await completeSourceLease(first, { ...claim, owner: ownerA, now: base, outcome: "parser_error" }), false);
+  assert.equal(await releaseOwnedSourceLease(first, { ...claim, owner: ownerA }), true);
+  const released = await first.festivalSource.findUniqueOrThrow({ where: { id } });
+  assert.deepEqual(released, { ...edited, leaseOwner: null, leaseExpiresAt: null });
+  assert.equal(await releaseOwnedSourceLease(first, { ...claim, owner: ownerA }), false);
+
+  await first.festivalSource.update({ where: { id }, data: { nextRunAt: base } });
+  const [secondClaim] = await claimDueSources(first, options(ownerA));
+  assert.equal(secondClaim.id, id);
+  await first.festivalSource.update({ where: { id }, data: { leaseExpiresAt: new Date("2027-02-28T00:00:00.000Z") } });
+  const [reclaimed] = await claimDueSources(second, options(ownerB));
+  assert.equal(reclaimed.id, id);
+  const before = await second.festivalSource.findUniqueOrThrow({ where: { id } });
+  assert.equal(await releaseOwnedSourceLease(first, { ...secondClaim, owner: ownerA }), false);
+  assert.deepEqual(await first.festivalSource.findUniqueOrThrow({ where: { id } }), before);
+  assert.equal(await completeSourceLease(second, { ...reclaimed, owner: ownerB, now: base, outcome: "success" }), true);
+});
+
 test("invalid claim arguments fail before database access", async () => {
   const unavailable = { $queryRaw: () => { throw new Error("database accessed"); } } as unknown as PrismaClient;
   await assert.rejects(claimDueSourceIds(unavailable, { ...options(ownerA), limit: 0 }), /Invalid ingestion batch size/);
@@ -104,6 +136,9 @@ test("claim returns the exact revision used by publication and completion fences
   assert.equal(claim.id, id);
   const row = await first.festivalSource.findUniqueOrThrow({ where: { id } });
   assert.equal(claim.updatedAt.toISOString(), row.updatedAt.toISOString());
+  const staleRevision = new Date(claim.updatedAt.getTime() + 1_000);
+  assert.equal(await completeSourceLease(first, { ...claim, updatedAt: staleRevision, owner: ownerA, now: base, outcome: "success" }), false);
+  assert.equal((await first.festivalSource.findUniqueOrThrow({ where: { id } })).leaseOwner, ownerA);
   assert.equal(await completeSourceLease(first, { ...claim, owner: ownerA, now: base, outcome: "success" }), true);
 });
 
@@ -122,7 +157,7 @@ test("renewal preserves revision/configuration and fails closed on expiry, recla
   assert.equal(renewed.nextRunAt?.getTime(), before.nextRunAt?.getTime());
   assert.equal(renewed.leaseOwner, ownerA);
   assert.ok(renewed.leaseExpiresAt! > new Date());
-  await first.$executeRaw`UPDATE "FestivalSource" SET "leaseExpiresAt" = ${new Date(Date.now() - 1000)} WHERE id = ${id}`;
+  await first.$executeRaw`UPDATE "FestivalSource" SET "leaseExpiresAt" = (${new Date(Date.now() - 1000)}::timestamptz AT TIME ZONE 'UTC') WHERE id = ${id}`;
   const expired = await first.festivalSource.findUniqueOrThrow({ where: { id } });
   assert.equal(await renewSourceLease(first, { ...claim, owner: ownerA }, 30_000), false);
   assert.deepEqual(await first.festivalSource.findUniqueOrThrow({ where: { id } }), expired);
@@ -163,7 +198,7 @@ test("heartbeat extends a shortened lease during asynchronous work and detects s
   const now = new Date();
   await first.festivalSource.update({ where: { id }, data: { enabled: true, parserKey: "manual_review", nextRunAt: now, leaseOwner: null, leaseExpiresAt: null } });
   const [claim] = await claimDueSources(first, options(ownerA, now));
-  await first.$executeRaw`UPDATE "FestivalSource" SET "leaseExpiresAt" = ${new Date(Date.now() + 200)} WHERE id = ${id}`;
+  await first.$executeRaw`UPDATE "FestivalSource" SET "leaseExpiresAt" = (${new Date(Date.now() + 200)}::timestamptz AT TIME ZONE 'UTC') WHERE id = ${id}`;
   const heartbeat = startSourceLeaseRenewal(first, { ...claim, owner: ownerA }, { intervalMs: 30, ttlMs: 30_000 });
   try {
     await new Promise((resolve) => setTimeout(resolve, 90));
