@@ -31,7 +31,10 @@ export async function POST(request: Request) {
   if (parsed.data.force) args.push("--force");
   try {
     try {
-      await execute(process.execPath, args, {
+      // The manual DB due pilot takes the same host lock before its health
+      // preflight and holds it through the fetch. This covers both the timer
+      // and the independently dispatched legacy HTTP workflow.
+      await execute("/usr/bin/flock", ["-n", "-F", "/opt/festival-radar/shared/ingestion/source-fetch.lock", process.execPath, ...args], {
         cwd: process.cwd(),
         env: { ...process.env, GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_SHA: process.env.DEPLOYED_COMMIT ?? "production" },
         timeout: 1_100_000,

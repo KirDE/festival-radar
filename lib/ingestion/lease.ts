@@ -2,7 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 type ClaimOptions = { owner: string; now: Date; limit: number; ttlMs: number };
 type LeaseIdentity = { id: string; owner: string; updatedAt: Date };
-type Completion = { id: string; owner: string; now: Date; updatedAt: Date; outcome: "success" | "fetch_error" | "parser_error" };
+type Completion = { id: string; owner: string; now: Date; updatedAt: Date; outcome: "success" | "fetch_error" | "parser_error" | "pre_attempt_error" | "post_attempt_error" };
 
 function validateOwner(owner: string) {
   // Per-run random UUID, never a stable hostname or user-supplied source value.
@@ -26,13 +26,15 @@ export async function claimDueSources(db: PrismaClient, { owner, now, limit, ttl
       WHERE enabled = true AND "configurationBackfilledAt" IS NOT NULL
         AND "festivalId" IS NOT NULL AND "editionId" IS NOT NULL
         AND "parserKey" IS NOT NULL AND "cadenceSeconds" > 0
-        AND ("nextRunAt" IS NULL OR "nextRunAt" <= ${now})
-        AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" <= ${now})
+        AND ("nextRunAt" IS NULL OR "nextRunAt" <= (${now}::timestamptz AT TIME ZONE 'UTC'))
+        AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" <= (${now}::timestamptz AT TIME ZONE 'UTC'))
       ORDER BY "nextRunAt" ASC NULLS FIRST, id ASC
       FOR UPDATE SKIP LOCKED LIMIT ${limit}
     )
     UPDATE "FestivalSource" AS source
-    SET "leaseOwner" = ${owner}, "leaseExpiresAt" = ${expires}, "updatedAt" = ${now}
+    SET "leaseOwner" = ${owner},
+        "leaseExpiresAt" = (${expires}::timestamptz AT TIME ZONE 'UTC'),
+        "updatedAt" = (${now}::timestamptz AT TIME ZONE 'UTC')
     FROM due WHERE source.id = due.id
     RETURNING source.id, source."updatedAt"
   `;
@@ -52,9 +54,12 @@ export async function renewSourceLease(db: PrismaClient, lease: LeaseIdentity, t
   if (!lease.id || !Number.isInteger(ttlMs) || ttlMs < 30_000 || ttlMs > 30 * 60_000) throw new Error("Invalid ingestion lease renewal");
   const rows = await db.$queryRaw<Array<{ id: string }>>`
     UPDATE "FestivalSource"
-    SET "leaseExpiresAt" = clock_timestamp() + (${ttlMs}::int * interval '1 millisecond')
+    SET "leaseExpiresAt" = (clock_timestamp() AT TIME ZONE 'UTC') + (${ttlMs}::int * interval '1 millisecond')
     WHERE id = ${lease.id} AND "leaseOwner" = ${lease.owner}
-      AND "updatedAt" = ${lease.updatedAt} AND "leaseExpiresAt" > clock_timestamp()
+      -- Prisma binds Date as timestamptz; updatedAt is timestamp without time zone.
+      -- Compare UTC wall time explicitly instead of using the session TimeZone.
+      AND "updatedAt" = (${lease.updatedAt}::timestamptz AT TIME ZONE 'UTC')
+      AND "leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
       AND enabled = true AND "configurationBackfilledAt" IS NOT NULL
       AND "festivalId" IS NOT NULL AND "editionId" IS NOT NULL
       AND "parserKey" IS NOT NULL AND "cadenceSeconds" > 0
@@ -99,22 +104,37 @@ export async function completeSourceLease(db: PrismaClient, { id, owner, now, up
   validateOwner(owner);
   validateNow(now);
   validateNow(updatedAt);
-  if (!id || !["success", "fetch_error", "parser_error"].includes(outcome)) throw new Error("Invalid ingestion completion");
+  if (!id || !["success", "fetch_error", "parser_error", "pre_attempt_error", "post_attempt_error"].includes(outcome)) throw new Error("Invalid ingestion completion");
   const success = outcome === "success";
   const rows = await db.$queryRaw<Array<{ id: string }>>`
     UPDATE "FestivalSource"
     SET "leaseOwner" = NULL, "leaseExpiresAt" = NULL,
-        "lastAttemptAt" = ${now},
-        "lastSuccessAt" = CASE WHEN ${success} THEN ${now} ELSE "lastSuccessAt" END,
+        "lastAttemptAt" = (${now}::timestamptz AT TIME ZONE 'UTC'),
+        "lastSuccessAt" = CASE WHEN ${success} THEN (${now}::timestamptz AT TIME ZONE 'UTC') ELSE "lastSuccessAt" END,
         "lastError" = CASE WHEN ${success} THEN NULL ELSE ${outcome} END,
         "consecutiveFailures" = CASE WHEN ${success} THEN 0 ELSE "consecutiveFailures" + 1 END,
         "nextRunAt" = CASE WHEN ${success}
-          THEN ${now} + make_interval(secs => "cadenceSeconds")
-          ELSE ${now} + make_interval(secs => LEAST(86400, 300 * power(2, LEAST("consecutiveFailures", 8)))::int)
+          THEN (${now}::timestamptz AT TIME ZONE 'UTC') + make_interval(secs => "cadenceSeconds")
+          ELSE (${now}::timestamptz AT TIME ZONE 'UTC') + make_interval(secs => LEAST(86400, 300 * power(2, LEAST("consecutiveFailures", 8)))::int)
         END,
-        "updatedAt" = ${now}
-    WHERE id = ${id} AND "leaseOwner" = ${owner} AND "leaseExpiresAt" > ${now}
-      AND enabled = true AND "configurationBackfilledAt" IS NOT NULL AND "updatedAt" = ${updatedAt}
+        "updatedAt" = (${now}::timestamptz AT TIME ZONE 'UTC')
+    WHERE id = ${id} AND "leaseOwner" = ${owner}
+      AND "leaseExpiresAt" > (${now}::timestamptz AT TIME ZONE 'UTC')
+      AND enabled = true AND "configurationBackfilledAt" IS NOT NULL
+      AND "updatedAt" = (${updatedAt}::timestamptz AT TIME ZONE 'UTC')
+    RETURNING id
+  `;
+  return rows.length === 1;
+}
+
+/** Cleanup after fenced completion fails: remove only this worker's lease.
+ * Never advance the schedule, overwrite an operator edit, or clear a reclaimed owner. */
+export async function releaseOwnedSourceLease(db: PrismaClient, lease: Pick<LeaseIdentity, "id" | "owner">): Promise<boolean> {
+  validateOwner(lease.owner);
+  if (!lease.id) throw new Error("Invalid ingestion lease release");
+  const rows = await db.$queryRaw<Array<{ id: string }>>`
+    UPDATE "FestivalSource" SET "leaseOwner" = NULL, "leaseExpiresAt" = NULL
+    WHERE id = ${lease.id} AND "leaseOwner" = ${lease.owner}
     RETURNING id
   `;
   return rows.length === 1;
