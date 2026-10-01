@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Root operator only. No sudoers grant or scheduled invocation is installed.
+[[ "$(id -u)" == 0 && $# == 2 ]] || { echo 'operator arguments rejected' >&2; exit 2; }
+commit="$1"
+mode="$2"
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo 'invalid commit' >&2; exit 2; }
+case "$mode" in health|ingest|drain) ;; *) echo 'invalid mode' >&2; exit 2 ;; esac
+root=/opt/festival-radar
+release="$root/releases/$commit"
+exec 9>/run/festival-radar-activation.lock
+flock -n 9 || { echo 'deployment or due operation busy' >&2; exit 5; }
+[[ "$(readlink -f "$root/current" 2>/dev/null || true)" == "$release" && -f "$release/DEPLOYED_COMMIT" && "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" ]] || { echo 'deployed commit mismatch' >&2; exit 4; }
+[[ -f /etc/systemd/system/festival-radar-db-due@.service ]] || { echo 'manual unit not installed' >&2; exit 4; }
+if ! systemctl start "festival-radar-db-due@$mode.service" >/dev/null 2>&1; then
+  echo 'DB due operation failed' >&2
+  exit 6
+fi
+echo 'DB due operation completed'

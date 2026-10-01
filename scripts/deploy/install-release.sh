@@ -93,6 +93,31 @@ ProtectSystem=strict
 TimeoutStartSec=120
 UNIT
 
+# Manual-only, root-triggered, fixed-mode DB due operation. No timer or enablement.
+cat > "/etc/systemd/system/$service-db-due@.service" <<UNIT
+[Unit]
+Description=Manual Festival Radar DB due operation %i
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=$release
+EnvironmentFile=$shared/production.env
+Environment=NODE_ENV=production
+ExecStart=$release/scripts/deploy/run-db-due-operation.sh %i $commit
+StandardOutput=journal
+StandardError=null
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$shared
+TimeoutStartSec=7500
+UNIT
+install -o root -g root -m 0755 "$release/scripts/deploy/start-db-due" /usr/local/libexec/festival-radar/start-db-due
+
 cat > "/etc/systemd/system/$service-collection@.service" <<UNIT
 [Unit]
 Description=Festival Radar production collection job %i
