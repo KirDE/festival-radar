@@ -19,6 +19,14 @@ test.before(async () => {
   await db.festival.deleteMany();
   await db.artist.deleteMany();
   await backfillCatalog(db, catalogSeed);
+  // Explicit legacy source fixtures: generic catalogue backfill no longer owns sources.
+  const festivals = await db.festival.findMany({ select: { slug: true, id: true } });
+  const ids = new Map(festivals.map((festival) => [festival.slug, festival.id]));
+  await db.festivalSource.createMany({ data: festivalSources.map((source) => ({
+    festivalSlug: source.festivalSlug, festivalId: ids.get(source.festivalSlug),
+    url: source.url, strategies: [...source.strategies], refreshPolicy: source.refreshPolicy,
+    enabled: source.enabled, editionYear: source.editionYear, manualReviewReason: source.manualReviewReason,
+  })) });
 });
 test.after(async () => {
   await db.festivalSource.deleteMany();

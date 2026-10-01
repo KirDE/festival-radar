@@ -3,6 +3,7 @@ import test from "node:test";
 import { PrismaClient } from "@prisma/client";
 import { backfillCatalog, verifyCatalogParity } from "../lib/catalog/backfill.ts";
 import { catalogSeed } from "../lib/catalog/seed.ts";
+import { festivalSources } from "../data/festival-sources.ts";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || !/(?:test|integration)/i.test(new URL(databaseUrl).pathname)) {
@@ -25,6 +26,31 @@ test("catalog backfill is complete and idempotent", async () => {
   assert.equal(first.ok, true, first.mismatches.join("\n"));
   const second = await backfillCatalog(db, catalogSeed);
   assert.deepEqual(second, first);
+});
+
+test("catalog backfill never inserts or overwrites database-owned source configuration", async () => {
+  assert.equal(await db.festivalSource.count(), 0);
+  const festival = catalogSeed.festivals[0];
+  const row = await db.festivalSource.create({ data: {
+    festivalSlug: festival.slug, festival: { connect: { slug: festival.slug } },
+    url: "https://db-only.example.test/operator", strategies: ["manual_review"],
+    refreshPolicy: "weekly", enabled: false, editionYear: 2027,
+  } });
+  const canonical = festivalSources[0];
+  const edited = await db.festivalSource.create({ data: {
+    festivalSlug: canonical.festivalSlug, festival: { connect: { slug: canonical.festivalSlug } },
+    url: canonical.url, strategies: ["manual_review"],
+    refreshPolicy: "weekly", enabled: false, editionYear: canonical.editionYear,
+  } });
+  const before = await db.festivalSource.findUniqueOrThrow({ where: { id: row.id } });
+  const editedBefore = await db.festivalSource.findUniqueOrThrow({ where: { id: edited.id } });
+  const result = await backfillCatalog(db, catalogSeed);
+  assert.equal(result.ok, true, result.mismatches.join("\n"));
+  assert.equal("sources" in result.expected, false);
+  assert.equal("sources" in result.actual, false);
+  assert.equal(await db.festivalSource.count(), 2);
+  assert.deepEqual(await db.festivalSource.findUniqueOrThrow({ where: { id: row.id } }), before);
+  assert.deepEqual(await db.festivalSource.findUniqueOrThrow({ where: { id: edited.id } }), editedBefore);
 });
 
 test("parity verification detects missing relational data", async () => {

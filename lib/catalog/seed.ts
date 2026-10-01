@@ -1,7 +1,6 @@
 import { artistProfiles } from "../../data/artists.ts";
 import type { ArtistProfile } from "../domain/artist.ts";
 import { festivalEditions } from "../../data/editions.ts";
-import { festivalSources } from "../../data/festival-sources.ts";
 import { artistSlug, festivals } from "../../data/festivals.ts";
 import playlistStatusJson from "../../data/playlist-status.json" with { type: "json" };
 
@@ -52,7 +51,6 @@ export const catalogSeed = {
   artists: [...everyArtistName]
     .map((name) => profileBySlug.get(artistSlug(name)) || emptyProfile(name))
     .sort((left, right) => left.slug.localeCompare(right.slug)),
-  sources: festivalSources,
   playlists: playlistStatus,
 } as const;
 
