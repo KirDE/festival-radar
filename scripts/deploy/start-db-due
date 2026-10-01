@@ -2,7 +2,7 @@
 set -euo pipefail
 # Supported operator trigger requires root; not a DB security boundary against
 # www-data, which already owns the release and application DB credentials.
-# No sudoers grant or scheduled invocation is installed.
+# Deploy-user access is only via activate-release COMMIT due-health.
 [[ "$(id -u)" == 0 && $# == 2 ]] || { echo 'operator arguments rejected' >&2; exit 2; }
 commit="$1"
 mode="$2"
@@ -14,8 +14,34 @@ exec 9>/run/festival-radar-activation.lock
 flock -n 9 || { echo 'deployment or due operation busy' >&2; exit 5; }
 [[ "$(readlink -f "$root/current" 2>/dev/null || true)" == "$release" && -f "$release/DEPLOYED_COMMIT" && "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" ]] || { echo 'deployed commit mismatch' >&2; exit 4; }
 [[ -f /etc/systemd/system/festival-radar-db-due@.service ]] || { echo 'manual unit not installed' >&2; exit 4; }
+audit_dir=/run/festival-radar-db-due
+if [[ ! -e "$audit_dir" && ! -L "$audit_dir" ]]; then
+  mkdir -m 0700 -- "$audit_dir" 2>/dev/null || { echo 'DB due audit unavailable' >&2; exit 6; }
+fi
+[[ -d "$audit_dir" && ! -L "$audit_dir" && "$(stat -c %u:%a -- "$audit_dir" 2>/dev/null)" == 0:700 ]] || { echo 'DB due audit unsafe' >&2; exit 6; }
+audit="$audit_dir/$mode.audit"
+temporary="$(mktemp "$audit_dir/.$mode.XXXXXXXX" 2>/dev/null)" || { echo 'DB due audit unavailable' >&2; exit 6; }
+trap 'rm -f -- "$temporary" "$audit"' EXIT
+[[ "$(stat -c %u:%a -- "$temporary" 2>/dev/null)" == 0:600 ]] || { echo 'DB due audit unsafe' >&2; exit 6; }
+mv -fT -- "$temporary" "$audit" 2>/dev/null || { echo 'DB due audit unavailable' >&2; exit 6; }
 if ! systemctl start "festival-radar-db-due@$mode.service" >/dev/null 2>&1; then
   echo 'DB due operation failed' >&2
   exit 6
+fi
+if [[ "$mode" == health ]]; then
+  [[ -f "$audit" && ! -L "$audit" && "$(stat -c %u:%a -- "$audit" 2>/dev/null)" == 0:600 ]] || { echo 'DB due health audit unsafe' >&2; exit 6; }
+  size="$(stat -c %s -- "$audit" 2>/dev/null)" || { echo 'DB due health audit unreadable' >&2; exit 6; }
+  [[ "$size" =~ ^[0-9]+$ ]] && (( size > 0 && size <= 512 )) || { echo 'DB due health audit size invalid' >&2; exit 6; }
+  # Never forward raw database, systemd, journal or malformed worker output.
+  if ! (tr -d '\000' < "$audit" | cmp -s -- "$audit" -) 2>/dev/null; then
+    echo 'DB due health audit binary' >&2; exit 6
+  fi
+  record="$(cat -- "$audit")" || { echo 'DB due health audit unreadable' >&2; exit 6; }
+  [[ "$(stat -c %s -- "$audit" 2>/dev/null)" == "$size" ]] || { echo 'DB due health audit changed' >&2; exit 6; }
+  number='(0|[1-9][0-9]{0,15})'
+  pattern='^\{"due":'"$number"',"queueLaggedOverHour":'"$number"',"active":'"$number"',"expired":'"$number"',"error":'"$number"',"outboxPending":'"$number"',"outboxLaggedOverHour":'"$number"',"unknownParserKeys":'"$number"'\}$'
+  [[ "$record" =~ $pattern ]] || { echo 'DB due health audit invalid' >&2; exit 6; }
+  printf 'DB_DUE_HEALTH %s\n' "$record"
+  exit 0
 fi
 echo 'DB due operation completed'
