@@ -11,7 +11,7 @@ import { notificationEventsForChanges } from "../lib/ingestion/notification-even
 import { db } from "../lib/db.ts";
 import { publishIngestionResult } from "../lib/catalog/publication.ts";
 import { readCatalog } from "../lib/catalog/repository.ts";
-import { claimDueSources, completeSourceLease } from "../lib/ingestion/lease.ts";
+import { claimDueSources, completeSourceLease, startSourceLeaseRenewal } from "../lib/ingestion/lease.ts";
 import { randomUUID } from "node:crypto";
 import { createIngestionRun, finishIngestionRun, ingestionQueries, persistAttempt } from "../lib/ingestion/repository.ts";
 import { applyPublication, historyRecord } from "../lib/ingestion/publication.ts";
@@ -53,6 +53,7 @@ if (publish && notificationDeliveryEnabled && (!notificationEndpoint || !process
 if (dbDue && maxFetchErrorsArg !== undefined && (!Number.isInteger(Number(maxFetchErrorsArg)) || Number(maxFetchErrorsArg) < 0)) throw new Error("Invalid maximum fetch error count");
 if (dbDue) await mkdir(outputDirectory, { recursive: true });
 let sourceLease = null;
+let leaseRenewal = null;
 let run = null;
 if (dbDue) {
   const owner = randomUUID();
@@ -64,6 +65,7 @@ if (dbDue) {
   }
   sourceLease = { ...claims[0], owner };
   try {
+    leaseRenewal = startSourceLeaseRenewal(db, sourceLease);
     // Resolve after claim to avoid parsing a stale pre-claim configuration.
     const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceLease.id } });
     if (row.updatedAt.getTime() !== sourceLease.updatedAt.getTime()) throw new Error("Claimed source was edited after claim");
@@ -71,6 +73,7 @@ if (dbDue) {
     if (selected.length !== 1) throw new Error("Claimed source is not configured");
     run = await createIngestionRun(db, { trigger: process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL", sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length });
   } catch (error) {
+    try { await leaseRenewal?.stop(); } catch { /* retain the original setup error */ }
     await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "parser_error" });
     throw error;
   }
@@ -113,6 +116,7 @@ for (const source of selected) {
     if (escalated) summary.escalatedFailures += 1;
     const lastExtraction = persistenceEnabled ? await ingestionQueries.lastSuccessfulExtraction(db, source.festivalSlug) : null;
     summary.results.push({ festivalSlug: source.festivalSlug, status: escalated ? "escalated_failure" : "fetch_error", extractionPath: source.strategies, manualReviewReason: source.manualReviewReason ?? null, evidenceFields: [], lastSuccessfulExtraction: lastExtraction?.observedAt.toISOString() ?? null, error: error instanceof Error ? error.message : String(error), attempts, consecutiveFailures });
+    if (sourceLease) await leaseRenewal.stop();
     if (sourceLease && !await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "fetch_error" })) throw new Error("Ingestion source lease is no longer active");
     continue;
   }
@@ -130,6 +134,7 @@ for (const source of selected) {
   let outcome = result.changes.length ? (result.reviewReasons.length ? "review_required" : "dry_run") : "unchanged";
   let catalogPublication = null;
   if (publish && result.publishable && !result.reviewReasons.length) {
+    leaseRenewal?.assertActive();
     catalogPublication = attempt
       ? await publishIngestionResult(db, { attemptId: attempt.id, result, sourceCommit: process.env.GITHUB_SHA || "local", ...(sourceLease ? { sourceLease } : {}) })
       : null;
@@ -147,6 +152,7 @@ for (const source of selected) {
       // Do not call external notification storage until a committed catalog
       // change is acknowledged; delivery failure must not schedule a retry.
       if (sourceLease) {
+        await leaseRenewal.stop();
         if (!await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "success" })) throw new Error("Ingestion source lease is no longer active");
         leaseCompleted = true;
       }
@@ -165,12 +171,14 @@ for (const source of selected) {
   const lastExtraction = persistenceEnabled ? await ingestionQueries.lastSuccessfulExtraction(db, source.festivalSlug) : null;
   summary.results.push({ festivalSlug: source.festivalSlug, status, outcome, catalogPublicationId: catalogPublication?.id ?? null, playlistRefreshRequested: catalogPublication?.playlistRefreshRequested ?? false, catalogFields: catalogPublication?.fields ?? [], extractionPath: source.strategies, manualReviewReason: source.manualReviewReason ?? null, evidenceFields: candidate.evidence.map(({ field }) => field), lastSuccessfulExtraction: lastExtraction?.observedAt.toISOString() ?? (candidate.evidence.length ? fetchedAt : null), changes: result.changes.length, reviewReasons: result.reviewReasons });
   if (sourceLease && !leaseCompleted) {
+    await leaseRenewal.stop();
     if (!await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "success" })) throw new Error("Ingestion source lease is no longer active");
     leaseCompleted = true;
   }
   } catch (error) {
     // Preserve a terminal run even if lease cleanup itself fails. A committed
     // publication must never be converted into a parser backoff retry.
+    try { await leaseRenewal?.stop(); } catch { /* preserve the original error; cleanup remains fenced */ }
     try {
       if (run && sourceLease) await db.ingestionRun.update({ where: { id: run.id }, data: { status: "FAILED", endedAt: new Date(), failed: 1 } });
     } finally {
