@@ -53,6 +53,7 @@ if (publish && notificationDeliveryEnabled && (!notificationEndpoint || !process
 if (dbDue && maxFetchErrorsArg !== undefined && (!Number.isInteger(Number(maxFetchErrorsArg)) || Number(maxFetchErrorsArg) < 0)) throw new Error("Invalid maximum fetch error count");
 if (dbDue) await mkdir(outputDirectory, { recursive: true });
 let sourceLease = null;
+let run = null;
 if (dbDue) {
   const owner = randomUUID();
   const claims = await claimDueSources(db, { owner, now: new Date(), limit: 1, ttlMs: 30 * 60_000 });
@@ -61,13 +62,14 @@ if (dbDue) {
     await db.$disconnect();
     process.exit(0);
   }
-  // Resolve after claim to avoid parsing a stale pre-claim configuration.
-  const row = await db.festivalSource.findUniqueOrThrow({ where: { id: claims[0].id } });
   sourceLease = { ...claims[0], owner };
   try {
+    // Resolve after claim to avoid parsing a stale pre-claim configuration.
+    const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceLease.id } });
     if (row.updatedAt.getTime() !== sourceLease.updatedAt.getTime()) throw new Error("Claimed source was edited after claim");
     selected = (await listConfiguredSources(db, row.festivalSlug)).filter((source) => source.id === row.id);
     if (selected.length !== 1) throw new Error("Claimed source is not configured");
+    run = await createIngestionRun(db, { trigger: process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL", sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length });
   } catch (error) {
     await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "parser_error" });
     throw error;
@@ -77,14 +79,16 @@ if (selected.length === 0) throw new Error(slugArg ? `Unknown or disabled festiv
 const maxFetchErrors = maxFetchErrorsArg === undefined ? Math.max(0, selected.length - 1) : Number(maxFetchErrorsArg);
 if (!Number.isInteger(maxFetchErrors) || maxFetchErrors < 0) throw new Error(`Invalid maximum fetch error count: ${maxFetchErrorsArg}`);
 
-await mkdir(outputDirectory, { recursive: true });
+if (!dbDue) await mkdir(outputDirectory, { recursive: true });
 const trigger = process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL";
-const run = persistenceEnabled ? await createIngestionRun(db, { trigger, sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length }) : null;
+if (!dbDue && persistenceEnabled) run = await createIngestionRun(db, { trigger, sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length });
 const summary = { schemaVersion: 1, ingestionRunId: run?.id ?? null, generatedAt: new Date().toISOString(), dryRun: !publish, totalSources: selected.length, attempted: 0, processed: 0, changed: 0, publishable: 0, published: 0, playlistRefreshRequested: 0, reviewRequired: 0, fetchErrors: 0, escalatedFailures: 0, notificationEvents: 0, maxFetchErrors, failureThreshold, status: "RUNNING", results: [] };
 let publicationStore = persistenceEnabled ? null : JSON.parse(await readFile(publicationsPath, "utf8"));
 const history = [];
 
 for (const source of selected) {
+  let leaseCompleted = false;
+  let publicationCommitted = false;
   try {
   summary.attempted += 1;
   const current = runtimeFestivals.find(({ slug }) => slug === source.festivalSlug);
@@ -136,9 +140,16 @@ for (const source of selected) {
       if (fileChanged) publicationStore = nextStore;
     }
     if (catalogPublication || (!persistenceEnabled && fileChanged)) {
+      publicationCommitted = Boolean(catalogPublication);
       summary.published += 1;
       if (catalogPublication?.playlistRefreshRequested) summary.playlistRefreshRequested += 1;
       outcome = "published";
+      // Do not call external notification storage until a committed catalog
+      // change is acknowledged; delivery failure must not schedule a retry.
+      if (sourceLease) {
+        if (!await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "success" })) throw new Error("Ingestion source lease is no longer active");
+        leaseCompleted = true;
+      }
       if (notificationDeliveryEnabled) {
         const events = notificationEventsForChanges(current, result.changes, fetchedAt);
         for (const event of events) {
@@ -153,20 +164,30 @@ for (const source of selected) {
   history.push(historyRecord(result, outcome));
   const lastExtraction = persistenceEnabled ? await ingestionQueries.lastSuccessfulExtraction(db, source.festivalSlug) : null;
   summary.results.push({ festivalSlug: source.festivalSlug, status, outcome, catalogPublicationId: catalogPublication?.id ?? null, playlistRefreshRequested: catalogPublication?.playlistRefreshRequested ?? false, catalogFields: catalogPublication?.fields ?? [], extractionPath: source.strategies, manualReviewReason: source.manualReviewReason ?? null, evidenceFields: candidate.evidence.map(({ field }) => field), lastSuccessfulExtraction: lastExtraction?.observedAt.toISOString() ?? (candidate.evidence.length ? fetchedAt : null), changes: result.changes.length, reviewReasons: result.reviewReasons });
-  if (sourceLease && !await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "success" })) throw new Error("Ingestion source lease is no longer active");
+  if (sourceLease && !leaseCompleted) {
+    if (!await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "success" })) throw new Error("Ingestion source lease is no longer active");
+    leaseCompleted = true;
+  }
   } catch (error) {
-    // Only the current owner may set a retry after parser/publication errors.
-    if (sourceLease) {
-      await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "parser_error" });
-      // An attempt may already be persisted or even published. The worker run
-      // itself must not remain RUNNING after a post-attempt exception.
-      await db.ingestionRun.update({ where: { id: run.id }, data: { status: "FAILED", endedAt: new Date(), failed: 1 } });
+    // Preserve a terminal run even if lease cleanup itself fails. A committed
+    // publication must never be converted into a parser backoff retry.
+    try {
+      if (run && sourceLease) await db.ingestionRun.update({ where: { id: run.id }, data: { status: "FAILED", endedAt: new Date(), failed: 1 } });
+    } finally {
+      if (sourceLease && !leaseCompleted) await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: publicationCommitted ? "success" : "parser_error" });
     }
     throw error;
   }
 }
 
-if (run) await finishIngestionRun(db, run.id);
+if (run) {
+  try {
+    await finishIngestionRun(db, run.id);
+  } catch (error) {
+    if (dbDue) await db.ingestionRun.update({ where: { id: run.id }, data: { status: "FAILED", endedAt: new Date(), failed: 1 } });
+    throw error;
+  }
+}
 summary.status = summary.fetchErrors === 0 ? "COMPLETED" : summary.fetchErrors <= maxFetchErrors && summary.escalatedFailures === 0 ? "PARTIAL" : "FAILED";
 if (publish && !persistenceEnabled) await writeFile(publicationsPath, `${JSON.stringify(publicationStore, null, 2)}\n`);
 if (!persistenceEnabled && history.length) await appendFile(historyPath, `${history.map((record) => JSON.stringify(record)).join("\n")}\n`);

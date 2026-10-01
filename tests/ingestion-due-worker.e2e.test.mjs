@@ -16,10 +16,10 @@ let dir;
 let runIds = [];
 const fixture = '<html><script type="application/ld+json">{"@type":"MusicEvent","startDate":"2027-07-07"}</script></html>';
 
-function run(extra = [], output = path.join(dir, "out-" + randomUUID())) {
+function run(extra = [], output = path.join(dir, "out-" + randomUUID()), envExtra = {}) {
   return spawnSync(process.execPath, ["scripts/ingest-festivals.mjs", "--db-due", "--publish", ...(extra.some((value) => value.startsWith("--fixture=")) ? [] : ["--fixture=" + path.join(dir, "fixture.html")]), "--output=" + output, ...extra], {
     encoding: "utf8",
-    env: { ...process.env, APP_URL: "", NOTIFICATION_EVENTS_URL: "", INTERNAL_API_SECRET: "", NOTIFICATION_DELIVERY_REQUIRED: "false" },
+    env: { ...process.env, APP_URL: "", NOTIFICATION_EVENTS_URL: "", INTERNAL_API_SECRET: "", NOTIFICATION_DELIVERY_REQUIRED: "false", ...envExtra },
   });
 }
 
@@ -109,4 +109,45 @@ test("due mode rejects ambiguous manual controls without claiming", async () => 
   assert.match(invalid.stderr, /--db-due requires database and --publish/);
   const after = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
   assert.deepEqual(after, before);
+});
+
+test("run creation failure releases claimed source without a RUNNING run", async () => {
+  const marker = "fail-" + randomUUID();
+  await db.festivalSource.update({ where: { id: sourceId }, data: { nextRunAt: new Date(Date.now() - 1000) } });
+  // Disposable PostgreSQL: force INSERT failure only for this test invocation.
+  await db.$executeRawUnsafe("CREATE FUNCTION due_worker_reject_run() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.\"sourceCommit\" = '" + marker + "' THEN RAISE EXCEPTION 'test run insert failure'; END IF; RETURN NEW; END $$");
+  await db.$executeRawUnsafe('CREATE TRIGGER due_worker_reject_run BEFORE INSERT ON "IngestionRun" FOR EACH ROW EXECUTE FUNCTION due_worker_reject_run()');
+  try {
+    const failed = run([], undefined, { GITHUB_SHA: marker });
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /test run insert failure/);
+    const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+    assert.equal(source.leaseOwner, null);
+    assert.equal(source.lastError, "parser_error");
+    assert.equal(await db.ingestionRun.count({ where: { sourceCommit: marker } }), 0);
+  } finally {
+    await db.$executeRawUnsafe('DROP TRIGGER due_worker_reject_run ON "IngestionRun"');
+    await db.$executeRawUnsafe('DROP FUNCTION due_worker_reject_run()');
+  }
+});
+
+test("failed notification cannot retry committed publication", async () => {
+  await db.festivalSource.update({ where: { id: sourceId }, data: {
+    nextRunAt: new Date(Date.now() - 1000), strategies: ["json_ld_event"], parserKey: "json_ld_event",
+  } });
+  const failed = run([], undefined, {
+    NOTIFICATION_EVENTS_URL: "http://127.0.0.1:1/events", INTERNAL_API_SECRET: "disposable-test-secret",
+  });
+  assert.notEqual(failed.status, 0);
+  assert.match(failed.stderr, /fetch failed|Notification event persistence failed/);
+  const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+  assert.equal(source.leaseOwner, null);
+  assert.equal(source.lastError, null);
+  assert.equal(source.consecutiveFailures, 0);
+  assert.ok(source.nextRunAt > new Date());
+  const latest = await db.ingestionRun.findFirstOrThrow({ where: { attempts: { some: { festivalSlug: slug } } }, orderBy: { startedAt: "desc" } });
+  assert.equal(latest.status, "FAILED");
+  assert.ok(latest.endedAt);
+  assert.equal(await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } }), 1);
+  assert.deepEqual(JSON.parse(run().stdout), { status: "NO_DUE_SOURCES", attempted: 0 });
 });
