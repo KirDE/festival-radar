@@ -181,7 +181,7 @@ async function createPublication(db: Database, input: {
   return { ...publication, playlistRefreshRequested: lineupChanged };
 }
 
-export async function publishIngestionResult(client: PrismaClient, input: { attemptId: string; result: IngestionResult; sourceCommit: string; sourceLease?: { id: string; owner: string } }) {
+export async function publishIngestionResult(client: PrismaClient, input: { attemptId: string; result: IngestionResult; sourceCommit: string; sourceLease?: { id: string; owner: string; updatedAt: Date } }) {
   if (!input.result.publishable || input.result.reviewReasons.length || input.result.changes.some(({ reviewRequired }) => reviewRequired)) throw new Error(`Refusing ambiguous ingestion publication for ${input.result.festivalSlug}`);
   return client.$transaction(async (db) => {
     if (input.sourceLease) {
@@ -191,6 +191,8 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
         SELECT id FROM "FestivalSource"
         WHERE id = ${input.sourceLease.id} AND "festivalSlug" = ${input.result.festivalSlug}
           AND url = ${input.result.sourceUrl} AND "leaseOwner" = ${input.sourceLease.owner}
+          AND enabled = true AND "configurationBackfilledAt" IS NOT NULL
+          AND "updatedAt" = ${input.sourceLease.updatedAt}
           AND "leaseExpiresAt" > clock_timestamp()
         FOR UPDATE
       `;
