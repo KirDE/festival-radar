@@ -7,7 +7,7 @@ import {
   TicketStatus,
   type PrismaClient,
 } from "@prisma/client";
-import type { PublishedNotificationEvent } from "../ingestion/notification-events.ts";
+import { uniqueNotificationEvents, type PublishedNotificationEvent } from "../ingestion/notification-events.ts";
 import type { IngestionResult } from "../ingestion/types.ts";
 
 type Database = PrismaClient | Prisma.TransactionClient;
@@ -224,7 +224,7 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
     // The due-worker event batch is committed atomically with the catalogue.
     if (publication && input.notificationEvents?.length) {
       if (input.notificationEvents.some((event) => event.festivalId !== input.result.festivalSlug + ":" + applied.edition.year)) throw new Error("Notification edition mismatch");
-      await db.ingestionNotificationOutbox.createMany({ data: input.notificationEvents.map((event) => ({
+      await db.ingestionNotificationOutbox.createMany({ data: uniqueNotificationEvents(input.notificationEvents).map((event) => ({
         publicationId: publication.id, dedupeKey: event.dedupeKey, event: json(event),
       })) });
     }

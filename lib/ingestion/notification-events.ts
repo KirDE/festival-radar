@@ -47,3 +47,11 @@ export function notificationEventsForChanges(festival: Festival, changes: Festiv
     }];
   });
 }
+
+// Match sequential recordChange upserts: the first event for a key wins,
+// including its original payload, while later same-key changes add no event.
+export function uniqueNotificationEvents(events: PublishedNotificationEvent[]): PublishedNotificationEvent[] {
+  const firstByKey = new Map<string, PublishedNotificationEvent>();
+  for (const event of events) if (!firstByKey.has(event.dedupeKey)) firstByKey.set(event.dedupeKey, event);
+  return [...firstByKey.values()];
+}

@@ -33,8 +33,10 @@ The `--db-due --publish` ingestion path stages each supported notification event
 `IngestionNotificationOutbox` in the **same database transaction** as its catalog
 publication. It does not POST to `/api/notifications/events/`; manual ingestion
 continues to use that endpoint unchanged. The dedupe key and event snapshot are
-persisted at publication time, so a worker crash or unavailable API after the
-catalog commit cannot erase the notification effect or trigger re-publication.
+persisted at publication time. If multiple changes in one publication share a
+dedupe key, the first change wins, as with sequential endpoint upserts. A worker
+crash or unavailable API after the catalog commit cannot erase the notification
+effect or trigger re-publication.
 
 After deploying the migration, an operator may explicitly run
 `npm run notifications:drain-db-due` with `DATABASE_URL` set. The separate

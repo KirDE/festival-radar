@@ -7,7 +7,7 @@ import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 import { fetchSource } from "../lib/ingestion/fetch.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
 import { dueFestivalSources } from "../lib/ingestion/schedule.ts";
-import { notificationEventsForChanges } from "../lib/ingestion/notification-events.ts";
+import { notificationEventsForChanges, uniqueNotificationEvents } from "../lib/ingestion/notification-events.ts";
 import { db } from "../lib/db.ts";
 import { publishIngestionResult } from "../lib/catalog/publication.ts";
 import { readCatalog } from "../lib/catalog/repository.ts";
@@ -135,8 +135,9 @@ for (const source of selected) {
   let catalogPublication = null;
   if (publish && result.publishable && !result.reviewReasons.length) {
     leaseRenewal?.assertActive();
+    const stagedNotificationEvents = sourceLease ? notificationEventsForChanges(current, result.changes, fetchedAt) : undefined;
     catalogPublication = attempt
-      ? await publishIngestionResult(db, { attemptId: attempt.id, result, sourceCommit: process.env.GITHUB_SHA || "local", ...(sourceLease ? { sourceLease, notificationEvents: notificationEventsForChanges(current, result.changes, fetchedAt) } : {}) })
+      ? await publishIngestionResult(db, { attemptId: attempt.id, result, sourceCommit: process.env.GITHUB_SHA || "local", ...(sourceLease ? { sourceLease, notificationEvents: stagedNotificationEvents } : {}) })
       : null;
     let fileChanged = false;
     if (!persistenceEnabled) {
@@ -146,7 +147,7 @@ for (const source of selected) {
     }
     if (catalogPublication || (!persistenceEnabled && fileChanged)) {
       publicationCommitted = Boolean(catalogPublication);
-      if (dbDue) summary.notificationEvents += notificationEventsForChanges(current, result.changes, fetchedAt).length;
+      if (dbDue) summary.notificationEvents += uniqueNotificationEvents(stagedNotificationEvents).length;
       summary.published += 1;
       if (catalogPublication?.playlistRefreshRequested) summary.playlistRefreshRequested += 1;
       outcome = "published";
