@@ -4,6 +4,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { claimDueSources } from "../lib/ingestion/lease.ts";
+import { drainIngestionNotificationOutbox } from "../lib/ingestion/notification-outbox.ts";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -134,27 +135,58 @@ test("run creation failure releases claimed source without a RUNNING run", async
   }
 });
 
-test("failed notification cannot retry committed publication", async () => {
-  await db.festivalSource.update({ where: { id: sourceId }, data: {
-    nextRunAt: new Date(Date.now() - 1000), strategies: ["json_ld_event"], parserKey: "json_ld_event",
+test("publication survives notification failure and independent drain recovers once", async () => {
+  const user = await db.user.create({ data: { email: slug + "@example.test", passwordHash: "unused", emailVerifiedAt: new Date() } });
+  await db.notificationPreference.create({ data: {
+    userId: user.id, festivalId: slug + ":2027", eventType: "FESTIVAL_DATE_MOVED",
+    channel: "EMAIL", frequency: "IMMEDIATE",
   } });
-  const failed = run([], undefined, {
-    NOTIFICATION_EVENTS_URL: "http://127.0.0.1:1/events", INTERNAL_API_SECRET: "disposable-test-secret",
-  });
-  assert.notEqual(failed.status, 0);
-  assert.match(failed.stderr, /fetch failed|Notification event persistence failed/);
-  const source = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
-  assert.equal(source.leaseOwner, null);
-  assert.equal(source.lastError, null);
-  assert.equal(source.consecutiveFailures, 0);
-  assert.ok(source.nextRunAt > new Date());
-  const latest = await db.ingestionRun.findFirstOrThrow({ where: { attempts: { some: { festivalSlug: slug } } }, orderBy: { startedAt: "desc" } });
-  assert.equal(latest.status, "FAILED");
-  assert.ok(latest.endedAt);
-  assert.equal(await db.catalogPublication.count({ where: { festivalSlug: slug, source: "INGESTION" } }), 1);
-  assert.deepEqual(JSON.parse(run().stdout), { status: "NO_DUE_SOURCES", attempted: 0 });
+  try {
+    await db.festivalSource.update({ where: { id: sourceId }, data: {
+      nextRunAt: new Date(Date.now() - 1000), strategies: ["json_ld_event"], parserKey: "json_ld_event",
+    } });
+    // The start and end dates change to the same value: two changes, one
+    // notification dedupe key. Legacy sequential upsert keeps the first.
+    const duplicateFixture = path.join(dir, "duplicate-event-key.html");
+    await writeFile(duplicateFixture, fixture.replace('"startDate":"2027-07-07"', '"startDate":"2027-07-07","endDate":"2027-07-07"'));
+    const published = run(["--fixture=" + duplicateFixture], undefined, {
+      NOTIFICATION_EVENTS_URL: "http://127.0.0.1:1/events", INTERNAL_API_SECRET: "disposable-test-secret",
+    });
+    assert.equal(published.status, 0, published.stderr);
+    const summary = JSON.parse(published.stdout);
+    assert.equal(summary.published, 1);
+    assert.equal(summary.results[0].changes, 2, "fixture must produce two date changes");
+    assert.equal(summary.notificationEvents, 1, "stage only one event for duplicate key");
+    const publication = await db.catalogPublication.findFirstOrThrow({ where: { festivalSlug: slug, source: "INGESTION" } });
+    const outbox = await db.ingestionNotificationOutbox.findMany({ where: { publicationId: publication.id } });
+    assert.equal(outbox.length, 1);
+    assert.equal(outbox[0].event.payload.change.field, "startDate", "first change payload wins");
+    assert.equal(outbox[0].deliveredAt, null);
+    assert.equal(await db.notificationEvent.count({ where: { dedupeKey: outbox[0].dedupeKey } }), 0);
+    await assert.rejects(drainIngestionNotificationOutbox(db, {
+      afterRecord: async () => { throw new Error("simulated post-record crash"); },
+    }), /simulated post-record crash/);
+    assert.equal(await db.notificationEvent.count({ where: { dedupeKey: outbox[0].dedupeKey } }), 0);
+    assert.equal(await db.notificationDelivery.count({ where: { userId: user.id } }), 0);
+    assert.equal((await db.ingestionNotificationOutbox.findUniqueOrThrow({ where: { id: outbox[0].id } })).deliveredAt, null);
+    const recovered = spawnSync(process.execPath, ["scripts/drain-ingestion-notifications.mjs", "--db-due"], {
+      encoding: "utf8", env: process.env,
+    });
+    assert.equal(recovered.status, 0, recovered.stderr);
+    assert.deepEqual(JSON.parse(recovered.stdout), { delivered: 1 });
+    assert.equal(await drainIngestionNotificationOutbox(db), 0);
+    const recorded = await db.notificationEvent.findMany({ where: { dedupeKey: outbox[0].dedupeKey } });
+    assert.equal(recorded.length, 1);
+    assert.equal(recorded[0].payload.change.field, "startDate");
+    assert.equal(await db.notificationDelivery.count({ where: { userId: user.id } }), 1);
+    assert.ok((await db.ingestionNotificationOutbox.findUniqueOrThrow({ where: { id: outbox[0].id } })).deliveredAt);
+    assert.deepEqual(JSON.parse(run().stdout), { status: "NO_DUE_SOURCES", attempted: 0 });
+  } finally {
+    await db.notificationDelivery.deleteMany({ where: { userId: user.id } });
+    await db.notificationPreference.deleteMany({ where: { userId: user.id } });
+    await db.user.delete({ where: { id: user.id } });
+  }
 });
-
 
 async function within(promise, ms, message) {
   let timer;

@@ -7,7 +7,7 @@ import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 import { fetchSource } from "../lib/ingestion/fetch.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
 import { dueFestivalSources } from "../lib/ingestion/schedule.ts";
-import { notificationEventsForChanges } from "../lib/ingestion/notification-events.ts";
+import { notificationEventsForChanges, uniqueNotificationEvents } from "../lib/ingestion/notification-events.ts";
 import { db } from "../lib/db.ts";
 import { publishIngestionResult } from "../lib/catalog/publication.ts";
 import { readCatalog } from "../lib/catalog/repository.ts";
@@ -45,9 +45,9 @@ const lastSuccessfulChecks = new Map(persistedStates.map((state) => [state.festi
 const hydratedSources = configuredSources.map((source) => ({ ...source, lastSuccessfulCheck: lastSuccessfulChecks.get(source.festivalSlug) ?? source.lastSuccessfulCheck }));
 const eligible = dueOnly ? dueFestivalSources(hydratedSources) : hydratedSources.filter((source) => source.enabled);
 let selected = eligible.filter((source) => !slugArg || source.festivalSlug === slugArg);
-const notificationEndpoint = process.env.NOTIFICATION_EVENTS_URL || (process.env.APP_URL ? new URL("/api/notifications/events/", process.env.APP_URL).toString() : undefined);
+const notificationEndpoint = !dbDue && (process.env.NOTIFICATION_EVENTS_URL || (process.env.APP_URL ? new URL("/api/notifications/events/", process.env.APP_URL).toString() : undefined));
 const notificationDeliveryEnabled = Boolean(notificationEndpoint || process.env.INTERNAL_API_SECRET || process.env.NOTIFICATION_DELIVERY_REQUIRED === "true");
-if (publish && notificationDeliveryEnabled && (!notificationEndpoint || !process.env.INTERNAL_API_SECRET)) throw new Error("Published ingestion requires APP_URL (or NOTIFICATION_EVENTS_URL) and INTERNAL_API_SECRET");
+if (publish && !dbDue && notificationDeliveryEnabled && (!notificationEndpoint || !process.env.INTERNAL_API_SECRET)) throw new Error("Published ingestion requires APP_URL (or NOTIFICATION_EVENTS_URL) and INTERNAL_API_SECRET");
 // Reject malformed controls before acquiring a lease; no invalid invocation
 // should strand a claimed source until its TTL expires.
 if (dbDue && maxFetchErrorsArg !== undefined && (!Number.isInteger(Number(maxFetchErrorsArg)) || Number(maxFetchErrorsArg) < 0)) throw new Error("Invalid maximum fetch error count");
@@ -135,8 +135,9 @@ for (const source of selected) {
   let catalogPublication = null;
   if (publish && result.publishable && !result.reviewReasons.length) {
     leaseRenewal?.assertActive();
+    const stagedNotificationEvents = sourceLease ? notificationEventsForChanges(current, result.changes, fetchedAt) : undefined;
     catalogPublication = attempt
-      ? await publishIngestionResult(db, { attemptId: attempt.id, result, sourceCommit: process.env.GITHUB_SHA || "local", ...(sourceLease ? { sourceLease } : {}) })
+      ? await publishIngestionResult(db, { attemptId: attempt.id, result, sourceCommit: process.env.GITHUB_SHA || "local", ...(sourceLease ? { sourceLease, notificationEvents: stagedNotificationEvents } : {}) })
       : null;
     let fileChanged = false;
     if (!persistenceEnabled) {
@@ -146,6 +147,7 @@ for (const source of selected) {
     }
     if (catalogPublication || (!persistenceEnabled && fileChanged)) {
       publicationCommitted = Boolean(catalogPublication);
+      if (dbDue) summary.notificationEvents += uniqueNotificationEvents(stagedNotificationEvents).length;
       summary.published += 1;
       if (catalogPublication?.playlistRefreshRequested) summary.playlistRefreshRequested += 1;
       outcome = "published";
@@ -156,7 +158,7 @@ for (const source of selected) {
         if (!await completeSourceLease(db, { ...sourceLease, now: new Date(), outcome: "success" })) throw new Error("Ingestion source lease is no longer active");
         leaseCompleted = true;
       }
-      if (notificationDeliveryEnabled) {
+      if (!dbDue && notificationDeliveryEnabled) {
         const events = notificationEventsForChanges(current, result.changes, fetchedAt);
         for (const event of events) {
           const notificationResponse = await fetch(notificationEndpoint, { method: "POST", headers: { authorization: `Bearer ${process.env.INTERNAL_API_SECRET}`, "content-type": "application/json" }, body: JSON.stringify(event), signal: AbortSignal.timeout(20_000) });

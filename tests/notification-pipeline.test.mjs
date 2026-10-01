@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { notificationEventsForChanges } from "../lib/ingestion/notification-events.ts";
+import { notificationEventsForChanges, uniqueNotificationEvents } from "../lib/ingestion/notification-events.ts";
 import { nextDigest } from "../lib/notification-schedule.ts";
 
 const festival = { slug: "test-fest", name: "Test Fest", country: "Germany", countryCode: "DE", officialUrl: "https://example.test", headliners: [], lineup: [], status: "confirmed", editionYear: 2027 };
@@ -20,6 +20,19 @@ test("publication maps every supported event type to stable edition-aware keys",
   assert.deepEqual(new Set(first.map(({ type }) => type)), new Set(["ARTIST_ADDED", "ARTIST_CANCELLED", "FESTIVAL_DATE_MOVED", "TICKETS_ON_SALE", "TICKETS_LOW", "TICKETS_SOLD_OUT", "TIMETABLE_PUBLISHED"]));
   assert.deepEqual(first.map(({ dedupeKey }) => dedupeKey), second.map(({ dedupeKey }) => dedupeKey));
   assert.ok(first.every(({ dedupeKey, festivalId }) => dedupeKey.includes(":2027:") && festivalId === "test-fest:2027"));
+});
+
+test("duplicate keys keep first event and original order", () => {
+  const changes = [
+    { kind: "date_changed", field: "startDate", after: "2027-07-07", reviewRequired: false },
+    { kind: "date_changed", field: "endDate", after: "2027-07-07", reviewRequired: false },
+    { kind: "tickets_changed", field: "ticketsUrl", after: "https://example.test/tickets", reviewRequired: false },
+  ];
+  const events = notificationEventsForChanges(festival, changes, "2026-08-29T19:15:00.000Z");
+  assert.equal(events[0].dedupeKey, events[1].dedupeKey);
+  const unique = uniqueNotificationEvents(events);
+  assert.deepEqual(unique, [events[0], events[2]]);
+  assert.equal(unique[0].payload.change.field, "startDate");
 });
 
 test("digest schedule is daily 08:00 UTC and weekly Monday 08:00 UTC", () => {

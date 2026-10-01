@@ -7,6 +7,7 @@ import {
   TicketStatus,
   type PrismaClient,
 } from "@prisma/client";
+import { uniqueNotificationEvents, type PublishedNotificationEvent } from "../ingestion/notification-events.ts";
 import type { IngestionResult } from "../ingestion/types.ts";
 
 type Database = PrismaClient | Prisma.TransactionClient;
@@ -181,8 +182,10 @@ async function createPublication(db: Database, input: {
   return { ...publication, playlistRefreshRequested: lineupChanged };
 }
 
-export async function publishIngestionResult(client: PrismaClient, input: { attemptId: string; result: IngestionResult; sourceCommit: string; sourceLease?: { id: string; owner: string; updatedAt: Date } }) {
+export async function publishIngestionResult(client: PrismaClient, input: { attemptId: string; result: IngestionResult; sourceCommit: string; sourceLease?: { id: string; owner: string; updatedAt: Date }; notificationEvents?: PublishedNotificationEvent[] }) {
   if (!input.result.publishable || input.result.reviewReasons.length || input.result.changes.some(({ reviewRequired }) => reviewRequired)) throw new Error(`Refusing ambiguous ingestion publication for ${input.result.festivalSlug}`);
+  if (input.sourceLease && !input.notificationEvents) throw new Error("Leased publication requires staged notification events");
+  if (!input.sourceLease && input.notificationEvents) throw new Error("Only leased due publications can stage notification events");
   return client.$transaction(async (db) => {
     if (input.sourceLease) {
       // Hold the same source row lock that a reclaiming worker needs. A stale
@@ -218,6 +221,13 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
       editionYear: applied.edition.year, actorLabel: "automatic-ingestion", fields: applied.changedFields,
       evidence: { candidateId: candidate.id, sourceCommit: input.sourceCommit, sourceUrl: input.result.sourceUrl, evidenceIds: candidate.evidence.map(({ id }) => id) },
     });
+    // The due-worker event batch is committed atomically with the catalogue.
+    if (publication && input.notificationEvents?.length) {
+      if (input.notificationEvents.some((event) => event.festivalId !== input.result.festivalSlug + ":" + applied.edition.year)) throw new Error("Notification edition mismatch");
+      await db.ingestionNotificationOutbox.createMany({ data: uniqueNotificationEvents(input.notificationEvents).map((event) => ({
+        publicationId: publication.id, dedupeKey: event.dedupeKey, event: json(event),
+      })) });
+    }
     await db.ingestionCandidate.update({ where: { id: candidate.id }, data: {
       reviewState: publication ? "PUBLISHED" : "SUPERSEDED", reviewActor: "automatic-ingestion",
       reviewedAt: new Date(), publishedAt: publication ? new Date() : null, catalogueVersion: publication?.id ?? null,

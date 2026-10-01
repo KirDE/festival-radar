@@ -793,6 +793,19 @@ model IngestionDiff {
   @@index([candidateId, createdAt])
 }
 
+model IngestionNotificationOutbox {
+  id            String             @id @default(cuid())
+  publicationId String
+  dedupeKey     String
+  event         Json
+  createdAt     DateTime           @default(now())
+  deliveredAt   DateTime?
+  publication   CatalogPublication @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+
+  @@unique([publicationId, dedupeKey])
+  @@index([deliveredAt, createdAt])
+}
+
 model CatalogPublication {
   id              String                   @id @default(cuid())
   source          CatalogPublicationSource
@@ -805,6 +818,7 @@ model CatalogPublication {
   evidence        Json?
   createdAt       DateTime                 @default(now())
   playlistRefresh CatalogPlaylistRefresh?
+  notificationOutbox IngestionNotificationOutbox[]
 
   @@index([festivalSlug, createdAt])
   @@index([source, createdAt])

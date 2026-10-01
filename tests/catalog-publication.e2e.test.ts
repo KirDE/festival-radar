@@ -158,20 +158,20 @@ test("leased publication rejects an expired or reclaimed worker before catalog w
   createdArtists.push(slug);
   try {
     await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix,
-      sourceLease: { id: source.id, owner: ownerA, updatedAt: source.updatedAt } }), /lease is no longer active/);
+      notificationEvents: [], sourceLease: { id: source.id, owner: ownerA, updatedAt: source.updatedAt } }), /lease is no longer active/);
     assert.equal(await db.catalogPublication.count({ where: { sourceId: "ingestion:" + candidate.id } }), 0);
     assert.equal(await db.artist.count({ where: { slug } }), 0);
     const reassigned = await db.festivalSource.update({ where: { id: source.id }, data: { leaseOwner: ownerB, leaseExpiresAt: new Date(Date.now() + 300_000), updatedAt: new Date("2030-01-01T00:00:00.000Z") } });
     await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix,
-      sourceLease: { id: source.id, owner: ownerA, updatedAt: source.updatedAt } }), /lease is no longer active/);
+      notificationEvents: [], sourceLease: { id: source.id, owner: ownerA, updatedAt: source.updatedAt } }), /lease is no longer active/);
     await db.festivalSource.update({ where: { id: source.id }, data: { enabled: false, updatedAt: new Date("2031-01-01T00:00:00.000Z") } });
     await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix,
-      sourceLease: { id: source.id, owner: ownerB, updatedAt: reassigned.updatedAt } }), /lease is no longer active/);
+      notificationEvents: [], sourceLease: { id: source.id, owner: ownerB, updatedAt: reassigned.updatedAt } }), /lease is no longer active/);
     const restored = await db.festivalSource.update({ where: { id: source.id }, data: { enabled: true, updatedAt: new Date("2032-01-01T00:00:00.000Z") } });
     await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix,
-      sourceLease: { id: source.id, owner: ownerB, updatedAt: reassigned.updatedAt } }), /lease is no longer active/);
+      notificationEvents: [], sourceLease: { id: source.id, owner: ownerB, updatedAt: reassigned.updatedAt } }), /lease is no longer active/);
     const published = await publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix,
-      sourceLease: { id: source.id, owner: ownerB, updatedAt: restored.updatedAt } });
+      notificationEvents: [], sourceLease: { id: source.id, owner: ownerB, updatedAt: restored.updatedAt } });
     assert.ok(published);
     assert.equal(await db.catalogPublication.count({ where: { sourceId: "ingestion:" + candidate.id } }), 1);
   } finally {
