@@ -181,11 +181,26 @@ async function createPublication(db: Database, input: {
   return { ...publication, playlistRefreshRequested: lineupChanged };
 }
 
-export async function publishIngestionResult(client: PrismaClient, input: { attemptId: string; result: IngestionResult; sourceCommit: string }) {
+export async function publishIngestionResult(client: PrismaClient, input: { attemptId: string; result: IngestionResult; sourceCommit: string; sourceLease?: { id: string; owner: string; updatedAt: Date } }) {
   if (!input.result.publishable || input.result.reviewReasons.length || input.result.changes.some(({ reviewRequired }) => reviewRequired)) throw new Error(`Refusing ambiguous ingestion publication for ${input.result.festivalSlug}`);
   return client.$transaction(async (db) => {
-    const candidate = await db.ingestionCandidate.findUnique({ where: { attemptId: input.attemptId }, include: { diffs: true, evidence: true } });
+    if (input.sourceLease) {
+      // Hold the same source row lock that a reclaiming worker needs. A stale
+      // worker cannot publish even if its candidate was persisted earlier.
+      const held = await db.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM "FestivalSource"
+        WHERE id = ${input.sourceLease.id} AND "festivalSlug" = ${input.result.festivalSlug}
+          AND url = ${input.result.sourceUrl} AND "leaseOwner" = ${input.sourceLease.owner}
+          AND enabled = true AND "configurationBackfilledAt" IS NOT NULL
+          AND "updatedAt" = ${input.sourceLease.updatedAt}
+          AND "leaseExpiresAt" > clock_timestamp()
+        FOR UPDATE
+      `;
+      if (held.length !== 1) throw new Error("Ingestion source lease is no longer active");
+    }
+    const candidate = await db.ingestionCandidate.findUnique({ where: { attemptId: input.attemptId }, include: { diffs: true, evidence: true, attempt: { select: { requestedUrl: true } } } });
     if (!candidate || !candidate.publishable) throw new Error("Publishable ingestion candidate was not persisted");
+    if (input.sourceLease && (candidate.festivalSlug !== input.result.festivalSlug || candidate.attempt.requestedUrl !== input.result.sourceUrl)) throw new Error("Leased candidate source does not match persisted attempt");
     const sourceId = `ingestion:${candidate.id}`;
     const existing = await db.catalogPublication.findUnique({ where: { sourceId } });
     if (existing) return { ...existing, playlistRefreshRequested: existing.lineupChanged };
