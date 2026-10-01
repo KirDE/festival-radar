@@ -26,6 +26,7 @@ test.before(async () => {
   jobId = job.id;
   await first.catalogPlaylistRefresh.update({ where: { id: jobId }, data: { requestedAt: base } });
 });
+// Publications are append-only; this suite runs only against a disposable database.
 test.after(async () => { await Promise.all([first.$disconnect(), second.$disconnect()]); });
 
 test("publication enqueue dedupes across clients and rejects non-lineup publications", async () => {
@@ -38,6 +39,22 @@ test("publication enqueue dedupes across clients and rejects non-lineup publicat
     editionYear: 2027, actorLabel: "test", fields: ["dates"], lineupChanged: false,
   } });
   await assert.rejects(enqueuePlaylistRefresh(first, noLineup.id), /lineup publication/);
+  const racePublication = await first.catalogPublication.create({ data: {
+    source: "INGESTION", sourceId: `playlist-race:${randomUUID()}`, festivalSlug: "queue-race",
+    editionYear: 2027, actorLabel: "test", fields: ["lineup"], lineupChanged: true,
+  } });
+  try {
+    const [one, two] = await Promise.all([
+      enqueuePlaylistRefresh(first, racePublication.id), enqueuePlaylistRefresh(second, racePublication.id),
+    ]);
+    assert.equal(one.id, two.id);
+    assert.equal(await first.catalogPlaylistRefresh.count({ where: { publicationId: racePublication.id } }), 1);
+  } finally {
+    // Leave no claimable work for the next test; publications remain append-only.
+    await first.catalogPlaylistRefresh.updateMany({
+      where: { publicationId: racePublication.id }, data: { status: "SUCCEEDED" },
+    });
+  }
 });
 
 test("atomic claim, expiry reclaim and attempt-fenced completion", async () => {
@@ -52,11 +69,14 @@ test("atomic claim, expiry reclaim and attempt-fenced completion", async () => {
   assert.equal(await finishPlaylistRefresh(first, claim, new Date(base.getTime() + 60_002), "FAILED"), false);
   assert.equal(await finishPlaylistRefresh(second, reclaimed, new Date(base.getTime() + 60_002), "FAILED"), true);
   assert.equal(await finishPlaylistRefresh(second, reclaimed, new Date(base.getTime() + 60_003), "SUCCEEDED"), false);
-  const retried = await claimPlaylistRefresh(first, input(ownerA, new Date(base.getTime() + 60_003)));
+  const failedRow = await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: jobId } });
+  assert.equal(failedRow.retryAt?.getTime(), base.getTime() + 180_002);
+  assert.equal(await claimPlaylistRefresh(first, input(ownerA, new Date(base.getTime() + 180_001))), null);
+  const retried = await claimPlaylistRefresh(first, input(ownerA, new Date(base.getTime() + 180_002)));
   assert.equal(retried?.id, jobId);
-  assert.equal(await finishPlaylistRefresh(first, retried, new Date(base.getTime() + 60_004), "SUCCEEDED"), true);
+  assert.equal(await finishPlaylistRefresh(first, retried, new Date(base.getTime() + 180_003), "SUCCEEDED"), true);
   assert.equal((await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: jobId } })).status, "SUCCEEDED");
-  assert.equal(await claimPlaylistRefresh(second, input(ownerB, new Date(base.getTime() + 60_005))), null);
+  assert.equal(await claimPlaylistRefresh(second, input(ownerB, new Date(base.getTime() + 180_004))), null);
 });
 
 test("malformed claims fail before any DB access", async () => {

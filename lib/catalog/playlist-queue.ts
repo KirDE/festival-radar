@@ -1,8 +1,9 @@
 import type { PrismaClient } from "@prisma/client";
 
 // This module is deliberately not wired to the existing HTTP playlist route or
-// scheduler. A later cutover must fence *all* playlist-side effects and retire
-// the legacy route before invoking a DB-backed worker.
+// scheduler. A later cutover must fence *all* playlist-side effects, retire
+// the legacy route, serialize jobs for the same festival, and reconcile old
+// RUNNING rows with no lease before invoking a DB-backed worker.
 type Claim = { id: string; publicationId: string; festivalSlug: string; attempts: number; leaseOwner: string; leaseExpiresAt: Date };
 
 function validate(owner: string, now: Date, ttlMs: number) {
@@ -28,7 +29,8 @@ export async function claimPlaylistRefresh(db: PrismaClient, input: { owner: str
   const rows = await db.$queryRaw<Claim[]>`
     WITH candidate AS (
       SELECT id FROM "CatalogPlaylistRefresh"
-      WHERE status IN ('PENDING', 'FAILED')
+      WHERE status = 'PENDING'
+        OR (status = 'FAILED' AND "retryAt" <= ${input.now})
         OR (status = 'RUNNING' AND "leaseExpiresAt" <= ${input.now})
       ORDER BY "requestedAt", id
       LIMIT 1 FOR UPDATE SKIP LOCKED
@@ -36,7 +38,7 @@ export async function claimPlaylistRefresh(db: PrismaClient, input: { owner: str
     UPDATE "CatalogPlaylistRefresh" AS job
       SET status = 'RUNNING', attempts = job.attempts + 1,
           "leaseOwner" = ${input.owner}, "leaseExpiresAt" = ${expiry},
-          "startedAt" = ${input.now}, "completedAt" = NULL,
+          "startedAt" = ${input.now}, "completedAt" = NULL, "retryAt" = NULL,
           "lastError" = NULL, "updatedAt" = ${input.now}
     FROM candidate WHERE job.id = candidate.id
     RETURNING job.id, job."publicationId", job."festivalSlug", job.attempts,
@@ -47,10 +49,14 @@ export async function claimPlaylistRefresh(db: PrismaClient, input: { owner: str
 
 export async function finishPlaylistRefresh(db: PrismaClient, claim: Claim, now: Date, outcome: "SUCCEEDED" | "FAILED") {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error("Invalid playlist completion time");
+  // Failed attempts cannot hot-loop: bounded exponential retry. Legacy FAILED
+  // rows without retryAt stay dormant until explicitly reconciled at cutover.
+  const retryDelayMs = Math.min(86_400_000, 60_000 * 2 ** Math.min(11, Math.max(0, claim.attempts - 1)));
   const result = await db.catalogPlaylistRefresh.updateMany({
     where: { id: claim.id, status: "RUNNING", leaseOwner: claim.leaseOwner,
       attempts: claim.attempts, leaseExpiresAt: { gt: now } },
-    data: { status: outcome, completedAt: now, leaseOwner: null, leaseExpiresAt: null },
+    data: { status: outcome, completedAt: now, leaseOwner: null, leaseExpiresAt: null,
+      retryAt: outcome === "FAILED" ? new Date(now.getTime() + retryDelayMs) : null },
   });
   return result.count === 1;
 }

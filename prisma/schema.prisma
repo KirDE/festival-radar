@@ -835,12 +835,14 @@ model CatalogPlaylistRefresh {
   startedAt     DateTime?
   leaseOwner    String?
   leaseExpiresAt DateTime?
+  retryAt       DateTime?
   completedAt   DateTime?
   updatedAt     DateTime                     @updatedAt
   publication   CatalogPublication           @relation(fields: [publicationId], references: [id], onDelete: Restrict)
 
   @@index([status, requestedAt])
   @@index([status, leaseExpiresAt, requestedAt])
+  @@index([status, retryAt, requestedAt])
   @@index([festivalSlug, status])
 }
 
