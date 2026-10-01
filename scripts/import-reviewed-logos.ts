@@ -28,8 +28,10 @@ if (mode === '--dry-run' && !process.env.DATABASE_URL) process.exit(0);
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL required for DB comparison');
 const target = new URL(process.env.DATABASE_URL);
 const name = decodeURIComponent(target.pathname.slice(1));
-const localDisposable = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(target.hostname)
-  && /(?:test|integration)/i.test(name) && !target.searchParams.has('host');
+const localDisposable = ['postgres:', 'postgresql:'].includes(target.protocol)
+  && ['localhost', '127.0.0.1', '::1', '[::1]'].includes(target.hostname)
+  && /^[a-zA-Z0-9_-]+$/.test(name) && /(?:test|integration)/i.test(name)
+  && !target.searchParams.has('host') && !target.searchParams.has('hostaddr');
 if (mode === '--apply' && (!localDisposable || options.length !== 2 ||
     !options.includes('--confirm-disposable=' + name) || !options.includes('--expected-digest=' + digest))) {
   throw new Error('Apply requires local disposable test/integration database and exact DB name + inventory digest confirmation');

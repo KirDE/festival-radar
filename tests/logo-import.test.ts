@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -27,6 +28,19 @@ test('logo E2E guard accepts only unambiguous local disposable databases', () =>
 });
 
 const rows = await auditReviewedLogos();
+test('apply CLI rejects remote host override before database connection', () => {
+  const digest = inventoryDigest(rows);
+  for (const suffix of ['?hostaddr=192.0.2.1', '?host=db.example.invalid']) {
+    const result = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/import-reviewed-logos.ts', '--apply',
+      '--confirm-disposable=festival_test', '--expected-digest=' + digest], {
+      env: { ...process.env, DATABASE_URL: 'postgresql://tester@localhost:5432/festival_test' + suffix },
+      encoding: 'utf8', timeout: 15_000, maxBuffer: 1024 * 1024,
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Apply requires local disposable test\/integration database/);
+    assert.doesNotMatch(result.stderr, /PrismaClientInitializationError/);
+  }
+});
 test('reviewed inventory fully decodes, hashes and covers exact static binding', () => {
   assert.equal(rows.length, 47);
   assert.equal(rows.filter(r => r.mimeType === 'image/png').length, 39);
