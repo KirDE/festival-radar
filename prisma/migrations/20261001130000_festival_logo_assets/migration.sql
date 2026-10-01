@@ -1,4 +1,6 @@
 -- Storage only: no data backfill, URL change, or serving route.
+-- Fail closed if digest support is unavailable; pgcrypto is a trusted extension.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE "AssetBlob" (
   "sha256" CHAR(64) NOT NULL,
   "mimeType" TEXT NOT NULL,
@@ -8,8 +10,18 @@ CREATE TABLE "AssetBlob" (
   CONSTRAINT "AssetBlob_pkey" PRIMARY KEY ("sha256"),
   CONSTRAINT "AssetBlob_sha256_format_check" CHECK ("sha256" ~ '^[0-9a-f]{64}$'),
   CONSTRAINT "AssetBlob_mime_type_check" CHECK ("mimeType" IN ('image/png', 'image/jpeg', 'image/webp')),
-  CONSTRAINT "AssetBlob_size_check" CHECK ("sizeBytes" BETWEEN 1 AND 2097152 AND "sizeBytes" = octet_length("bytes"))
+  CONSTRAINT "AssetBlob_size_check" CHECK ("sizeBytes" BETWEEN 1 AND 2097152 AND "sizeBytes" = octet_length("bytes")),
+  CONSTRAINT "AssetBlob_digest_check" CHECK ("sha256" = encode(digest("bytes", 'sha256'), 'hex'))
 );
+
+-- Once stored, a hash and its content/metadata must not change.
+CREATE FUNCTION reject_asset_blob_update() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'AssetBlob rows are immutable';
+END;
+$$;
+CREATE TRIGGER "AssetBlob_immutable_update" BEFORE UPDATE ON "AssetBlob"
+  FOR EACH ROW EXECUTE FUNCTION reject_asset_blob_update();
 
 CREATE TABLE "FestivalLogo" (
   "festivalId" TEXT NOT NULL,

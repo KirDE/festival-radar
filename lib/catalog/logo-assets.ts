@@ -5,6 +5,7 @@ export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 export type LogoMimeType = "image/png" | "image/jpeg" | "image/webp";
 
 // Only locally supplied, reviewed images should enter this store. Never fetch arbitrary URLs here.
+// Signatures are not full decoding; audited imports must decode before public activation.
 export function validateLogo(bytes: Uint8Array, mimeType: LogoMimeType) {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0 || bytes.byteLength > MAX_LOGO_BYTES) {
     throw new Error("Logo must contain 1–2097152 bytes");
@@ -30,9 +31,14 @@ export async function saveFestivalLogo(db: PrismaClient, slug: string, bytes: Ui
   const { sha256, sizeBytes, image } = validateLogo(bytes, mimeType);
   return db.$transaction(async (tx) => {
     const festival = await tx.festival.findUniqueOrThrow({ where: { slug }, select: { id: true } });
-    await tx.assetBlob.upsert({
-      where: { sha256 }, create: { sha256, mimeType, sizeBytes, bytes: image }, update: {},
-    });
+    // An empty-update Prisma upsert can race on the primary key across clients.
+    // PostgreSQL waits for a competing insert before resolving this conflict.
+    await tx.$executeRaw`INSERT INTO "AssetBlob" ("sha256", "mimeType", "sizeBytes", "bytes")
+      VALUES (${sha256}, ${mimeType}, ${sizeBytes}, ${image}) ON CONFLICT ("sha256") DO NOTHING`;
+    const stored = await tx.assetBlob.findUniqueOrThrow({ where: { sha256 } });
+    if (stored.mimeType !== mimeType || stored.sizeBytes !== sizeBytes || !Buffer.from(stored.bytes).equals(image)) {
+      throw new Error("Stored logo hash collision or corrupted asset");
+    }
     await tx.festivalLogo.upsert({
       where: { festivalId: festival.id }, create: { festivalId: festival.id, assetHash: sha256 },
       update: { assetHash: sha256 },
