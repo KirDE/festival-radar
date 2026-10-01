@@ -38,6 +38,7 @@ jobs:
       - run: npm ci
       - run: npm run prisma:generate
       - run: npx prisma migrate deploy
+      - run: npm run test:logo-assets
       - run: npm run test:playlist-queue
       - run: npm run test:catalog-db
       - run: npm run catalog:backfill
