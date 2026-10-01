@@ -7,9 +7,9 @@ export const channels = Object.values(NotificationChannel);
 export const frequencies = Object.values(NotificationFrequency);
 export type DetectedChange = { dedupeKey: string; festivalId: string; type: NotificationEventType; title: string; message: string; url?: string; occurredAt: Date; payload?: Prisma.InputJsonValue };
 
-export async function recordChange(change: DetectedChange) {
-  const event = await db.notificationEvent.upsert({ where: { dedupeKey: change.dedupeKey }, update: {}, create: change });
-  const preferences = await db.notificationPreference.findMany({ where: { enabled: true, eventType: change.type, OR: [{ festivalId: change.festivalId }, { festivalId: null }] }, include: { user: { select: { emailVerifiedAt: true } } } });
+export async function recordChange(change: DetectedChange, client: typeof db | Prisma.TransactionClient = db) {
+  const event = await client.notificationEvent.upsert({ where: { dedupeKey: change.dedupeKey }, update: {}, create: change });
+  const preferences = await client.notificationPreference.findMany({ where: { enabled: true, eventType: change.type, OR: [{ festivalId: change.festivalId }, { festivalId: null }] }, include: { user: { select: { emailVerifiedAt: true } } } });
   const effectivePreferences = new Map<string, (typeof preferences)[number]>();
   for (const preference of preferences) {
     if (preference.channel === NotificationChannel.EMAIL && !preference.user.emailVerifiedAt) continue;
@@ -17,7 +17,7 @@ export async function recordChange(change: DetectedChange) {
     const current = effectivePreferences.get(key);
     if (!current || (current.festivalId === null && preference.festivalId !== null)) effectivePreferences.set(key, preference);
   }
-  await db.notificationDelivery.createMany({ data: [...effectivePreferences.values()].map((p) => ({ eventId: event.id, userId: p.userId, channel: p.channel, frequency: p.frequency, nextAttemptAt: p.frequency === NotificationFrequency.IMMEDIATE ? new Date() : nextDigest(p.frequency) })), skipDuplicates: true });
+  await client.notificationDelivery.createMany({ data: [...effectivePreferences.values()].map((p) => ({ eventId: event.id, userId: p.userId, channel: p.channel, frequency: p.frequency, nextAttemptAt: p.frequency === NotificationFrequency.IMMEDIATE ? new Date() : nextDigest(p.frequency) })), skipDuplicates: true });
   return event;
 }
 

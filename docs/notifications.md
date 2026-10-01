@@ -26,3 +26,25 @@ Each dispatcher atomically claims due rows with PostgreSQL `FOR UPDATE SKIP LOCK
 4. Do not reset a `SENT` delivery. If a provider timed out after accepting a request, verify the provider using the delivery ID/idempotency key before changing state.
 
 The staging end-to-end test uses a disposable PostgreSQL database and local provider receiver to prove detected change → persisted event/delivery → claimed due delivery → one provider request. No production destination is contacted.
+
+### Opt-in DB due ingestion outbox (not scheduled)
+
+The `--db-due --publish` ingestion path stages each supported notification event in
+`IngestionNotificationOutbox` in the **same database transaction** as its catalog
+publication. It does not POST to `/api/notifications/events/`; manual ingestion
+continues to use that endpoint unchanged. The dedupe key and event snapshot are
+persisted at publication time, so a worker crash or unavailable API after the
+catalog commit cannot erase the notification effect or trigger re-publication.
+
+After deploying the migration, an operator may explicitly run
+`npm run notifications:drain-db-due` with `DATABASE_URL` set. The separate
+processor locks pending rows with `SKIP LOCKED` and commits event upsert,
+subscriber-delivery creation and outbox acknowledgement in one transaction.
+Failures roll back all three; reruns and concurrent drainers do not create
+extra event/delivery rows. Each invocation processes at most 100 rows; repeat
+as required and monitor `deliveredAt IS NULL` counts. This slice intentionally
+adds no timer, workflow dispatch or production opt-in. Rollout still needs a
+reviewed independent schedule, monitoring/retry alerts, and a production gate
+for the opt-in DB due publisher. Existing provider dispatch retains its own
+at-least-once network semantics (Telegram in particular has no end-to-end
+exactly-once guarantee after successful send but before acknowledgement).
