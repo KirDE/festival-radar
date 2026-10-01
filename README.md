@@ -28,6 +28,23 @@ npm run test:data
 npm run build
 ```
 
+### Dormant festival-logo asset storage
+
+The additive PostgreSQL migration creates content-addressed AssetBlob records and
+one optional FestivalLogo binding per festival. The unconnected helper in
+lib/catalog/logo-assets.ts validates reviewed local PNG/JPEG/WebP bytes (maximum
+2 MiB), deduplicates by SHA-256, and returns a quoted strong hash ETag. Run
+npm run test:logo-assets only with a disposable test/integration database
+after prisma migrate deploy. No static files, offline snapshot, initials
+fallback, public route, or production delivery path changes in this phase.
+
+Activation requires a separate reviewed change: migrate only audited logo files
+(detect actual MIME rather than trusting their .png suffix), compare stored
+bytes/hash and per-festival coverage, then introduce an opt-in serving route
+with conditional If-None-Match/304 and correct Content-Type/Cache-Control. Keep
+the current static path and fallback until route parity and rollback are proven;
+do not delete static files or switch traffic as part of this migration.
+
 Account and sync API routes require a Next.js server deployment plus PostgreSQL:
 
 ```bash

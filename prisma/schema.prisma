@@ -274,8 +274,29 @@ model Festival {
   updatedAt   DateTime          @updatedAt
   editions    FestivalEdition[]
   sources     FestivalSource[]
+  logo        FestivalLogo?
 
   @@index([countryCode, slug])
+}
+
+// Dormant content-addressed storage. Public logos still come from /public/logos.
+model AssetBlob {
+  sha256    String         @id @db.Char(64)
+  mimeType String
+  sizeBytes Int
+  bytes     Bytes
+  createdAt DateTime       @default(now())
+  logos     FestivalLogo[]
+}
+
+model FestivalLogo {
+  festivalId String    @id
+  assetHash  String    @db.Char(64)
+  updatedAt  DateTime  @updatedAt
+  festival   Festival  @relation(fields: [festivalId], references: [id], onDelete: Cascade)
+  asset      AssetBlob @relation(fields: [assetHash], references: [sha256], onDelete: Restrict)
+
+  @@index([assetHash])
 }
 
 model FestivalEdition {
