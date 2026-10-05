@@ -24,6 +24,18 @@ if [[ "$mode" == ingest-pilot ]]; then
   [[ "$(systemctl show --property=ActiveState --value festival-radar-collection@ingestion.service 2>/dev/null)" == inactive ]] || { echo 'legacy ingestion service not inactive' >&2; exit 6; }
   mode=ingest
 fi
+# Every supported manual source fetch uses the common lock, including non-pilot
+# ingest. Manual fetch is refused in scheduled DB-due mode (force cannot bypass).
+if [[ "$mode" == ingest && "$pilot" != true ]]; then
+  lock="$root/shared/ingestion/source-fetch.lock"
+  [[ -f "$lock" && ! -L "$lock" && "$(stat -c %U:%a -- "$lock")" == www-data:640 ]] || exit 6
+  exec 8<"$lock"
+  flock -n 8 || exit 5
+fi
+if [[ "$mode" == ingest ]]; then
+  gate=/var/lib/festival-radar-scheduler/mode
+  [[ -f "$gate" && ! -L "$gate" && "$(stat -c %u:%a "$gate")" == 0:644 && "$(cat "$gate")" == legacy ]] || { echo 'manual fetch inactive' >&2; exit 6; }
+fi
 audit_dir=/run/festival-radar-db-due
 if [[ ! -e "$audit_dir" && ! -L "$audit_dir" ]]; then
   mkdir -m 0700 -- "$audit_dir" 2>/dev/null || { echo 'DB due audit unavailable' >&2; exit 6; }

@@ -28,8 +28,8 @@ for (const present of [false, true]) {
       await writeFile(unit, 'new logo unit');
       const rollback = cleanup + '\n' +
         'systemctl() { printf "%s" "$*" > "$TEMP/reload"; }; ' +
-        'logo_import_unit_armed=true; db_due_assets_armed=false; ' +
-        'logo_import_unit="$UNIT"; logo_import_backup="$BACKUP"; db_due_backup=""; ' +
+        'logo_import_unit_armed=true; db_due_assets_armed=false; scheduler_assets_armed=false; ' +
+        'logo_import_unit="$UNIT"; logo_import_backup="$BACKUP"; db_due_backup=""; scheduler_backup=""; ' +
         'archive="$TEMP/archive"; env_source="$TEMP/env"; false || cleanup_install';
       run(rollback, { UNIT: unit, BACKUP: backup, TEMP: temporary });
       assert.equal(await readFile(path.join(temporary, 'reload'), 'utf8'), 'daemon-reload');
@@ -112,10 +112,10 @@ for (const present of [false, true]) {
       const end = installer.indexOf('\nlogo_import_unit_armed=false\ndb_due_assets_armed=false', start);
       assert.ok(start >= 0 && end > start);
       const branch = installer.slice(start, end);
-      const setup = 'db_due_restore_assets() { :; }; systemctl() { :; }; ' +
+      const setup = 'scheduler_restore_assets() { :; }; db_due_restore_assets() { :; }; systemctl() { :; }; ' +
         'healthy=false; previous="$PREVIOUS"; app_root="$TEMP"; ' +
         'logo_import_unit="$UNIT"; logo_import_backup="$BACKUP"; ' +
-        'db_due_unit="$FOREIGN"; db_due_wrapper="$FOREIGN"; db_due_backup="$BACKUP"; ' +
+        'db_due_unit="$FOREIGN"; db_due_wrapper="$FOREIGN"; db_due_backup="$BACKUP"; scheduler_backup="$BACKUP"; ' +
         'had_previous_env="$HAD_ENV"; previous_env="$PREVIOUS_ENV"; env_file="$ENV_FILE"; service=festival-radar; ';
       const result = spawnSync('bash', ['-c', 'set -euo pipefail; source "$HELPER"; ' + setup + branch], {
         encoding: 'utf8', env: { ...process.env, HELPER: helper, UNIT: unit, BACKUP: backup,

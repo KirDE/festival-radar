@@ -62,6 +62,7 @@ test('root path rejects active legacy, held fetch lock, unhealthy preflight and 
     await mkdir(release, { recursive: true });
     await mkdir(path.dirname(lock), { recursive: true });
     await mkdir(bin);
+    await writeFile(path.join(dir, 'mode'), 'legacy\n', { mode: 0o644 });
     await symlink(release, path.join(root, 'current'));
     await writeFile(path.join(release, 'DEPLOYED_COMMIT'), sha);
     await writeFile(lock, '', { mode: 0o640 });
@@ -70,9 +71,11 @@ test('root path rejects active legacy, held fetch lock, unhealthy preflight and 
     await writeFile(path.join(bin, 'systemctl'), '#!/bin/sh\nif [ "$1" = show ]; then echo "${TEST_ACTIVE:-inactive}"; exit 0; fi\nprintf "%s\\n" "$2" >> "$TEST_LOG"\nif [ "$2" = festival-radar-db-due@health.service ]; then printf "%s\\n" "$TEST_HEALTH" > "$TEST_AUDIT_DIR/health.audit"; else printf "%s\\n" "$TEST_INGEST" > "$TEST_AUDIT_DIR/ingest.audit"; exit "${TEST_INGEST_EXIT:-0}"; fi\n', { mode: 0o755 });
     let wrapper = await readFile('scripts/deploy/start-db-due', 'utf8');
     wrapper = wrapper.replace('root=/opt/festival-radar', 'root=' + root)
+      .replace('/var/lib/festival-radar-scheduler/mode', path.join(dir, 'mode'))
       .replace('/run/festival-radar-activation.lock', path.join(dir, 'activation.lock'))
       .replace('/etc/systemd/system/festival-radar-db-due@.service', unit)
       .replace('/run/festival-radar-db-due', privateDir)
+      .replaceAll('0:644', process.getuid() + ':644')
       .replaceAll('0:700', process.getuid() + ':700').replaceAll('0:600', process.getuid() + ':600')
       .replace('www-data:640', userInfo().username + ':640');
     const file = path.join(dir, 'wrapper');

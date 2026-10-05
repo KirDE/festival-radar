@@ -2,7 +2,7 @@
 set -euo pipefail
 mode="$1"
 commit="$2"
-case "$mode" in health|ingest|drain) ;; *) exit 2 ;; esac
+case "$mode" in health|ingest|drain|tick) ;; *) exit 2 ;; esac
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || exit 2
 root=/opt/festival-radar
 release="$root/releases/$commit"
@@ -12,6 +12,7 @@ release="$root/releases/$commit"
 cd "$release"
 umask 077
 case "$mode" in
+  tick) GITHUB_SHA="$commit" exec "$release/.runtime/node" scripts/db-due-tick.mjs ;;
   health) exec "$release/.runtime/node" scripts/report-db-due-health.mjs ;;
   ingest)
     output="$(mktemp -d /opt/festival-radar/shared/.db-due.XXXXXXXX 2>/dev/null)" || { echo 'DB due output unavailable' >&2; exit 1; }
