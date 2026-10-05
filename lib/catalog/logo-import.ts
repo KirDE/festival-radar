@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { lstat, readdir, readFile } from 'node:fs/promises';
+import { open, readdir } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import sharp from 'sharp';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { festivalLogoFallbacks, festivalLogoPath } from '../../data/festival-logos.ts';
 import { festivals } from '../../data/festivals.ts';
 import { MAX_LOGO_BYTES, validateLogo, type LogoMimeType } from './logo-assets.ts';
@@ -13,6 +14,7 @@ export type ReviewedLogo = { slug: string; file: string; mimeType: LogoMimeType;
 export const LOGO_DIRECTORY = fileURLToPath(new URL('../../public/logos/', import.meta.url));
 const TYPES: Record<string, LogoMimeType> = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
 const EXPECTED_COUNT = 47;
+export const PINNED_REVIEWED_DIGEST = '99a2e164672883036310fd14639be96519a5e0765d770699bfeb98a1b06db456';
 
 /** Decode every pixel; metadata and signatures alone cannot reject truncated payloads. */
 export async function decodeReviewedLogo(bytes: Buffer, expectedMime: LogoMimeType) {
@@ -47,8 +49,15 @@ export async function auditReviewedLogos(directory = LOGO_DIRECTORY): Promise<Re
       throw new Error('Invalid reviewed logo mapping');
     }
     const filename = path.join(directory, row.file);
-    if (!(await lstat(filename)).isFile()) throw new Error('Logo source must be a regular file');
-    const bytes = await readFile(filename);
+    // No lstat/read race: validate and read the same non-symlink descriptor.
+    const handle = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    let bytes: Buffer;
+    try {
+      const stat = await handle.stat();
+      if (!stat.isFile()) throw new Error('Logo source must be a regular file');
+      if (stat.size !== row.sizeBytes || stat.size > MAX_LOGO_BYTES) throw new Error('Reviewed logo content mismatch');
+      bytes = await handle.readFile();
+    } finally { await handle.close(); }
     const parsed = await decodeReviewedLogo(bytes, row.mimeType);
     if (parsed.sha256 !== row.sha256 || parsed.sizeBytes !== row.sizeBytes) throw new Error('Reviewed logo content mismatch');
     rows.push({ ...row, bytes });
@@ -57,7 +66,15 @@ export async function auditReviewedLogos(directory = LOGO_DIRECTORY): Promise<Re
 }
 
 /** Read-only exact comparison of every binding, hash, MIME and byte payload. */
-export async function verifyReviewedLogos(db: PrismaClient, rows: ReviewedLogo[]) {
+export async function verifyReviewedLogos(db: PrismaClient | Prisma.TransactionClient, rows: ReviewedLogo[]): Promise<{ bound: number; distinctHashes: number }> {
+  // Prisma may load included relations with separate queries. Use one read-only
+  // snapshot for standalone verify/read-back, or reuse the locked write transaction.
+  if ('$transaction' in db) {
+    return db.$transaction(async tx => {
+      await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
+      return verifyReviewedLogos(tx, rows);
+    }, { isolationLevel: 'RepeatableRead', timeout: 60_000 });
+  }
   const bindings = await db.festivalLogo.findMany({ include: { festival: { select: { slug: true } }, asset: true } });
   if (bindings.length !== rows.length) throw new Error('Logo binding coverage mismatch');
   const bySlug = new Map(bindings.map(binding => [binding.festival.slug, binding]));
@@ -84,11 +101,11 @@ function assertReviewedRows(rows: ReviewedLogo[]) {
 }
 
 /** Read-only target preflight: never overwrite a manually assigned or inconsistent binding. */
-export async function previewReviewedLogos(db: PrismaClient, rows: ReviewedLogo[]) {
+export async function previewReviewedLogos(db: PrismaClient | Prisma.TransactionClient, rows: ReviewedLogo[]) {
   assertReviewedRows(rows);
   const dbFestivals = await db.festival.findMany({ select: { slug: true } });
-  if (dbFestivals.length !== festivals.length || rows.length !== EXPECTED_COUNT ||
-      rows.some(row => !dbFestivals.some(f => f.slug === row.slug))) throw new Error('Database festival coverage mismatch');
+  if (dbFestivals.length !== festivals.length || new Set(dbFestivals.map(f => f.slug)).size !== festivals.length ||
+      festivals.some(f => !dbFestivals.some(target => target.slug === f.slug))) throw new Error('Database festival coverage mismatch');
   const existing = await db.festivalLogo.findMany({ include: { festival: { select: { slug: true } }, asset: true } });
   for (const binding of existing) {
     const row = rows.find(row => row.slug === binding.festival.slug);
@@ -101,26 +118,27 @@ export async function previewReviewedLogos(db: PrismaClient, rows: ReviewedLogo[
 }
 
 /** No write before complete source and DB preflight; all inserts/bindings atomic. */
-export async function applyReviewedLogos(db: PrismaClient, rows: ReviewedLogo[]) {
+export async function applyReviewedLogos(db: PrismaClient, sourceRows: ReviewedLogo[], expectedExisting?: number) {
+  // Own the buffers across asynchronous decode/transaction boundaries.
+  const rows = sourceRows.map(row => ({ ...row, bytes: Buffer.from(row.bytes) }));
   assertReviewedRows(rows);
-  await previewReviewedLogos(db, rows);
-  const festivalsInDb = await db.festival.findMany({ select: { id: true, slug: true } });
-  const bySlug = new Map(festivalsInDb.map(f => [f.slug, f.id]));
-  if (festivalsInDb.length !== festivals.length || rows.some(row => !bySlug.has(row.slug))) throw new Error('Database festival coverage mismatch');
   for (const row of rows) {
     const decoded = await decodeReviewedLogo(row.bytes, row.mimeType);
     if (decoded.sha256 !== row.sha256 || decoded.sizeBytes !== row.sizeBytes) throw new Error('Logo content changed before apply');
   }
   return db.$transaction(async tx => {
-    const existing = await tx.festivalLogo.findMany({ include: { festival: { select: { slug: true } }, asset: true } });
-    const expected = new Map(rows.map(row => [row.slug, row]));
-    for (const binding of existing) {
-      const row = expected.get(binding.festival.slug);
-      if (!row || binding.assetHash !== row.sha256 || binding.asset.mimeType !== row.mimeType ||
-          binding.asset.sizeBytes !== row.sizeBytes || !Buffer.from(binding.asset.bytes).equals(row.bytes)) {
-        throw new Error('Existing festival logo conflict');
-      }
+    // Block catalog edits and asset/binding writers until commit, including inserts
+    // into previously absent rows. Lock order is fixed; bounded wait fails closed.
+    await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '10s'");
+    await tx.$executeRawUnsafe('LOCK TABLE "Festival", "AssetBlob", "FestivalLogo" IN SHARE ROW EXCLUSIVE MODE');
+    if (inventoryDigest(rows) !== PINNED_REVIEWED_DIGEST) throw new Error('Before-write inventory digest changed');
+    const preview = await previewReviewedLogos(tx, rows);
+    if (expectedExisting !== undefined && preview.existingBindings !== expectedExisting) {
+      throw new Error('Before-write binding count changed');
     }
+    const festivalsInDb = await tx.festival.findMany({ select: { id: true, slug: true } });
+    const bySlug = new Map(festivalsInDb.map(f => [f.slug, f.id]));
+    const existing = await tx.festivalLogo.findMany({ select: { festivalId: true } });
     for (const row of rows) {
       await tx.$executeRawUnsafe('INSERT INTO "AssetBlob" ("sha256", "mimeType", "sizeBytes", "bytes") VALUES ($1, $2, $3, $4) ON CONFLICT ("sha256") DO NOTHING',
         row.sha256, row.mimeType, row.sizeBytes, row.bytes);
@@ -133,8 +151,9 @@ export async function applyReviewedLogos(db: PrismaClient, rows: ReviewedLogo[])
         await tx.festivalLogo.create({ data: { festivalId, assetHash: row.sha256 } });
       }
     }
-    return { bound: rows.length, distinctHashes: new Set(rows.map(row => row.sha256)).size };
-  }, { timeout: 60_000 });
+    // Detect trigger-induced corruption before commit as well as after commit.
+    return verifyReviewedLogos(tx, rows);
+  }, { isolationLevel: 'Serializable', timeout: 60_000 });
 }
 
 export function inventoryDigest(rows: ReviewedLogo[]) {
