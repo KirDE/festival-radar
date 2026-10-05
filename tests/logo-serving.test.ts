@@ -9,23 +9,21 @@ import { serveFestivalLogo } from "../lib/catalog/logo-serving.ts";
 const png = inventory.find((row) => row.mimeType === "image/png")!;
 const jpeg = inventory.find((row) => row.mimeType === "image/jpeg")!;
 async function fixture(row = png) {
-  return { ...row, bytes: await readFile(new URL(`../public/logos/${row.file}`, import.meta.url)), etag: `"${row.sha256}"` };
+  return { ...row, bytes: await readFile(new URL(`../source-inputs/reviewed-logos/${row.file}`, import.meta.url)), etag: `"${row.sha256}"` };
 }
 function request(tag?: string, method = "GET") {
   return new Request("http://localhost/api/logos/test.png", { method, headers: tag ? { "If-None-Match": tag } : {} });
 }
 
-test("exact public references map to reviewed filenames; static references and initials stay intact", () => {
+test("only exact reviewed filenames and slugs produce DB URLs", () => {
   for (const row of inventory) {
-    const reference = festivalLogoPath(row.slug)!;
-    assert.equal(reference, `/logos/${row.file}`);
-    assert.equal(databaseLogoPath(reference), `/api/logos/${row.file}`);
+    assert.equal(festivalLogoPath(row.slug), `/api/logos/${row.file}`);
+    assert.equal(databaseLogoPath(row.file), `/api/logos/${row.file}`);
   }
-  for (const slug of festivalLogoFallbacks) {
+  for (const slug of [...festivalLogoFallbacks, "unknown", "constructor", "__proto__", "2000trees.png", "../2000trees", "2000trees?x"]) {
     assert.equal(festivalLogoPath(slug), null);
-    assert.equal(databaseLogoPath(`/logos/${slug}.png`), null);
   }
-  for (const reference of ["https://example.org/logos/2000trees.png", "/private/2000trees.png", "/logos/../2000trees.png", "/logos/%32%30%30%30trees.png", "/logos/2000trees.png?x=1"]) {
+  for (const reference of ["https://example.org/logos/2000trees.png", "/logos/2000trees.png", "/api/logos/2000trees.png", "../2000trees.png", "%32%30%30%30trees.png", "2000trees.png?x=1", "unknown.png"]) {
     assert.equal(databaseLogoPath(reference), null);
   }
 });

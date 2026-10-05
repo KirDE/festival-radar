@@ -1,5 +1,5 @@
 /* Festival Radar public-only service worker. Bump DATA_VERSION when the offline payload changes. */
-const CACHE_VERSION = "festival-radar-public-v2";
+const CACHE_VERSION = "festival-radar-public-v3";
 const DATA_VERSION = "festivals-2027-v1";
 const MAX_ENTRIES = 80;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -31,7 +31,6 @@ function isPrivatePath(pathname) {
 function isPublicAsset(url) {
   return url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/icons/") ||
-    url.pathname.startsWith("/logos/") ||
     url.pathname.startsWith("/offline/") ||
     url.pathname === "/manifest.webmanifest";
 }

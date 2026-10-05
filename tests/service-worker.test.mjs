@@ -81,3 +81,21 @@ test("offline fallback is navigation-only; API and ordinary assets are not type-
   listeners.fetch({ request: { method: "GET", url: "https://festivals.test/private.pdf", mode: "cors" }, respondWith: () => { unknownAssetIntercepted = true; } });
   assert.equal(unknownAssetIntercepted, false);
 });
+
+test("retired logos and DB logos are not intercepted, and activation removes the old static cache", async () => {
+  const deleted = [];
+  const { helpers, listeners } = await loadWorker({ cachesImpl: {
+    keys: async () => ['festival-radar-public-v2', 'festival-radar-public-v3'],
+    delete: async key => { deleted.push(key); },
+  } });
+  for (const pathname of ['/logos/2000trees.png', '/api/logos/2000trees.png']) {
+    assert.equal(helpers.isPublicAsset(new URL(`https://festivals.test${pathname}`)), false);
+    let intercepted = false;
+    listeners.fetch({ request: { method: 'GET', url: `https://festivals.test${pathname}`, mode: 'cors' }, respondWith: () => { intercepted = true; } });
+    assert.equal(intercepted, false);
+  }
+  let activation;
+  listeners.activate({ waitUntil: value => { activation = value; } });
+  await activation;
+  assert.deepEqual(deleted, ['festival-radar-public-v2']);
+});

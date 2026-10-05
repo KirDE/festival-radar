@@ -15,7 +15,7 @@ test("the seed contains 52 unique festivals", () => {
   assert.equal(new Set(festivals.map(({ slug }) => slug)).size, 52);
 });
 
-test("every emitted local festival logo URL exists", async () => {
+test("every DB logo URL has a pinned non-public source", async () => {
   const fallbackNames = [];
   for (const festival of festivals) {
     const logoPath = festivalLogoPath(festival.slug);
@@ -23,8 +23,8 @@ test("every emitted local festival logo URL exists", async () => {
       fallbackNames.push(festival.slug);
       continue;
     }
-    assert.match(logoPath, /^\/logos\/[a-z0-9-]+\.png$/);
-    await access(new URL(`../public${logoPath}`, import.meta.url));
+    assert.match(logoPath, /^\/api\/logos\/[a-z0-9-]+\.png$/);
+    await access(new URL(`../source-inputs/reviewed-logos/${logoPath.split("/").at(-1)}`, import.meta.url));
   }
   assert.deepEqual(fallbackNames.sort(), [...festivalLogoFallbacks].sort());
   assert.deepEqual(fallbackNames.sort(), ["bloodstock", "brutal-assault", "pistoia-blues", "polandrock", "tolminator"]);

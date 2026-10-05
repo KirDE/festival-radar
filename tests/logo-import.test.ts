@@ -41,7 +41,7 @@ test('apply CLI rejects remote host override before database connection', () => 
     assert.doesNotMatch(result.stderr, /PrismaClientInitializationError/);
   }
 });
-test('reviewed inventory fully decodes, hashes and covers exact static binding', () => {
+test('reviewed inventory fully decodes, hashes and covers exact DB mapping', () => {
   assert.equal(rows.length, 47);
   assert.equal(rows.filter(r => r.mimeType === 'image/png').length, 39);
   assert.equal(rows.filter(r => r.mimeType === 'image/jpeg').length, 8);
@@ -49,7 +49,7 @@ test('reviewed inventory fully decodes, hashes and covers exact static binding',
   assert.equal(rows.length + festivalLogoFallbacks.size, festivals.length);
   assert.deepEqual(rows.map(r => r.slug), [...rows.map(r => r.slug)].sort());
   for (const row of rows) {
-    assert.equal(festivalLogoPath(row.slug), '/logos/' + row.file);
+    assert.equal(festivalLogoPath(row.slug), '/api/logos/' + row.file);
     assert.equal(createHash('sha256').update(row.bytes).digest('hex'), row.sha256);
     assert.equal(row.bytes.length, row.sizeBytes);
   }

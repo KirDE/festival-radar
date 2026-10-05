@@ -9,11 +9,10 @@ import inventory from "../data/reviewed-logo-inventory.json";
 
 const reviewed = inventory[0];
 
-test("all reviewed logos initially select the DB route and retain the exact static reference", () => {
+test("all reviewed logos initially select the DB route", () => {
   for (const row of inventory) {
     const state = createFestivalLogoState(row.slug);
     assert.equal(state.src, `/api/logos/${row.file}`);
-    assert.equal(state.staticSrc, `/logos/${row.file}`);
   }
   const html = renderToStaticMarkup(createElement(FestivalLogo, { slug: reviewed.slug, name: "Test Festival", large: true }));
   assert.match(html, new RegExp(`src="/api/logos/${reviewed.file}"`));
@@ -22,38 +21,24 @@ test("all reviewed logos initially select the DB route and retain the exact stat
   assert.doesNotMatch(html, /logo fallback/);
 });
 
-// The browser reports these HTTP errors (and decoding/network errors) as onError;
-// the image state machine intentionally does not inspect response status codes.
-for (const failure of ["DB 503", "missing binding 404", "missing endpoint 404", "browser image error"]) {
-  test(`${failure} retries the same reviewed static logo exactly once`, () => {
+// HTTP, network and decoding failures all enter the same browser onError handler.
+for (const failure of ["DB 503", "missing binding 404", "missing endpoint 404", "network/decoding error"]) {
+  test(`${failure} goes straight to terminal initials`, () => {
     const initial = createFestivalLogoState(reviewed.slug);
-    const fallback = failFestivalLogo(initial, initial.src!);
-    assert.equal(fallback.src, `/logos/${reviewed.file}`);
-    assert.strictEqual(failFestivalLogo(fallback, initial.src!), fallback, "duplicate API errors cannot fail the static attempt");
-    assert.strictEqual(failFestivalLogo(fallback, "/other.png"), fallback, "stale errors are ignored");
-    // No error means the successful static image stays selected.
-    assert.equal(fallback.src, fallback.staticSrc);
+    assert.strictEqual(failFestivalLogo(initial, "/other.png"), initial);
+    const terminal = failFestivalLogo(initial, initial.src!);
+    assert.deepEqual(terminal, { src: null });
+    assert.strictEqual(failFestivalLogo(terminal, initial.src!), terminal);
+    assert.equal(festivalLogoInitials("  Test   Festival Extra "), "TF");
+    assert.equal(festivalLogoInitials("Wacken"), "W");
+    assert.equal(festivalLogoInitials("  "), "");
   });
 }
-
-test("static failure shows initials and is terminal, without API/static retry loops", () => {
-  const initial = createFestivalLogoState(reviewed.slug);
-  const fallback = failFestivalLogo(initial, initial.src!);
-  const terminal = failFestivalLogo(fallback, fallback.src!);
-  assert.equal(terminal.src, null);
-  for (const src of [initial.src!, fallback.src!, "/other.png"]) {
-    assert.strictEqual(failFestivalLogo(terminal, src), terminal);
-  }
-  assert.equal(festivalLogoInitials("  Test   Festival Extra "), "TF");
-  assert.equal(festivalLogoInitials("Wacken"), "W");
-  assert.equal(festivalLogoInitials("  "), "");
-});
 
 test("slug or name changes remount fresh state; size changes keep the existing attempt", () => {
   const props = { slug: reviewed.slug, name: "Test Festival" };
   const initial = createFestivalLogoState(props.slug);
-  const fallback = failFestivalLogo(initial, initial.src!);
-  const terminal = failFestivalLogo(fallback, fallback.src!);
+  const terminal = failFestivalLogo(initial, initial.src!);
   assert.equal(terminal.src, null);
   const key = FestivalLogo(props).key;
   assert.equal(key, festivalLogoKey(props.slug, props.name));
@@ -68,7 +53,7 @@ test("slug or name changes remount fresh state; size changes keep the existing a
 test("the five initials-only festivals never request either image route", () => {
   assert.deepEqual([...festivalLogoFallbacks].sort(), ["bloodstock", "brutal-assault", "pistoia-blues", "polandrock", "tolminator"]);
   for (const slug of festivalLogoFallbacks) {
-    assert.deepEqual(createFestivalLogoState(slug, "/festival-radar"), { src: null, staticSrc: null });
+    assert.deepEqual(createFestivalLogoState(slug, "/festival-radar"), { src: null });
     const html = renderToStaticMarkup(createElement(FestivalLogo, { slug, name: "Test Festival" }));
     assert.match(html, /role="img" aria-label="Test Festival logo fallback">TF<\/span>/);
     assert.doesNotMatch(html, /<img\b/);
@@ -79,16 +64,40 @@ test("the five initials-only festivals never request either image route", () => 
   assert.notEqual(FestivalLogo({ slug: "bloodstock", name: "Test Festival" }).key, FestivalLogo({ slug: reviewed.slug, name: "Test Festival" }).key);
 });
 
-test("basePath is preserved on the preferred route and its one static retry", () => {
+test("basePath prefixes only the DB request; failure is terminal", () => {
   const initial = createFestivalLogoState(reviewed.slug, "/festival-radar");
   assert.equal(initial.src, `/festival-radar/api/logos/${reviewed.file}`);
-  const fallback = failFestivalLogo(initial, initial.src!);
-  assert.equal(fallback.src, `/festival-radar/logos/${reviewed.file}`);
-  assert.equal(failFestivalLogo(fallback, fallback.src!).src, null);
-});
-
-test("unreviewed slugs do not use the DB route or retry their static reference", () => {
-  const initial = createFestivalLogoState("not-reviewed");
-  assert.equal(initial.src, "/logos/not-reviewed.png");
   assert.equal(failFestivalLogo(initial, initial.src!).src, null);
 });
+
+test("unreviewed slugs fail closed without any image request", () => {
+  for (const slug of ["not-reviewed", "constructor", "__proto__", "../2000trees", "2000trees.png"]) {
+    assert.deepEqual(createFestivalLogoState(slug), { src: null });
+    const html = renderToStaticMarkup(createElement(FestivalLogo, { slug, name: "Unknown Festival" }));
+    assert.match(html, />UF<\/span>/);
+    assert.doesNotMatch(html, /<img\b/);
+  }
+});
+
+// Exercise the actual localized card and detail trees, including all 52 festivals.
+for (const language of ["en", "de", "ru"] as const) {
+  test(`${language} cards/detail render the 47 DB logos and five initials`, async () => {
+    const { LanguageProvider } = await import("../components/LanguageProvider");
+    const { LocalPlannerProvider } = await import("../components/LocalPlanner");
+    const { FestivalExplorer } = await import("../components/FestivalExplorer");
+    const { FestivalDetail } = await import("../components/FestivalDetail");
+    const { festivals } = await import("../data/festivals");
+    const wrap = (child: ReturnType<typeof createElement>) => createElement(LanguageProvider, { initialLanguage: language, children: createElement(LocalPlannerProvider, { children: child }) });
+    const cards = renderToStaticMarkup(wrap(createElement(FestivalExplorer, { festivals })));
+    assert.equal((cards.match(/class="festivalLogo /g) ?? []).length, 52);
+    for (const row of inventory) assert.ok(cards.includes(`src="/api/logos/${row.file}"`), `${language}: ${row.slug}`);
+    assert.equal((cards.match(/logo fallback/g) ?? []).length, 5);
+    assert.doesNotMatch(cards, /src="\/logos\//);
+    for (const slug of [reviewed.slug, ...festivalLogoFallbacks]) {
+      const item = festivals.find((row) => row.slug === slug)!;
+      const detail = renderToStaticMarkup(wrap(createElement(FestivalDetail, { item, festivals, artistSlugs: {} })));
+      if (festivalLogoFallbacks.has(slug)) assert.ok(detail.includes(renderToStaticMarkup(createElement(FestivalLogo, { slug, name: item.name, large: true }))));
+      else assert.ok(detail.includes(`src="/api/logos/${reviewed.file}"`));
+    }
+  });
+}

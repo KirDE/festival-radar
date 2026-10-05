@@ -6,6 +6,7 @@ output="${2:-festival-radar-${commit}.tar.gz}"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 
+node scripts/deploy/verify-logo-source-inputs.mjs
 test -f .next/standalone/server.js
 mkdir -p "$stage/app/.next" "$stage/app/.runtime" "$stage/app/scripts/analytics" "$stage/app/scripts/deploy" "$stage/app/scripts/notifications" "$stage/app/scripts/spotify_gmm_2026"
 "$(dirname "$0")/bundle-node-runtime.sh" "$stage/app/.runtime"
@@ -14,7 +15,9 @@ cp -a .next/static "$stage/app/.next/static"
 cp -a public "$stage/app/public"
 cp package.json package-lock.json "$stage/app/"
 cp -a prisma "$stage/app/prisma"
-cp -a data lib "$stage/app/"
+cp -a data lib source-inputs "$stage/app/"
+cp scripts/deploy/verify-logo-source-inputs.mjs "$stage/app/scripts/deploy/"
+"$stage/app/.runtime/node" "$stage/app/scripts/deploy/verify-logo-source-inputs.mjs"
 cp scripts/ingest-festivals.mjs scripts/drain-ingestion-notifications.mjs "$stage/app/scripts/"
 cp scripts/report-db-due-health.mjs scripts/report-db-due-pilot.mjs "$stage/app/scripts/"
 cp scripts/resolve-artist-identities.mjs scripts/check-festival-sources.mjs scripts/export-playlist-catalog.mjs scripts/build-playlist-status.mjs "$stage/app/scripts/"
@@ -48,3 +51,8 @@ grep -Fxq 'app/scripts/drain-ingestion-notifications.mjs' "$archive_contents"
 grep -Fxq 'app/scripts/spotify_gmm_2026/spotify_auth.py' "$archive_contents"
 grep -Eq '^app/\.python/(requests|ytmusicapi)/' "$archive_contents"
 grep -Fxq 'app/scripts/notifications/dispatch-production.sh' "$archive_contents"
+grep -Fxq 'app/scripts/deploy/verify-logo-source-inputs.mjs' "$archive_contents"
+grep -Fxq 'app/source-inputs/reviewed-logos/2000trees.png' "$archive_contents"
+if grep -Eq '^app/public/logos(/|$)' "$archive_contents"; then
+  echo 'public logo assets rejected' >&2; exit 1
+fi

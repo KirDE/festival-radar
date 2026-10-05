@@ -41,15 +41,18 @@ test/integration database after prisma migrate deploy. No static files, offline
 snapshot, initials fallback, public route, or production delivery path changes
 in this phase.
 
-Activation requires a separate reviewed change: migrate only audited logo files
-(detect actual MIME rather than trusting their .png suffix), **fully decode**
-each image before it can be served publicly, compare stored bytes/hash and
-per-festival coverage, then introduce an opt-in serving route
-with conditional If-None-Match/304 and correct Content-Type/Cache-Control. Keep
-the current static path and fallback until route parity and rollback are proven;
-do not delete static files or switch traffic as part of this migration. The
-current magic-byte/signature screening is deliberately shallow: it does not
-guarantee that an image decodes correctly and is not safe for untrusted uploads.
+Reviewed import and DB serving are now implemented: all 47 image sources are fully
+decoded and pinned by MIME, size and SHA-256; five festivals intentionally use
+initials. The UI uses only exact allowlisted `/api/logos/<filename>` URLs and fails
+straight to initials on image error. The unchanged binaries are retained in
+non-public `source-inputs/reviewed-logos` for manual audit/verify/import; release
+packaging and installation check their immutable inventory. Static logo URLs and
+public assets are retired in this implementation. Production endpoint parity and
+a retained known-good release artifact remain deployment gates; this change does
+not deploy or re-import. See [DB logo serving](docs/db-logo-serving.md) and
+[reviewed logo import](docs/reviewed-logo-import.md) for verification and rollback.
+The asset-store magic-byte screening remains shallow on its own; untrusted uploads
+still require full decoding and explicit review.
 
 Account and sync API routes require a Next.js server deployment plus PostgreSQL:
 

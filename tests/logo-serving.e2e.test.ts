@@ -51,7 +51,7 @@ test.after(async () => {
 
 test("47 imported logos serve through actual Next HTTP routing with exact bytes/MIME and conditional cache", { timeout: 90_000 }, async () => {
   for (const row of rows) {
-    const url = origin + databaseLogoPath(`/logos/${row.file}`) + "/";
+    const url = origin + databaseLogoPath(row.file) + "/";
     const response = await request(url);
     assert.equal(response.status, 200, row.file);
     assert.equal(response.headers.get("content-type"), row.mimeType);
@@ -80,7 +80,7 @@ test("47 imported logos serve through actual Next HTTP routing with exact bytes/
     assert.equal(missing.status, 404);
     assert.equal(missing.headers.get("cache-control"), "no-store");
     const fallback = await request(`${origin}/logos/${first.file}`);
-    assert.equal(fallback.status, 200);
-    assert.deepEqual(Buffer.from(await fallback.arrayBuffer()), first.bytes);
+    assert.equal(fallback.status, 404);
+    assert.equal((await request(`${origin}/source-inputs/reviewed-logos/${first.file}`)).status, 404);
   } finally { await db.festivalLogo.create({ data: binding }); }
 });

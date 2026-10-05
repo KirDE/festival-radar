@@ -16,7 +16,7 @@ const logos = ["greenfield.png", "rock-for-people.png", "barcelona-rock-fest.png
 let images: Buffer[];
 
 test.before(async () => {
-  images = await Promise.all(logos.map((file) => readFile(new URL('../public/logos/' + file, import.meta.url))));
+  images = await Promise.all(logos.map((file) => readFile(new URL('../source-inputs/reviewed-logos/' + file, import.meta.url))));
   for (const slug of slugs) await db.festival.create({ data: {
     slug, name: "Disposable asset test", country: "DE", countryCode: "DE", officialUrl: "https://example.org",
     genres: [],

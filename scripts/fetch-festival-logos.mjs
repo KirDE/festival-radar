@@ -1,7 +1,8 @@
+// Unreviewed candidates only; never overwrite the pinned import source or publish assets.
 import { access, mkdir, writeFile } from "node:fs/promises";
 
 const source = await import("../data/festivals.ts");
-const output = new URL("../public/logos/", import.meta.url);
+const output = new URL("../.logo-candidates/", import.meta.url);
 await mkdir(output, { recursive: true });
 
 async function fetchLogo(festival) {

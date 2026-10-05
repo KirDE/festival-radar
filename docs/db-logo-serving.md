@@ -17,62 +17,100 @@ actual MIME, `nosniff`, a quoted SHA-256 ETag and
 `If-None-Match` accepts strong/weak tags, lists and `*`, returning bodyless `304`
 with the same ETag/cache policy. HEAD returns the GET headers without the body.
 
-`databaseLogoPath` in `data/logo-serving.ts` maps only exact existing reviewed
-`/logos/<filename>` references to `/api/logos/<filename>`. It returns null for
-unreviewed paths, external URLs and the five initials fallbacks. `FestivalLogo`
-now prefers this DB route. On browser image error (including a DB `503`, missing
-binding/endpoint `404`, network or decoding failure), it retries the exact same
-reviewed `/logos/<filename>` once. If that static image also fails, it shows
-initials. Duplicate/stale errors are ignored; neither failure restarts the API
-request. Changing slug or name remounts fresh state, and `NEXT_PUBLIC_BASE_PATH`
-prefixes both routes. The five initials-only festivals never request images.
-`festivalLogoPath` retains its static references, and all `public/logos` files
-remain available. No page auth, proxy, nginx, protected-image or public-image
-rules change in this milestone.
-The new endpoint intentionally exposes only reviewed public festival logos.
+`festivalLogoPath` resolves an exact reviewed slug through the pinned inventory,
+then `databaseLogoPath` accepts only an exact allowlisted filename. Unknown slugs,
+URLs, paths, case variations and the five intentional initials-only slugs return
+null. `FestivalLogo` requests only `/api/logos/<filename>`, prefixed by
+`NEXT_PUBLIC_BASE_PATH` when configured. Any HTTP, network or image decoding error
+goes straight to initials. Duplicate/stale errors are ignored; there is no retry.
+Changing slug or name remounts fresh state. Size changes retain the current state.
+
+## Static fallback retirement (#210)
+
+The 47 original binary files moved unchanged from `public/logos` to
+`source-inputs/reviewed-logos`. No static logo URL mapping or public logo directory
+remains. These source inputs are not HTTP assets and the endpoint never reads them.
+The inventory JSON (filename, slug, MIME, byte size and SHA-256) and inventory digest
+`99a2e164672883036310fd14639be96519a5e0765d770699bfeb98a1b06db456`
+are unchanged. There are still 39 PNG and eight JPEG payloads, with five initials-only
+festivals: bloodstock, brutal-assault, tolminator, pistoia-blues and polandrock.
+
+Local and deployed manual import/audit/verify read the new non-public directory.
+Release packaging explicitly copies it and verifies all 47 sizes/hashes and the
+pinned digest; installation repeats this offline guard before activation or logo
+unit changes. Import audit still fully decodes every pixel and rejects changed,
+missing, extra or symlinked files. The fetch helper writes unreviewed candidates to
+ignored `.logo-candidates/`, never to the pinned source directory or `public`.
+The service worker no longer caches static logo URLs; its cache version is bumped
+so activation removes the previous cache. DB API requests remain outside SW caching.
+No auth, proxy, nginx or protected-image policy changes are included.
 
 ## Verification
 
-- `npm run test:logo-serving`: focused path, mapping, bytes/MIME, conditional,
-  HEAD, cache, missing, corruption and database-error tests without a database;
-  also DOM-free UI state/SSR tests for DB preference, image-error static retry,
-  terminal static failure, prop reset, initials and base-path handling.
-- `npm run test:logo-serving-db`: requires a **local disposable** PostgreSQL
-  database (using the existing strict test guard), migrations and catalog backfill.
-  It audits and imports/verifies all 47 rows, starts a loopback Next dev server,
-  tests actual HTTP routing and all 47 images, conditional requests, invalid paths,
-  missing binding and the surviving static fallback. It temporarily removes one
-  binding and restores it in `finally`. Never run against production.
-- Quality CI runs both after the existing disposable logo-import tests.
+- `npm run test:logo-serving`: exact allowlist, bytes/MIME, HEAD, ETag/304, error
+  cache policy, UI terminal failure, prop reset, initials, unknown slugs, base path,
+  and EN/DE/RU card/detail rendering covering all 47 logos plus five initials.
+- `node --test tests/logo-source-inputs.test.mjs tests/service-worker.test.mjs`:
+  immutable non-public source set, release guards, no static UI references, and SW.
+- `node --import tsx --test tests/logo-import.test.ts`: full offline decode,
+  unchanged digest, coverage and rejection of substituted/missing/extra sources.
+- `npx playwright test tests/e2e/festival-logo.spec.mjs`: actual localized card and
+  detail image errors (404, 503, network and decoding), immediate initials, exact
+  47-request coverage and no static retry. Requires browser binaries and a migrated,
+  backfilled disposable catalog, like the existing browser suite.
+- `npm run test:logo-serving-db`: disposable-only integration test imports/verifies
+  47 rows and tests actual Next HTTP bytes, cache/conditional behavior and missing
+  bindings. Removed static and source-input HTTP paths must return 404. This test
+  writes its disposable DB; never run against production or when apply is forbidden.
 
-The reported 47 production rows are not route-parity evidence. This UI preference
-is a fallback-protected cutover, not proof that production DB serving works:
-static success can hide a broken or unavailable API, and an API failure adds a
-failed image request before the static logo loads. Before considering DB serving
-verified in production or removing static fallback, independently verify
-production DB byte/MIME/hash parity and test the deployed endpoint through the
-real reverse proxy: anonymous and authenticated
-GET/HEAD, both trailing-slash spellings, JPEG MIME, ETag/304, cache/error behavior,
-base-path handling if configured, and invalid/missing routes. Confirm existing
-protected/public image behavior and static rollback URLs. Keep `public/logos`
-while this fallback is enabled; removing it requires a separate cutover after
-those checks pass. A future logo replacement needs an explicitly reviewed
-inventory update; this route fails closed for manually changed bindings.
+## Release gate and rollback
 
-## Previous serving milestone results (#250)
+This implementation performs no deployment, production request, re-import or apply.
+Production DB endpoint parity is **not established by local tests or the historical
+47-row report**. Before deploying this retirement, independently verify exact
+production DB byte/MIME/hash parity and the deployed endpoint through the real
+reverse proxy: anonymous/authenticated GET/HEAD, both trailing-slash spellings,
+JPEG MIME, ETag/304, cache/error behavior, configured base path and invalid/missing
+routes. Confirm existing protected/public image behavior. If the API is unavailable
+after retirement, users see initials; no static request masks the failure.
 
-Previously verified for the serving milestone: focused serving tests (5/5), `npm run typecheck`,
-`npm run build`, and `npm run test:data` (248+4+4) passed. A fresh
-isolated Docker PostgreSQL 16 database was migrated and backfilled; the DB E2E
-imported/verified 47 reviewed logos and served all 47 through actual Next HTTP,
-including MIME, bytes, ETag/304, invalid paths and missing-binding/static-fallback
-behavior. The revised E2E test passed again after a readiness-gated fresh restore;
-the disposable container was removed.
+Keep the previous known-good release artifact for application rollback: it contains
+its own static assets, UI fallback and matching importer path. Use the existing
+reviewed release rollback procedure; do not copy source inputs back into the public
+web root as an unreviewed hotfix. New releases retain all immutable source bytes for
+manual preview/verify and separately authorized import or DB recovery. A rollback to
+an older release can require the existing deployment-assets alignment procedure
+before its manual logo dispatcher works; it fails closed on SHA mismatch. DB backup
+restore remains a separate operator decision, never an automatic part of UI rollback.
+See [reviewed-logo-import.md](reviewed-logo-import.md) for manual operation guards.
 
-Read-only production verify workflow [37332030276](https://github.com/KirDE/festival-radar/actions/runs/37332030276)
-reported `mode=verify status=ok sourceFiles=47 existing=47` on exact deployed
-SHA `50402487d1fbb6a0d1fc5aa4526acaf664dc8e4f`. Production had not
-received this route at that milestone; this local UI change does not deploy it.
-Production route parity remains a release gate before claiming DB serving works
-or removing static fallback. Caching, ETag and conditional `304` behavior were
-implemented by #250 and are unchanged here.
+## Historical serving milestone (#250)
+
+The earlier milestone retained a static retry. Its disposable DB tests verified
+47 DB images; read-only production verify workflow
+[37332030276](https://github.com/KirDE/festival-radar/actions/runs/37332030276)
+reported `mode=verify status=ok sourceFiles=47 existing=47` on deployed SHA
+`50402487d1fbb6a0d1fc5aa4526acaf664dc8e4f`. That release had not received the DB
+serving route, so the historical report is not route parity evidence for this cutover.
+
+## Retirement worktree checks (2026-10-05)
+
+`npm run test:logo-serving` passed. Running focused UI, serving, import-unit,
+production-audit-unit, apply-gate, source-input and SW tests with Node test isolation
+disabled gave **42 passed / one existing sandbox skip / zero failures**. All 47
+source files fully decoded with the unchanged inventory digest. `npm run typecheck`,
+offline release source guard, shell syntax and `git diff --check` passed. The native
+strip-types worker loaded its imports and rejected an invalid nonce before DB access.
+
+`npm run build` compiled successfully but stopped because sandbox nested execution
+returned empty TypeScript `--showConfig` output; a direct subprocess probe confirmed
+`EPERM`. `npm run test:data` did not pass: an in-process diagnostic run gave 239/252
+passing tests, with all 13 failures reproduced unchanged on base commit
+`9d096123165cc315f4a980187d43d826e46bbe37` (nested-process `EPERM`/empty output).
+The remaining eight selection/domain/source tests passed separately. Playwright
+listed all 12 localized image-failure cases but execution could not start its dev
+server. Full packaging was not completed because the build did not finish.
+DB E2E suites were not run: they perform apply, which this implementation task
+explicitly forbids. Controller/CI must complete build, full packaging and browser/DB
+checks in an appropriate disposable environment before release; production parity
+checks above remain a separate deployment gate.

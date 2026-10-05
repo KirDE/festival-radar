@@ -11,7 +11,7 @@ import { MAX_LOGO_BYTES, validateLogo, type LogoMimeType } from './logo-assets.t
 import inventory from '../../data/reviewed-logo-inventory.json' with { type: 'json' };
 
 export type ReviewedLogo = { slug: string; file: string; mimeType: LogoMimeType; sizeBytes: number; sha256: string; bytes: Buffer };
-export const LOGO_DIRECTORY = fileURLToPath(new URL('../../public/logos/', import.meta.url));
+export const LOGO_DIRECTORY = fileURLToPath(new URL('../../source-inputs/reviewed-logos/', import.meta.url));
 const TYPES: Record<string, LogoMimeType> = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
 const EXPECTED_COUNT = 47;
 export const PINNED_REVIEWED_DIGEST = '99a2e164672883036310fd14639be96519a5e0765d770699bfeb98a1b06db456';
@@ -44,7 +44,7 @@ export async function auditReviewedLogos(directory = LOGO_DIRECTORY): Promise<Re
   const rows: ReviewedLogo[] = [];
   for (const row of expected) {
     if (!/^[a-z0-9-]+[.]png$/.test(row.file) || row.file !== row.slug + '.png' ||
-        festivalLogoPath(row.slug) !== '/logos/' + row.file ||
+        festivalLogoPath(row.slug) !== '/api/logos/' + row.file ||
         !Object.values(TYPES).includes(row.mimeType) || !/^[a-f0-9]{64}$/.test(row.sha256)) {
       throw new Error('Invalid reviewed logo mapping');
     }
