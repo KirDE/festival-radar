@@ -39,3 +39,28 @@ a state snapshot, not permission to switch or proof of ingestion success. Pilot
 37343725370 stopped before preflight because legacy service was not inactive;
 use the separate service enums to distinguish an active oneshot from a failed
 one. Protected environment approval rules remain an external repository setting.
+
+Legacy failure classification adds two fixed fields after `dueServiceActive`:
+`legacyServiceResult` allows only `success`, `resources`, `protocol`, `timeout`,
+`exit-code`, `signal`, `core-dump`, `watchdog`, `start-limit-hit`, `oom-kill`,
+`exec-condition`, `unknown`, or `error`; `legacyServiceExitStatus` is an integer
+0–255 only when `ExecMainCode=1` (`CLD_EXITED`), otherwise `unknown`. Signals are
+never reported as numeric exit codes. Missing units yield `missing/unknown/unknown`
+only with no optional service properties or exactly the canonical trio
+`Result=success`, `ExecMainCode=0`, `ExecMainStatus=0`. Partial, duplicate or
+noncanonical optional properties yield `error/error/error`;
+transitional legacy states yield `unknown/unknown/unknown`; incomplete, duplicate,
+malformed or unavailable snapshots yield `error/error/error`. An unrecognized
+Result yields `unknown` and no numeric exit status. Unrun/default main-process
+properties (`ExecMainCode=0`) also yield an unknown exit status. Transport is capped
+at 4 KiB and the fixed-order marker at 2 KiB, with exactly one newline-terminated
+record validated before display. The SHA is checked at the root gate, not relayed.
+
+Local `org.freedesktop.systemd1(5)` and `systemd.exec(5)` document that Result
+belongs to the last service run, whereas ExecMain fields can describe the current
+or last main process. These retained properties may be reset/recycled; Result
+can describe another service step, and `success` alone does not prove a run.
+Numeric main exit status is therefore not necessarily the cause of the unit's
+failure, including when a failed unit retains `Result=success`. No exit age or date is emitted: reboot, suspend and property recycling
+prevent a reliable durable age from this snapshot. This diagnostic does not
+establish when or why the observed legacy failure originally occurred.

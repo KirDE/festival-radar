@@ -51,6 +51,54 @@ unit_status() {
   fi
 }
 if [[ "$action" == health ]]; then
+  # One property snapshot for the legacy oneshot; never relay property text.
+  legacy_failure_status() {
+    local record line load='' active='' result='' code='' status=''
+    local load_seen=0 active_seen=0 result_seen=0 code_seen=0 status_seen=0
+    legacy_service_active=error; legacy_service_result=error; legacy_service_exit_status=error
+    if ! record="$(systemctl show --all --property=LoadState,ActiveState,Result,ExecMainCode,ExecMainStatus "$legacy_service" 2>/dev/null | tr '\000' '\001')"; then return 0; fi
+    [[ ${#record} -le 512 && "$record" != *$'\001'* ]] || return 0
+    while IFS= read -r line; do
+      case "$line" in
+        LoadState=*) (( load_seen == 0 )) || return 0; load_seen=1; load="${line#LoadState=}" ;;
+        ActiveState=*) (( active_seen == 0 )) || return 0; active_seen=1; active="${line#ActiveState=}" ;;
+        Result=*) (( result_seen == 0 )) || return 0; result_seen=1; result="${line#Result=}" ;;
+        ExecMainCode=*) (( code_seen == 0 )) || return 0; code_seen=1; code="${line#ExecMainCode=}" ;;
+        ExecMainStatus=*) (( status_seen == 0 )) || return 0; status_seen=1; status="${line#ExecMainStatus=}" ;;
+        *) return 0 ;;
+      esac
+    done <<< "$record"
+    (( load_seen == 1 && active_seen == 1 )) || return 0
+    # Missing units may omit all service properties, or expose the complete
+    # canonical default trio. Partial or nondefault properties are not missing.
+    if [[ "$load" == not-found && "$active" == inactive ]]; then
+      if (( result_seen + code_seen + status_seen != 0 )); then
+        (( result_seen == 1 && code_seen == 1 && status_seen == 1 )) || return 0
+        [[ "$result" == success && "$code" == 0 && "$status" == 0 ]] || return 0
+      fi
+      legacy_service_active=missing; legacy_service_result=unknown; legacy_service_exit_status=unknown
+      return 0
+    fi
+    [[ "$load" == loaded ]] || return 0
+    (( result_seen == 1 && code_seen == 1 && status_seen == 1 )) || return 0
+    [[ -n "$result" && "$code" =~ ^[0-6]$ && "$status" =~ ^(0|[1-9][0-9]{0,2})$ ]] || return 0
+    (( status <= 255 )) || return 0
+    case "$active" in
+      inactive|active|failed) legacy_service_active="$active" ;;
+      activating|deactivating|reloading|refreshing|maintenance)
+        legacy_service_active=unknown; legacy_service_result=unknown; legacy_service_exit_status=unknown; return 0 ;;
+      *) return 0 ;;
+    esac
+    legacy_service_result=unknown; legacy_service_exit_status=unknown
+    case "$result" in
+      success|resources|protocol|timeout|exit-code|signal|core-dump|watchdog|start-limit-hit|oom-kill|exec-condition)
+        legacy_service_result="$result" ;;
+      *) return 0 ;;
+    esac
+    # waitid(2) CLD_EXITED=1: status is an exit code, not a signal number.
+    # Zero means no known exit; CLD_KILLED/DUMPED and other codes stay unknown.
+    if [[ "$code" == 1 ]]; then legacy_service_exit_status="$status"; fi
+  }
   mode_legacy=0; mode_due=0; mode_missing=0; tick_missing=1; tick_stale=1; fetch_error=0; drain_error=0
   if read_mode; then
     if [[ "$mode" == legacy ]]; then mode_legacy=1; else mode_due=1; fi
@@ -67,9 +115,10 @@ if [[ "$action" == health ]]; then
   fi
   unit_status "$legacy_timer" timer; legacy_enabled="$unit_enabled"; legacy_active="$unit_active"
   unit_status "$due_timer" timer; due_enabled="$unit_enabled"; due_active="$unit_active"
-  unit_status "$legacy_service" service; legacy_service_active="$unit_active"
+  legacy_failure_status
   unit_status "$due_service" service; due_service_active="$unit_active"
-  printf 'DB_DUE_SCHEDULER_HEALTH {"modeLegacy":%d,"modeDbDue":%d,"modeMissing":%d,"tickMissing":%d,"tickStale":%d,"fetchError":%d,"drainError":%d,"legacyTimerEnabled":"%s","legacyTimerActive":"%s","dueTimerEnabled":"%s","dueTimerActive":"%s","legacyServiceActive":"%s","dueServiceActive":"%s"}\n' "$mode_legacy" "$mode_due" "$mode_missing" "$tick_missing" "$tick_stale" "$fetch_error" "$drain_error" "$legacy_enabled" "$legacy_active" "$due_enabled" "$due_active" "$legacy_service_active" "$due_service_active"
+  case "$legacy_service_exit_status" in unknown|error) legacy_service_exit_status='"'"$legacy_service_exit_status"'"' ;; esac
+  printf 'DB_DUE_SCHEDULER_HEALTH {"modeLegacy":%d,"modeDbDue":%d,"modeMissing":%d,"tickMissing":%d,"tickStale":%d,"fetchError":%d,"drainError":%d,"legacyTimerEnabled":"%s","legacyTimerActive":"%s","dueTimerEnabled":"%s","dueTimerActive":"%s","legacyServiceActive":"%s","dueServiceActive":"%s","legacyServiceResult":"%s","legacyServiceExitStatus":%s}\n' "$mode_legacy" "$mode_due" "$mode_missing" "$tick_missing" "$tick_stale" "$fetch_error" "$drain_error" "$legacy_enabled" "$legacy_active" "$due_enabled" "$due_active" "$legacy_service_active" "$due_service_active" "$legacy_service_result" "$legacy_service_exit_status"
   exit 0
 fi
 lock="$root/shared/ingestion/source-fetch.lock"
