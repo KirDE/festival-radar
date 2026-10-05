@@ -29,7 +29,9 @@ rejects manual/conflicting bindings. Verify requires exact 47/47 byte parity;
 it cannot treat missing bindings as success. Only a fixed-status/count digest
 is exported; raw exception text and DB credentials never reach the workflow. This
 operator boundary does not isolate the app user (`www-data`), which already has
-application database access.
+application database access. If a deploy fails, the manual logo unit is restored
+(or removed on first installation); the separately upgraded root dispatcher remains
+but refuses an older release because its deployment-assets SHA no longer matches.
 
 **Not included:** production apply, production DB mutations, route cutover,
 fallback removal, asset deletion, or timer changes. A separate reviewed apply

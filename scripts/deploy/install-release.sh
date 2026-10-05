@@ -6,14 +6,24 @@ commit="${2:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
 env_source="${3:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
 db_due_backup=""
 db_due_assets_armed=false
+logo_import_backup=""
+logo_import_unit_armed=false
 cleanup_install() {
   local status=$?
-  if [[ "$db_due_assets_armed" == true && "$status" -ne 0 ]]; then
-    db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
-    systemctl daemon-reload
+  if [[ "$status" -ne 0 ]]; then
+    if [[ "$logo_import_unit_armed" == true ]]; then
+      logo_import_restore_unit "$logo_import_unit" "$logo_import_backup"
+    fi
+    if [[ "$db_due_assets_armed" == true ]]; then
+      db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
+    fi
+    if [[ "$logo_import_unit_armed" == true || "$db_due_assets_armed" == true ]]; then
+      systemctl daemon-reload
+    fi
   fi
   rm -f "$archive" "$env_source"
   if [[ -n "$db_due_backup" ]]; then rm -rf -- "$db_due_backup"; fi
+  if [[ -n "$logo_import_backup" ]]; then rm -rf -- "$logo_import_backup"; fi
 }
 trap cleanup_install EXIT
 app_root="${APP_ROOT:-/opt/festival-radar}"
@@ -46,11 +56,16 @@ install -d -m 0755 "$release"
 tar -xzf "$archive" --strip-components=1 -C "$release"
 test "$(cat "$release/DEPLOYED_COMMIT")" = "$commit"
 source "$release/scripts/deploy/db-due-assets.sh"
+source "$release/scripts/deploy/logo-import-assets.sh"
 db_due_unit="/etc/systemd/system/$service-db-due@.service"
 db_due_wrapper=/usr/local/libexec/festival-radar/start-db-due
 db_due_backup="$(mktemp -d /run/festival-radar-db-due.XXXXXXXX)"
 db_due_snapshot_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
 db_due_assets_armed=true
+logo_import_unit="/etc/systemd/system/$service-logo-import@.service"
+logo_import_backup="$(mktemp -d /run/festival-radar-logo-import.XXXXXXXX)"
+logo_import_snapshot_unit "$logo_import_unit" "$logo_import_backup"
+logo_import_unit_armed=true
 
 cd "$release"
 test -x "$release/.runtime/node"
@@ -361,8 +376,10 @@ if [[ "$healthy" != true ]]; then
   if [[ -n "$previous" && -d "$previous" ]]; then
     ln -sfn "$previous" "$app_root/current"
   fi
+  logo_import_restore_unit "$logo_import_unit" "$logo_import_backup"
   db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
   systemctl daemon-reload
+  logo_import_unit_armed=false
   db_due_assets_armed=false
   if [[ "$had_previous_env" == true ]]; then
     mv -f "$previous_env" "$env_file"
@@ -376,6 +393,7 @@ if [[ "$healthy" != true ]]; then
   exit 1
 fi
 
+logo_import_unit_armed=false
 db_due_assets_armed=false
 rm -f "$previous_env"
 

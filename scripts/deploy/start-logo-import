@@ -9,10 +9,21 @@ root=/opt/festival-radar
 release="$root/releases/$commit"
 exec 9>/run/festival-radar-activation.lock
 flock -n 9 || { echo 'deployment or logo operation busy' >&2; exit 5; }
-[[ "$(readlink -f "$root/current" 2>/dev/null || true)" == "$release" &&
+[[ -f /usr/local/libexec/festival-radar/DEPLOYMENT_ASSETS_COMMIT &&
+   "$(cat /usr/local/libexec/festival-radar/DEPLOYMENT_ASSETS_COMMIT)" == "$commit" &&
+   "$(readlink -f "$root/current" 2>/dev/null || true)" == "$release" &&
    -f "$release/DEPLOYED_COMMIT" && "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" &&
    -f "$release/scripts/deploy/run-reviewed-logo-import.ts" && -x "$release/.runtime/node" &&
-   -f /etc/systemd/system/festival-radar-logo-import@.service ]] || { echo 'deployed logo release mismatch' >&2; exit 4; }
+   -f /etc/systemd/system/festival-radar-logo-import@.service &&
+   ! -L /etc/systemd/system/festival-radar-logo-import@.service &&
+   "$(stat -c %u -- /etc/systemd/system/festival-radar-logo-import@.service 2>/dev/null)" == 0 ]] || { echo 'deployed logo release mismatch' >&2; exit 4; }
+# upgrade-deployment-assets installs this wrapper before release activation.
+# On a failed install it can outlive the unit; refuse a missing/stale unit rather
+# than invoking a runner from an old current release or a different audit path.
+unit=/etc/systemd/system/festival-radar-logo-import@.service
+grep -Fxq 'WorkingDirectory=/opt/festival-radar/current' "$unit" &&
+grep -Fxq 'ExecStart=/opt/festival-radar/current/.runtime/node --experimental-strip-types /opt/festival-radar/current/scripts/deploy/run-reviewed-logo-import.ts %i' "$unit" &&
+grep -Fxq 'StandardOutput=append:/run/festival-radar-logo-import/%i.audit' "$unit" || { echo 'logo unit/release mismatch' >&2; exit 4; }
 audit_dir=/run/festival-radar-logo-import
 if [[ ! -e "$audit_dir" && ! -L "$audit_dir" ]]; then
   mkdir -m 0700 -- "$audit_dir" 2>/dev/null || { echo 'logo audit unavailable' >&2; exit 6; }
