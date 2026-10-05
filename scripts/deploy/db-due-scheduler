@@ -5,6 +5,8 @@ set -euo pipefail
 commit="$1"; action="$2"
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || exit 2
 case "$action" in legacy|db-due|tick|health) ;; *) exit 2 ;; esac
+# Read-only callers receive only the fixed marker, including on local read errors.
+if [[ "$action" == health ]]; then exec 2>/dev/null; fi
 root=/opt/festival-radar
 state=/var/lib/festival-radar-scheduler
 release="$root/releases/$commit"
@@ -17,6 +19,36 @@ read_mode() {
   [[ -f "$mode_file" && ! -L "$mode_file" && "$(stat -c %u:%a "$mode_file")" == 0:644 ]] || return 1
   mode="$(cat "$mode_file")"
   [[ "$mode" == legacy || "$mode" == db-due ]]
+}
+legacy_timer=festival-radar-collection-ingestion.timer
+legacy_service=festival-radar-collection@ingestion.service
+due_timer=festival-radar-db-due.timer
+due_service=festival-radar-db-due@tick.service
+# Query only fixed systemd properties. Unknown, duplicate, malformed or failed
+# queries are error sentinels, never evidence that a fetching path is inactive.
+unit_status() {
+  local unit="$1" kind="$2" record line load='' active='' enabled=''
+  local load_seen=0 active_seen=0 enabled_seen=0
+  unit_active=error; unit_enabled=error
+  if ! record="$(systemctl show --all --property=LoadState,ActiveState,UnitFileState "$unit" 2>/dev/null)"; then return 0; fi
+  [[ ${#record} -le 256 ]] || return 0
+  while IFS= read -r line; do
+    case "$line" in
+      LoadState=*) (( load_seen == 0 )) || return 0; load_seen=1; load="${line#LoadState=}" ;;
+      ActiveState=*) (( active_seen == 0 )) || return 0; active_seen=1; active="${line#ActiveState=}" ;;
+      UnitFileState=*) (( enabled_seen == 0 )) || return 0; enabled_seen=1; enabled="${line#UnitFileState=}" ;;
+      *) return 0 ;;
+    esac
+  done <<< "$record"
+  (( load_seen == 1 && active_seen == 1 && enabled_seen == 1 )) || return 0
+  if [[ "$load" == not-found && "$active" == inactive && -z "$enabled" ]]; then
+    unit_active=missing; unit_enabled=missing; return 0
+  fi
+  [[ "$load" == loaded ]] || return 0
+  case "$active" in inactive|active|failed) unit_active="$active" ;; esac
+  if [[ "$kind" == timer ]]; then
+    case "$enabled" in enabled|disabled) unit_enabled="$enabled" ;; esac
+  fi
 }
 if [[ "$action" == health ]]; then
   mode_legacy=0; mode_due=0; mode_missing=0; tick_missing=1; tick_stale=1; fetch_error=0; drain_error=0
@@ -33,17 +65,17 @@ if [[ "$action" == health ]]; then
       if (( now >= 10#$stamp && now - 10#$stamp <= 2400 )); then tick_stale=0; fi
     fi
   fi
-  printf 'DB_DUE_SCHEDULER_HEALTH {"modeLegacy":%d,"modeDbDue":%d,"modeMissing":%d,"tickMissing":%d,"tickStale":%d,"fetchError":%d,"drainError":%d}\n' "$mode_legacy" "$mode_due" "$mode_missing" "$tick_missing" "$tick_stale" "$fetch_error" "$drain_error"
+  unit_status "$legacy_timer" timer; legacy_enabled="$unit_enabled"; legacy_active="$unit_active"
+  unit_status "$due_timer" timer; due_enabled="$unit_enabled"; due_active="$unit_active"
+  unit_status "$legacy_service" service; legacy_service_active="$unit_active"
+  unit_status "$due_service" service; due_service_active="$unit_active"
+  printf 'DB_DUE_SCHEDULER_HEALTH {"modeLegacy":%d,"modeDbDue":%d,"modeMissing":%d,"tickMissing":%d,"tickStale":%d,"fetchError":%d,"drainError":%d,"legacyTimerEnabled":"%s","legacyTimerActive":"%s","dueTimerEnabled":"%s","dueTimerActive":"%s","legacyServiceActive":"%s","dueServiceActive":"%s"}\n' "$mode_legacy" "$mode_due" "$mode_missing" "$tick_missing" "$tick_stale" "$fetch_error" "$drain_error" "$legacy_enabled" "$legacy_active" "$due_enabled" "$due_active" "$legacy_service_active" "$due_service_active"
   exit 0
 fi
 lock="$root/shared/ingestion/source-fetch.lock"
 [[ -f "$lock" && ! -L "$lock" && "$(stat -c %U:%a "$lock")" == www-data:640 ]] || exit 4
 exec 8<"$lock"
 flock -n 8 || exit 5
-legacy_timer=festival-radar-collection-ingestion.timer
-legacy_service=festival-radar-collection@ingestion.service
-due_timer=festival-radar-db-due.timer
-due_service=festival-radar-db-due@tick.service
 inactive() { [[ "$(systemctl show --property=ActiveState --value "$1" 2>/dev/null)" == inactive ]]; }
 write_mode() {
   local temp

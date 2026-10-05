@@ -19,3 +19,23 @@ Verify independently afterwards: legacy timer/service inactive, DB-due timer ena
 After any failed switch, verify BOTH timers and services off, the mode gate absent (legacy POST closed), and no stuck worker/lease. Do not enable the legacy timer by hand: use activate-release EXACT_DEPLOYED_SHA due-switch-legacy only after investigation and explicit rollback decision. It first stops and verifies both paths under both locks, atomically writes legacy, probes the active route and exact SHA, and only then enables legacy timer. Keep DB-due disabled. Deployments in DB-due or inhibited mode never automatically re-arm either ingestion timer; after deploy, repeat the exact-SHA gates and explicitly re-arm the intended mode. Other collection jobs are unaffected.
 
 The root audit exposes only fixed status labels and numeric counts. Never publish source URLs, raw errors, credentials or event payloads.
+
+## Read-only scheduler diagnostic
+
+The manual **DB due scheduler read-only diagnostic** workflow has no inputs or
+schedule. It runs only on `main`, behind the protected `production` environment
+and shared `festival-radar-production` concurrency. It calls only the existing
+constrained `activate-release GITHUB_SHA due-scheduler-health` grant. Production
+must already have the reviewed root-owned wrapper installed and the exact SHA
+active; a mismatch fails without a diagnostic. This candidate performs no
+production action and leaves DB-due OFF by default.
+
+The exact deployed commit is verified before producing the marker; the single validated marker includes existing mode/heartbeat
+bits, each timer's enabled and active enums, and each service's `ActiveState`:
+`inactive`, `active`, `failed`, `missing`, or `error`. Missing units and unavailable
+or malformed queries emit fail-closed sentinels; neither `failed` nor `missing`
+is `inactive`. No raw SSH output, logs, URLs or error details are relayed. This is
+a state snapshot, not permission to switch or proof of ingestion success. Pilot
+37343725370 stopped before preflight because legacy service was not inactive;
+use the separate service enums to distinguish an active oneshot from a failed
+one. Protected environment approval rules remain an external repository setting.
