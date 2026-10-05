@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { claimPlaylistRefresh as claimPage, enqueuePlaylistRefresh, finishPlaylistRefresh } from "../lib/catalog/playlist-queue.ts";
+import { claimPlaylistRefresh as claimPage, enqueuePlaylistRefresh, finishPlaylistRefresh, assertPlaylistRefreshLease, commitPlaylistRefresh, PlaylistLeaseLostError } from "../lib/catalog/playlist-queue.ts";
 import type { PlaylistClaimCursor } from "../lib/catalog/playlist-queue.ts";
 
 const url = process.env.DATABASE_URL;
@@ -282,4 +282,132 @@ test("multiple bounded calls resume past >32 contended festivals", async () => {
     await holding;
     await first.catalogPlaylistRefresh.updateMany({ where: { festivalSlug: { in: blocked } }, data: { status: "SUCCEEDED" } });
   }
+});
+
+// DB fencing scenarios use real database time rather than the historical
+// claim scanner's injected clock. No Spotify or live consumer is involved.
+async function fencedFixture(ttlMs = 60_000) {
+  const slug = `queue-fence-${randomUUID()}`;
+  const festival = await first.festival.create({ data: {
+    slug, name: "Fence test", country: "Germany", countryCode: "DE", officialUrl: "https://example.test", genres: [],
+    editions: { create: { year: 2027, status: "CONFIRMED", ticketStatus: "UNKNOWN", recordState: "CURRENT", completeness: "COMPLETE", sourceUpdatedAt: new Date() } },
+  }, include: { editions: true } });
+  const publication = await first.catalogPublication.create({ data: {
+    source: "INGESTION", sourceId: `playlist-fence:${randomUUID()}`, festivalSlug: slug,
+    editionYear: 2027, actorLabel: "test", fields: ["lineup"], lineupChanged: true,
+  } });
+  const job = await enqueuePlaylistRefresh(first, publication.id);
+  const [{ now }] = await first.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now`;
+  const page = await claimPage(first, { owner: ownerA, now, ttlMs });
+  assert.equal(page.claim?.id, job.id);
+  return { claim: page.claim!, editionId: festival.editions[0].id, slug };
+}
+
+const playlistWrite = (editionId: string, url: string) => async (tx: import("@prisma/client").Prisma.TransactionClient) => {
+  await tx.festivalPlaylist.upsert({
+    where: { editionId_provider: { editionId, provider: "spotify" } },
+    create: { editionId, provider: "spotify", url }, update: { url },
+  });
+  return url;
+};
+
+test("DB fence rejects wrong identities, expiry, reclaimed owners and commits new owner catalog writes", async () => {
+  const { claim, editionId, slug } = await fencedFixture();
+  const write = playlistWrite(editionId, `https://example.test/${randomUUID()}`);
+  for (const changed of [{ festivalSlug: "wrong-festival" }, { publicationId: jobId }, { leaseOwner: ownerB }, { attempts: claim.attempts + 1 }]) {
+    const wrong = { ...claim, ...changed };
+    await assert.rejects(assertPlaylistRefreshLease(first, wrong), PlaylistLeaseLostError);
+    await assert.rejects(commitPlaylistRefresh(first, wrong, write), PlaylistLeaseLostError);
+    assert.equal(await finishPlaylistRefresh(first, wrong, new Date(), "SUCCEEDED"), false);
+  }
+  await assertPlaylistRefreshLease(first, claim);
+  // Even a forged future expiry and stale caller clock cannot bypass DB time.
+  await first.catalogPlaylistRefresh.update({ where: { id: claim.id }, data: { leaseExpiresAt: new Date(0) } });
+  await assert.rejects(assertPlaylistRefreshLease(first, { ...claim, leaseExpiresAt: base }), PlaylistLeaseLostError);
+  await assert.rejects(commitPlaylistRefresh(first, claim, write), PlaylistLeaseLostError);
+  assert.equal(await finishPlaylistRefresh(first, claim, new Date(0), "SUCCEEDED"), false);
+  const [{ now }] = await second.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now`;
+  // A new owner can commit; the old owner and old attempt cannot.
+  const reclaimed = (await claimPage(second, { owner: ownerB, now, ttlMs: 60_000 })).claim!;
+  assert.equal(reclaimed.id, claim.id);
+  assert.equal(reclaimed.attempts, claim.attempts + 1);
+  await assert.rejects(commitPlaylistRefresh(first, claim, write), PlaylistLeaseLostError);
+  // Matching the new owner alone cannot authorize the original attempt.
+  await assert.rejects(commitPlaylistRefresh(first, { ...claim, leaseOwner: ownerB }, write), PlaylistLeaseLostError);
+  assert.equal(await first.festivalPlaylist.count({ where: { editionId } }), 0);
+  const result = await commitPlaylistRefresh(second, reclaimed, async (tx, scope) => {
+    assert.deepEqual(scope, { festivalSlug: slug, editionYear: 2027, publicationId: reclaimed.publicationId });
+    return write(tx);
+  });
+  assert.equal((await first.festivalPlaylist.findUniqueOrThrow({ where: { editionId_provider: { editionId, provider: "spotify" } } })).url, result);
+  const completed = await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: claim.id } });
+  assert.equal(completed.status, "SUCCEEDED");
+  assert.equal(completed.leaseOwner, null);
+  assert.equal(completed.leaseExpiresAt, null);
+  assert.ok(completed.completedAt);
+  await assert.rejects(commitPlaylistRefresh(first, reclaimed, write), PlaylistLeaseLostError);
+});
+
+test("DB fence rolls back catalog writes on callback error and expiry during transaction", async () => {
+  const { claim, editionId } = await fencedFixture();
+  const write = playlistWrite(editionId, `https://example.test/${randomUUID()}`);
+  await assert.rejects(commitPlaylistRefresh(first, claim, async (tx) => { await write(tx); throw new Error("write failed"); }), /write failed/);
+  assert.equal(await first.festivalPlaylist.count({ where: { editionId } }), 0);
+  assert.equal((await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: claim.id } })).status, "RUNNING");
+  // Shorten only the test fixture's lease; the callback itself never mutates it.
+  await first.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "leaseExpiresAt" = (clock_timestamp() AT TIME ZONE 'UTC') + interval '1 second' WHERE id = ${claim.id}`;
+  await assert.rejects(commitPlaylistRefresh(first, claim, async (tx) => {
+    await write(tx);
+    await tx.$queryRaw`SELECT 1 FROM pg_sleep(1.1)`;
+  }), PlaylistLeaseLostError);
+  assert.equal(await first.festivalPlaylist.count({ where: { editionId } }), 0);
+  assert.equal((await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: claim.id } })).status, "RUNNING");
+  await first.catalogPlaylistRefresh.update({ where: { id: claim.id }, data: { status: "SUCCEEDED" } });
+});
+
+test("DB fence serializes same-festival commit vs claimant and competing completion", async () => {
+  const { claim, editionId } = await fencedFixture();
+  let release!: () => void;
+  let held!: () => void;
+  const untilReleased = new Promise<void>((resolve) => { release = resolve; });
+  const lockHeld = new Promise<void>((resolve) => { held = resolve; });
+  const holding = commitPlaylistRefresh(first, claim, async (tx) => {
+    await playlistWrite(editionId, `https://example.test/${randomUUID()}`)(tx);
+    held();
+    await untilReleased;
+  });
+  try {
+    await lockHeld;
+    // Artificially advanced scanner clock makes this row reclaim-eligible;
+    // the shared festival lock still prevents reclaim during catalog commit.
+    assert.equal((await claimPage(second, { owner: ownerB, now: new Date(claim.leaseExpiresAt.getTime() + 1), ttlMs: 60_000 })).claim, null);
+    const competing = finishPlaylistRefresh(second, claim, new Date(), "FAILED");
+    release();
+    await holding;
+    assert.equal(await competing, false);
+    assert.equal((await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: claim.id } })).status, "SUCCEEDED");
+  } finally { release(); await holding; }
+});
+
+test("DB fence refuses unleased legacy RUNNING and any RUNNING sibling", async () => {
+  const { claim, editionId, slug } = await fencedFixture();
+  const legacyPublication = await first.catalogPublication.create({ data: {
+    source: "ADMIN", sourceId: `playlist-fence-legacy:${randomUUID()}`, festivalSlug: slug,
+    editionYear: 2027, actorLabel: "test", fields: ["lineup"], lineupChanged: true,
+  } });
+  const legacy = await enqueuePlaylistRefresh(first, legacyPublication.id);
+  await first.catalogPlaylistRefresh.update({ where: { id: legacy.id }, data: { status: "RUNNING", attempts: 1 } });
+  await assert.rejects(assertPlaylistRefreshLease(first, claim), PlaylistLeaseLostError);
+  await assert.rejects(commitPlaylistRefresh(first, claim, playlistWrite(editionId, "https://example.test/legacy")), PlaylistLeaseLostError);
+  await first.catalogPlaylistRefresh.update({ where: { id: claim.id }, data: { status: "SUCCEEDED" } });
+  const forged = { ...claim, id: legacy.id, publicationId: legacy.publicationId };
+  await assert.rejects(assertPlaylistRefreshLease(first, forged), PlaylistLeaseLostError);
+  assert.equal((await claimPage(second, input(ownerB))).claim, null);
+  // Partially populated legacy rows with an expired timestamp but no owner
+  // must not be implicitly resurrected either.
+  await first.catalogPlaylistRefresh.update({ where: { id: legacy.id }, data: { leaseExpiresAt: new Date(0) } });
+  assert.equal((await claimPage(second, input(ownerB))).claim, null);
+  assert.equal(await finishPlaylistRefresh(first, forged, new Date(), "SUCCEEDED"), false);
+  assert.equal(await first.festivalPlaylist.count({ where: { editionId } }), 0);
+  await first.catalogPlaylistRefresh.updateMany({ where: { festivalSlug: slug }, data: { status: "SUCCEEDED" } });
 });
