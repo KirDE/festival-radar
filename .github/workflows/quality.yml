@@ -42,6 +42,7 @@ jobs:
       - run: npm run test:playlist-queue
       - run: npm run test:catalog-db
       - run: npm run catalog:backfill
+      - run: node --import tsx --test tests/offline-catalog.e2e.test.ts
       - run: npm run test:logo-import
       - run: npm run test:logo-serving
       - run: npm run test:logo-serving-db
