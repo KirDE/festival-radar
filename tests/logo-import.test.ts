@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import sharp from 'sharp';
-import { auditReviewedLogos, decodeReviewedLogo, inventoryDigest, LOGO_DIRECTORY } from '../lib/catalog/logo-import.ts';
+import { auditReviewedLogos, decodeReviewedLogo, inventoryDigest, LOGO_DIRECTORY, PINNED_REVIEWED_DIGEST } from '../lib/catalog/logo-import.ts';
 import { festivalLogoPath, festivalLogoFallbacks } from '../data/festival-logos.ts';
 import { festivals } from '../data/festivals.ts';
 import { requireLocalDisposableLogoDatabase } from './logo-import-db-guard.ts';
@@ -53,7 +53,7 @@ test('reviewed inventory fully decodes, hashes and covers exact static binding',
     assert.equal(createHash('sha256').update(row.bytes).digest('hex'), row.sha256);
     assert.equal(row.bytes.length, row.sizeBytes);
   }
-  assert.match(inventoryDigest(rows), /^[a-f0-9]{64}$/);
+  assert.equal(inventoryDigest(rows), PINNED_REVIEWED_DIGEST);
   for (const slug of festivalLogoFallbacks) assert.equal(festivalLogoPath(slug), null);
 });
 
@@ -88,5 +88,7 @@ test('missing, unexpected, altered or mismatched source inventory fails closed',
     await writeFile(path.join(directory, name), rows[0].bytes);
     await rm(path.join(directory, name));
     await assert.rejects(auditReviewedLogos(directory), /inventory differs/);
+    await symlink(path.join(LOGO_DIRECTORY, name), path.join(directory, name));
+    await assert.rejects(auditReviewedLogos(directory));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

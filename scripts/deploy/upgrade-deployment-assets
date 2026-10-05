@@ -9,6 +9,10 @@ destination="/usr/local/libexec/festival-radar"
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid commit" >&2; exit 2; }
 [[ "${SUDO_USER:-}" == "$deploy_user" ]] || { echo "unauthorized deploy caller" >&2; exit 3; }
 
+# Serialize root dispatch asset replacement with activation and manual operations.
+exec 9>/run/festival-radar-activation.lock
+flock -n 9 || { echo "deployment or manual operation busy" >&2; exit 5; }
+
 temporary="$(mktemp -d)"
 trap 'rm -rf "$temporary"' EXIT
 

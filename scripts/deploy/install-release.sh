@@ -131,7 +131,7 @@ ProtectSystem=strict
 TimeoutStartSec=120
 UNIT
 
-# Manual-only read-only logo inventory/DB comparison. Never enable or schedule.
+# Manual-only fixed-mode logo operation. Apply requires separate explicit dispatch. Never enable or schedule.
 # PID 1 opens the root-owned audit before dropping privileges to www-data.
 cat > "/etc/systemd/system/$service-logo-import@.service" <<UNIT
 [Unit]

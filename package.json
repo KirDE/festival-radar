@@ -25,7 +25,7 @@
     "logos:dry-run": "tsx scripts/import-reviewed-logos.ts --dry-run",
     "logos:verify": "tsx scripts/import-reviewed-logos.ts --verify",
     "logos:apply": "tsx scripts/import-reviewed-logos.ts --apply",
-    "test:logo-import": "node --import tsx --test tests/logo-import.test.ts tests/logo-import.e2e.test.ts",
+    "test:logo-import": "node --import tsx --test tests/logo-import.test.ts tests/logo-import.e2e.test.ts && node --import tsx --test tests/logo-production-apply.e2e.test.ts",
     "test:due-worker": "node --import tsx --test --test-concurrency=1 tests/ingestion-due-worker.e2e.test.mjs tests/db-due-health.e2e.test.mjs",
     "catalog:backfill": "tsx scripts/backfill-catalog.ts",
     "catalog:verify": "tsx scripts/backfill-catalog.ts --verify-only",
