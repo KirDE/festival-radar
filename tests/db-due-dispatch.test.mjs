@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import { dueWorkerHealth } from '../lib/ingestion/due-health.ts';
 
@@ -37,7 +40,10 @@ test('manual unit is fixed-mode, read-only except private temporary output, and 
   assert.match(installer, /db_due_restore_assets.*systemctl daemon-reload/s);
   assert.ok(installer.includes("trap cleanup_install EXIT"));
   assert.ok(installer.includes("db_due_assets_armed=true"));
-  assert.ok(installer.includes(`"$db_due_assets_armed" == true && "$status" -ne 0`));
+  const cleanup = installer.slice(installer.indexOf('cleanup_install()'), installer.indexOf('trap cleanup_install EXIT'));
+  assert.match(cleanup, /if \[\[ "\$status" -ne 0 \]\]; then/);
+  assert.match(cleanup, /if \[\[ "\$db_due_assets_armed" == true \]\]; then\s+db_due_restore_assets "\$db_due_unit" "\$db_due_wrapper" "\$db_due_backup"/);
+  assert.match(cleanup, /if \[\[ "\$logo_import_unit_armed" == true \|\| "\$db_due_assets_armed" == true \]\]; then\s+systemctl daemon-reload/);
   assert.ok(installer.includes('ExecStart=$release/scripts/deploy/run-db-due-operation.sh %i $commit'));
   assert.ok(!installer.includes('db-due.timer'));
   assert.ok(installer.includes('User=www-data') && installer.includes('ProtectSystem=strict'));
@@ -49,4 +55,28 @@ test('manual unit is fixed-mode, read-only except private temporary output, and 
   assert.match(runner, /trap 'rm -rf/);
   assert.ok(packageScript.includes('cp scripts/report-db-due-health.mjs'));
   assert.ok(packageScript.includes('scripts/deploy/db-due-assets.sh'));
+});
+
+test('failed cleanup restores DB due only when armed; success never restores', async () => {
+  const installer = await readFile('scripts/deploy/install-release.sh', 'utf8');
+  const cleanup = installer.slice(installer.indexOf('cleanup_install()'), installer.indexOf('trap cleanup_install EXIT'));
+  const temporary = await mkdtemp(path.join(os.tmpdir(), 'db-due-rollback-'));
+  try {
+    for (const [armed, failed, expected] of [
+      [true, true, ['restore', 'daemon-reload']],
+      [false, true, []],
+      [true, false, []],
+    ]) {
+      const script = 'set -euo pipefail; ' + cleanup + '\n' +
+        'db_due_restore_assets() { printf "restore\n"; }; systemctl() { printf "%s\n" "$*"; }; ' +
+        'logo_import_unit_armed=false; logo_import_backup=""; ' +
+        'db_due_assets_armed="$ARMED"; db_due_unit=unit; db_due_wrapper=wrapper; db_due_backup=""; ' +
+        'archive="$TEMP/archive"; env_source="$TEMP/env"; ' +
+        (failed ? 'false || cleanup_install' : 'cleanup_install');
+      const result = spawnSync('bash', ['-c', script], { encoding: 'utf8',
+        env: { ...process.env, TEMP: temporary, ARMED: armed ? 'true' : 'false' } });
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(result.stdout.trim().split('\n').filter(Boolean), expected);
+    }
+  } finally { await rm(temporary, { recursive: true, force: true }); }
 });

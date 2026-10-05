@@ -1,0 +1,56 @@
+name: Reviewed festival logo audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Read-only DB preview or exact 47-binding verification
+        required: true
+        type: choice
+        options:
+          - preview
+          - verify
+
+concurrency:
+  group: festival-radar-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  logo-audit:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure constrained deployment SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host production
+            HostName $DEPLOY_HOST
+            Port $DEPLOY_PORT
+            User festival-radar-deploy
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+      - name: Validate deployment identity
+        run: bash scripts/deploy/preflight-ssh.sh production
+      - name: Compare exact deployed release, pinned inventory and DB
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          case "$MODE" in preview|verify) ;; *) exit 2 ;; esac
+          ssh production sudo -n /usr/local/libexec/festival-radar/activate-release "$GITHUB_SHA" "logo-$MODE"

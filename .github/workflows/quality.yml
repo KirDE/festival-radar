@@ -43,6 +43,7 @@ jobs:
       - run: npm run test:catalog-db
       - run: npm run catalog:backfill
       - run: npm run test:logo-import
+      - run: node --import tsx --test tests/logo-production-audit.test.ts
       - run: npm run test:due-worker
       # Prisma binds Date as timestamptz; exercise the source lease and fenced
       # publication against UTC-naive columns with a non-UTC database session.
