@@ -22,7 +22,7 @@
     "notifications:drain-db-due": "node scripts/drain-ingestion-notifications.mjs --db-due",
     "test:playlist-queue": "node --import tsx --test tests/playlist-queue.e2e.test.ts",
     "test:logo-assets": "node --import tsx --test tests/logo-assets.e2e.test.ts",
-    "test:logo-serving": "node --import tsx --test tests/logo-serving.test.ts",
+    "test:logo-serving": "node --import tsx --test tests/logo-serving.test.ts tests/festival-logo.test.ts",
     "test:logo-serving-db": "node --import tsx --test tests/logo-serving.e2e.test.ts",
     "logos:dry-run": "tsx scripts/import-reviewed-logos.ts --dry-run",
     "logos:verify": "tsx scripts/import-reviewed-logos.ts --verify",
