@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Root-owned fixed-mode dispatcher; no write mode is exposed.
+[[ "$(id -u)" == 0 && $# == 2 ]] || { echo 'logo arguments rejected' >&2; exit 2; }
+commit="$1" mode="$2"
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo 'invalid commit' >&2; exit 2; }
+case "$mode" in preview|verify) ;; *) echo 'invalid logo mode' >&2; exit 2 ;; esac
+root=/opt/festival-radar
+release="$root/releases/$commit"
+exec 9>/run/festival-radar-activation.lock
+flock -n 9 || { echo 'deployment or logo operation busy' >&2; exit 5; }
+[[ "$(readlink -f "$root/current" 2>/dev/null || true)" == "$release" &&
+   -f "$release/DEPLOYED_COMMIT" && "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" &&
+   -f "$release/scripts/deploy/run-reviewed-logo-import.ts" && -x "$release/.runtime/node" &&
+   -f /etc/systemd/system/festival-radar-logo-import@.service ]] || { echo 'deployed logo release mismatch' >&2; exit 4; }
+audit_dir=/run/festival-radar-logo-import
+if [[ ! -e "$audit_dir" && ! -L "$audit_dir" ]]; then
+  mkdir -m 0700 -- "$audit_dir" 2>/dev/null || { echo 'logo audit unavailable' >&2; exit 6; }
+fi
+[[ -d "$audit_dir" && ! -L "$audit_dir" && "$(stat -c %u:%a -- "$audit_dir" 2>/dev/null)" == 0:700 ]] || { echo 'logo audit unsafe' >&2; exit 6; }
+nonce="$(od -An -N32 -tx1 /dev/urandom | tr -d '[:space:]')"
+[[ "$nonce" =~ ^[0-9a-f]{64}$ ]] || { echo 'logo nonce unavailable' >&2; exit 6; }
+env_file="$audit_dir/$mode.env"
+audit_file="$audit_dir/$mode.audit"
+temporary="$(mktemp "$audit_dir/.$mode.XXXXXXXX")" || { echo 'logo environment unavailable' >&2; exit 6; }
+trap 'rm -f -- "$temporary" "$env_file" "$audit_file"' EXIT
+[[ "$(stat -c %u:%a -- "$temporary")" == 0:600 ]] || { echo 'logo environment unsafe' >&2; exit 6; }
+printf 'LOGO_IMPORT_NONCE=%s\n' "$nonce" > "$temporary"
+mv -fT -- "$temporary" "$env_file"
+temporary="$(mktemp "$audit_dir/.$mode.XXXXXXXX")" || { echo 'logo audit unavailable' >&2; exit 6; }
+[[ "$(stat -c %u:%a -- "$temporary")" == 0:600 ]] || { echo 'logo audit unsafe' >&2; exit 6; }
+mv -fT -- "$temporary" "$audit_file"
+result=0
+systemctl start "festival-radar-logo-import@$mode.service" >/dev/null 2>&1 || result=6
+[[ -f "$audit_file" && ! -L "$audit_file" && "$(stat -c %u:%a -- "$audit_file" 2>/dev/null)" == 0:600 ]] || { echo 'logo audit unsafe' >&2; exit 6; }
+size="$(stat -c %s -- "$audit_file" 2>/dev/null)" || { echo 'logo audit unreadable' >&2; exit 6; }
+[[ "$size" =~ ^[0-9]+$ ]] && (( size > 0 && size <= 512 )) || { echo 'logo audit invalid size' >&2; exit 6; }
+if ! (tr -d '\000' < "$audit_file" | cmp -s -- "$audit_file" -) 2>/dev/null; then echo 'logo audit binary' >&2; exit 6; fi
+record="$(cat -- "$audit_file")" || { echo 'logo audit unreadable' >&2; exit 6; }
+[[ "$(stat -c %s -- "$audit_file" 2>/dev/null)" == "$size" ]] || { echo 'logo audit changed' >&2; exit 6; }
+# Validate the entire single-line audit and exact bytes. Never relay raw worker output.
+ok_pattern='^LOGO_IMPORT_AUDIT \{"operation":"reviewed-logo-import","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"ok","inventoryDigest":"99a2e164672883036310fd14639be96519a5e0765d770699bfeb98a1b06db456","sourceFiles":47,"existing":(0|[1-9]|[1-3][0-9]|4[0-7])\}$'
+fail_pattern='^LOGO_IMPORT_AUDIT \{"operation":"reviewed-logo-import","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(source-rejected|database-rejected|disconnect-error)","inventoryDigest":"99a2e164672883036310fd14639be96519a5e0765d770699bfeb98a1b06db456","sourceFiles":47\}$'
+if [[ "$record" =~ $ok_pattern && "$result" == 0 ]]; then
+  count="${BASH_REMATCH[1]}"
+  printf '%s\n' "$record" | cmp -s -- "$audit_file" - || { echo 'logo audit ambiguous' >&2; exit 6; }
+  printf 'LOGO_IMPORT_AUDIT {"operation":"reviewed-logo-import","mode":"%s","status":"ok","inventoryDigest":"99a2e164672883036310fd14639be96519a5e0765d770699bfeb98a1b06db456","sourceFiles":47,"existing":%s}\n' "$mode" "$count"
+  exit 0
+fi
+if [[ "$record" =~ $fail_pattern && "$result" != 0 ]]; then
+  status="${BASH_REMATCH[1]}"
+  if printf '%s\n' "$record" | cmp -s -- "$audit_file" -; then
+    printf 'LOGO_IMPORT_FAILED %s\n' "$status" >&2
+    exit 6
+  fi
+fi
+echo 'logo operation failed or audit invalid' >&2
+exit 6

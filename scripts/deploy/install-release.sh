@@ -116,6 +116,31 @@ ProtectSystem=strict
 TimeoutStartSec=120
 UNIT
 
+# Manual-only read-only logo inventory/DB comparison. Never enable or schedule.
+# PID 1 opens the root-owned audit before dropping privileges to www-data.
+cat > "/etc/systemd/system/$service-logo-import@.service" <<UNIT
+[Unit]
+Description=Manual Festival Radar reviewed logo audit %i
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=$app_root/current
+EnvironmentFile=$shared/production.env
+EnvironmentFile=/run/festival-radar-logo-import/%i.env
+Environment=NODE_ENV=production
+ExecStart=$app_root/current/.runtime/node --experimental-strip-types $app_root/current/scripts/deploy/run-reviewed-logo-import.ts %i
+StandardOutput=append:/run/festival-radar-logo-import/%i.audit
+StandardError=null
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+TimeoutStartSec=120
+UNIT
+
 # Manual-only, operator-triggered, fixed-mode DB due operation. The application
 # user still owns the release and database credentials: this is NOT a DB access
 # security boundary. No timer or enablement.
