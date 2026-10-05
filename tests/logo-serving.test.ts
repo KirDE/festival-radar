@@ -15,7 +15,7 @@ function request(tag?: string, method = "GET") {
   return new Request("http://localhost/api/logos/test.png", { method, headers: tag ? { "If-None-Match": tag } : {} });
 }
 
-test("exact public references map to reviewed filenames; UI and initials fallback stay intact", () => {
+test("exact public references map to reviewed filenames; static references and initials stay intact", () => {
   for (const row of inventory) {
     const reference = festivalLogoPath(row.slug)!;
     assert.equal(reference, `/logos/${row.file}`);
