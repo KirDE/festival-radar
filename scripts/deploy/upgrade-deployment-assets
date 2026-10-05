@@ -22,17 +22,27 @@ main_sha="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
   | head -n 1)"
 [[ "$main_sha" == "$commit" ]] || { echo "commit is not the current main head" >&2; exit 4; }
 
-for asset in activate-release install-release.sh upgrade-deployment-assets start-logo-import; do
+for asset in activate-release install-release.sh upgrade-deployment-assets start-logo-import verify-logo-restore-proof.py; do
   curl --fail --silent --show-error --proto '=https' --tlsv1.2 --max-time 20 \
     "https://raw.githubusercontent.com/$repository/$commit/scripts/deploy/$asset" \
     --output "$temporary/$asset"
   test -s "$temporary/$asset"
-  bash -n "$temporary/$asset"
+  if [[ "$asset" == verify-logo-restore-proof.py ]]; then
+    if ! /usr/bin/python3 -I - "$temporary/$asset" >/dev/null 2>&1 <<'PY_SYNTAX'
+import ast, pathlib, sys
+ast.parse(pathlib.Path(sys.argv[1]).read_text())
+PY_SYNTAX
+    then echo 'root verifier syntax rejected' >&2; exit 6; fi
+  else
+    bash -n "$temporary/$asset"
+  fi
 done
 
 install -d -o root -g root -m 0755 "$destination"
-for asset in activate-release install-release.sh upgrade-deployment-assets start-logo-import; do
-  install -o root -g root -m 0755 "$temporary/$asset" "$destination/$asset"
+for asset in activate-release install-release.sh upgrade-deployment-assets start-logo-import verify-logo-restore-proof.py; do
+  asset_mode=0755
+  if [[ "$asset" == verify-logo-restore-proof.py ]]; then asset_mode=0644; fi
+  install -o root -g root -m "$asset_mode" "$temporary/$asset" "$destination/$asset"
 done
 printf '%s\n' "$commit" > "$destination/DEPLOYMENT_ASSETS_COMMIT"
 chmod 0644 "$destination/DEPLOYMENT_ASSETS_COMMIT"

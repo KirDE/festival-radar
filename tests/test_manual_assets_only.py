@@ -44,7 +44,7 @@ class HostFixture:
         for name in helper.ASSETS:
             data = name.encode()
             self.manifest['assets'][name] = hashlib.sha256(data).hexdigest()
-            self.add(DEST + name, 0, 0, stat.S_IFREG | 0o755, data)
+            self.add(DEST + name, 0, 0, stat.S_IFREG | (0o644 if name == 'verify-logo-restore-proof.py' else 0o755), data)
         for name in helper.RELEASE_FILES:
             data = name.encode()
             self.manifest['release'][name] = hashlib.sha256(data).hexdigest()
@@ -275,9 +275,13 @@ class OrchestrationTests(unittest.TestCase):
 class ContractTests(unittest.TestCase):
     def test_manifest_is_exact_git_content_and_unit(self):
         commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT).decode().strip()
-        # Only local git commands here, never helper.main().
-        with patch.object(helper, 'run', side_effect=lambda command, payload=None:
-                          subprocess.check_output(command, cwd=ROOT)):
+        # Model a commit containing the reviewable working files: this test also
+        # runs before commits exist. Assert every read requests the exact SHA.
+        def source(command, payload=None):
+            self.assertEqual(command[:2], ['git', 'show'])
+            self.assertTrue(command[2].startswith(commit + ':'))
+            return (ROOT / command[2].split(':', 1)[1]).read_bytes()
+        with patch.object(helper, 'run', side_effect=source):
             manifest = helper.manifest_for(commit)
         for name, digest in manifest['assets'].items():
             self.assertEqual(digest, hashlib.sha256((ROOT / 'scripts/deploy' / name).read_bytes()).hexdigest())
@@ -336,7 +340,8 @@ class ContractTests(unittest.TestCase):
         self.assertIn('run-reviewed-logo-import.ts', packager)
         self.assertIn('cp -a data lib', packager)
         self.assertIn('for asset in ' + ' '.join(helper.ASSETS), updater)
-        self.assertIn('install -o root -g root -m 0755', updater)
+        self.assertIn('install -o root -g root -m "$asset_mode"', updater)
+        self.assertIn('asset_mode=0644', updater)
         self.assertIn('[[ "$main_sha" == "$commit" ]]', updater)
         self.assertNotRegex(updater, r'systemctl|migrate|activate-release "|install-release.sh "')
 

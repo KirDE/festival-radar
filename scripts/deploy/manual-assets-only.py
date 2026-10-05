@@ -15,9 +15,9 @@ import re
 import subprocess
 import sys
 
-ASSETS = ('activate-release', 'install-release.sh', 'upgrade-deployment-assets', 'start-logo-import')
+ASSETS = ('activate-release', 'install-release.sh', 'upgrade-deployment-assets', 'start-logo-import', 'verify-logo-restore-proof.py')
 RELEASE_FILES = ('scripts/deploy/run-reviewed-logo-import.ts', 'scripts/deploy/logo-import-assets.sh',
-                 'lib/catalog/logo-import.ts')
+                 'lib/catalog/logo-import.ts', 'scripts/deploy/verify-logo-restore-proof.py')
 HEALTH_URL = 'https://festivals.kir-it.de/api/health/deployment/'
 
 
@@ -106,14 +106,14 @@ def remote_verify(commit, manifest, after):
             except FileNotFoundError:
                 continue  # Missing assets are the reason for this repair.
             marker = name == 'DEPLOYMENT_ASSETS_COMMIT'
-            data = check(destination + name, 0, 0, 0o644 if marker else 0o755)
+            data = check(destination + name, 0, 0, 0o644 if marker or name == 'verify-logo-restore-proof.py' else 0o755)
             if marker:
                 require(len(data) == 41 and data[-1:] == b'\n' and
                         all(value in b'0123456789abcdef' for value in data[:-1]))
     if after:
         check(destination + 'DEPLOYMENT_ASSETS_COMMIT', 0, 0, 0o644, contents=(commit + '\n').encode())
         for name, digest in manifest['assets'].items():
-            check(destination + name, 0, 0, 0o755, digest=digest)
+            check(destination + name, 0, 0, 0o644 if name == 'verify-logo-restore-proof.py' else 0o755, digest=digest)
     require(identity(current.lstat()) == identity(metadata) and os.readlink(current) == release)
 
 

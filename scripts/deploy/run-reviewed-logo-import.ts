@@ -70,8 +70,8 @@ if (isMainModule()) {
   const expected = process.env.LOGO_IMPORT_EXPECTED_EXISTING;
   if (!mode || !validNonce(nonce) || !process.env.DATABASE_URL ||
       !/^[0-9a-f]{40}$/.test(commit ?? '') || process.env.DEPLOYED_COMMIT !== commit || !releaseMatches ||
-      (mode === 'apply' && (process.env.LOGO_IMPORT_CONFIRMATION !== 'APPLY-47-' + commit + '-' + process.env.LOGO_IMPORT_EVIDENCE ||
-        !/^[0-9a-f]{64}$/.test(process.env.LOGO_IMPORT_EVIDENCE ?? '') || !['0', '47'].includes(expected ?? '')))) {
+      (mode === 'apply' && (process.env.LOGO_IMPORT_CONFIRMATION !== 'APPLY-47-' + commit ||
+        !/^[0-9a-f]{64}$/.test(process.env.LOGO_IMPORT_PROOF_DIGEST ?? '') || !['0', '47'].includes(expected ?? '')))) {
     console.error('logo operation guard rejected');
     process.exitCode = 1;
   } else {

@@ -148,7 +148,7 @@ test('dispatcher refuses invalid mode and malformed apply confirmation before to
   const guard = script.slice(0, script.indexOf('root=/opt/festival-radar'));
   for (const args of [['a'.repeat(40), 'invalid'], ['a'.repeat(40), 'apply'],
     ['a'.repeat(40), 'apply', 'wrong', '0', 'b'.repeat(64)],
-    ['a'.repeat(40), 'apply', 'APPLY-47-' + 'a'.repeat(40) + '-' + 'b'.repeat(64), '1', 'b'.repeat(64)]]) {
+    ['a'.repeat(40), 'apply', 'APPLY-47-' + 'a'.repeat(40), '1', 'b'.repeat(64)]]) {
     const result = spawnSync('bash', ['-c', 'id() { echo 0; }; ' + guard, 'wrapper-test', ...args], { encoding: 'utf8' });
     assert.equal(result.status, 2);
     assert.equal(result.stdout, '');
@@ -161,4 +161,46 @@ test('dispatch asset upgrades use the same host lock as apply and activation', (
     assert.match(script, /exec 9>\/run\/festival-radar-activation\.lock/);
     assert.match(script, /flock -n 9/);
   }
+});
+
+test('apply cannot start worker without a root proof checked inside the deployment lock', () => {
+  const wrapper = readFileSync('scripts/deploy/start-logo-import', 'utf8');
+  const activation = readFileSync('scripts/deploy/activate-release', 'utf8');
+  const worker = readFileSync('scripts/deploy/run-reviewed-logo-import.ts', 'utf8');
+  const lock = wrapper.indexOf('flock -n 9');
+  const check = wrapper.indexOf('"$proof_verifier" check "$commit" "$5"');
+  const start = wrapper.indexOf('systemctl start');
+  assert.ok(lock >= 0 && check > lock && start > check);
+  assert.match(wrapper, /stat -c %u:%g:%a.*proof_verifier.*0:0:644/);
+  assert.match(wrapper, /\/usr\/bin\/python3 -I.*proof_verifier.*check/);
+  assert.match(wrapper, /echo 'logo root restore proof rejected'.*exit 6/);
+  assert.match(activation, /logo-proof/);
+  assert.match(worker, /LOGO_IMPORT_PROOF_DIGEST/);
+  assert.doesNotMatch(worker, /LOGO_IMPORT_EVIDENCE/);
+});
+
+test('root proof failure exits before systemctl, with no raw error output', () => {
+  const wrapper = readFileSync('scripts/deploy/start-logo-import', 'utf8');
+  const start = wrapper.indexOf('# Repeat the root-file');
+  const end = wrapper.indexOf('[[ -f "$audit_file"', start);
+  const operation = wrapper.slice(start, end);
+  const child = spawnSync('bash', ['-c', 'set -euo pipefail; mode=apply; commit=' + 'a'.repeat(40) +
+    '; proof_verifier=/tmp/absent-logo-verifier; set -- x x x x ' + 'b'.repeat(64) +
+    '; systemctl() { echo WORKER_STARTED; }; ' + operation], { encoding: 'utf8' });
+  assert.equal(child.status, 6);
+  assert.equal(child.stdout, '');
+  assert.equal(child.stderr, 'logo root restore proof rejected\n');
+});
+
+test('root verifier packaging and asset upgrades never invoke proof or apply during deployment', () => {
+  const packager = readFileSync('scripts/deploy/package-release.sh', 'utf8');
+  const updater = readFileSync('scripts/deploy/upgrade-deployment-assets', 'utf8');
+  const installer = readFileSync('scripts/deploy/install-release.sh', 'utf8');
+  assert.match(packager, /cp scripts\/deploy\/verify-logo-restore-proof\.py/);
+  assert.match(packager, /grep -Fxq 'app\/scripts\/deploy\/verify-logo-restore-proof\.py'/);
+  assert.match(updater, /for asset in .*verify-logo-restore-proof\.py/);
+  assert.match(updater, /asset_mode=0644/);
+  assert.match(updater, /ast\.parse/);
+  assert.doesNotMatch(updater, /proof_verifier.*issue|logo-apply|logo-proof/);
+  assert.doesNotMatch(installer, /logo-proof|logo-apply|enable.*logo-import|logo-import.*timer/);
 });

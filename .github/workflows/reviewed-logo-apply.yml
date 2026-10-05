@@ -7,19 +7,6 @@ on:
         description: Exact main SHA already deployed and healthy (40 lowercase hex)
         required: true
         type: string
-      evidence_comment:
-        description: Issue 210 comment ID containing the immutable backup/restore attestation record
-        required: true
-        type: string
-      evidence_digest:
-        description: SHA256 of the exact evidence comment body
-        required: true
-        type: string
-      restore_attested:
-        description: I have backed up production and successfully restored and validated that backup in isolation
-        required: true
-        default: false
-        type: boolean
       expected_existing:
         description: Expected bindings; 47 permits an explicitly confirmed idempotent retry
         required: true
@@ -27,7 +14,7 @@ on:
         type: choice
         options: ['0', '47']
       confirmation:
-        description: Type APPLY-47-<deployment_sha>-<evidence_digest>
+        description: Type APPLY-47-<deployment_sha>
         required: true
         type: string
 
@@ -38,20 +25,16 @@ concurrency:
 permissions:
   contents: read
   actions: read
-  issues: read
 
 jobs:
   guarded-apply:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Configure required reviewers and restrict deployment branches to main.
+    # Secret scoping only: this environment has no independent approval protection.
     environment: production
     env:
       APPLY_SHA: ${{ inputs.deployment_sha }}
-      EVIDENCE_COMMENT: ${{ inputs.evidence_comment }}
-      EVIDENCE_DIGEST: ${{ inputs.evidence_digest }}
-      RESTORE_ATTESTED: ${{ inputs.restore_attested }}
       EXPECTED_EXISTING: ${{ inputs.expected_existing }}
       APPLY_CONFIRMATION: ${{ inputs.confirmation }}
       GITHUB_TOKEN: ${{ github.token }}
@@ -62,7 +45,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Require exact main Quality/Deploy and SHA-bound backup/restore attestation
+      - name: Require exact main Quality and Deploy
         run: node scripts/deploy/check-logo-apply-gates.mjs
       - name: Configure constrained deployment SSH
         env:
@@ -100,12 +83,23 @@ jobs:
           if (readFileSync('/tmp/logo-preview.audit', 'utf8') !== expected) { console.error('logo preview count/digest rejected'); process.exit(1); }
           console.log('logo preview count/digest passed');
           NODE
-      - name: Recheck head/evidence, apply through fixed dispatcher and verify
+      - name: Obtain root-owned SHA/source-bound fresh restore proof
+        id: root-proof
+        run: |
+          if ! ssh production sudo -n /usr/local/libexec/festival-radar/activate-release "$APPLY_SHA" logo-proof > /tmp/logo-restore-proof.audit 2>/dev/null; then
+            echo 'root restore proof unavailable; apply blocked'; exit 1
+          fi
+          node scripts/deploy/check-logo-apply-gates.mjs proof-audit < /tmp/logo-restore-proof.audit >> "$GITHUB_OUTPUT"
+      - name: Recheck main, apply with root proof revalidation and verify
+        env:
+          ROOT_PROOF_DIGEST: ${{ steps.root-proof.outputs.proof_digest }}
         run: |
           node scripts/deploy/check-logo-apply-gates.mjs
-          # Every argument has been allowlisted above. Root retakes the deployment lock,
-          # checks deployed SHA/health, and repeats preview/count inside the write transaction.
-          if ! ssh production sudo -n /usr/local/libexec/festival-radar/activate-release "$APPLY_SHA" logo-apply "$APPLY_CONFIRMATION" "$EXPECTED_EXISTING" "$EVIDENCE_DIGEST" 2>/dev/null; then
+          # Proof digest is derived from root output, never a workflow input.
+          # Root revalidates the protected proof AND the pinned artifacts/source/freshness
+          # inside the deployment lock immediately before starting the write unit.
+          [[ "$ROOT_PROOF_DIGEST" =~ ^[0-9a-f]{64}$ ]] || { echo 'root proof digest rejected'; exit 1; }
+          if ! ssh production sudo -n /usr/local/libexec/festival-radar/activate-release "$APPLY_SHA" logo-apply "$APPLY_CONFIRMATION" "$EXPECTED_EXISTING" "$ROOT_PROOF_DIGEST" 2>/dev/null; then
             echo 'logo apply failed; commit may have happened; inspect via approved verify before retry or restore'; exit 1
           fi
           if ! ssh production sudo -n /usr/local/libexec/festival-radar/activate-release "$APPLY_SHA" logo-verify 2>/dev/null; then

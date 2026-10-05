@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Root-owned fixed-mode dispatcher. Apply needs SHA-bound confirmation and evidence digest.
+# Root-owned fixed-mode dispatcher. Apply needs SHA-bound confirmation and a root-issued restore proof.
 [[ "$(id -u)" == 0 && ( $# == 2 || $# == 5 ) ]] || { echo 'logo arguments rejected' >&2; exit 2; }
 commit="$1" mode="$2"
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo 'invalid commit' >&2; exit 2; }
 case "$mode" in
-  preview|verify) [[ $# == 2 ]] || { echo 'logo arguments rejected' >&2; exit 2; } ;;
+  preview|verify|proof) [[ $# == 2 ]] || { echo 'logo arguments rejected' >&2; exit 2; } ;;
   apply)
-    [[ $# == 5 && "$4" =~ ^(0|47)$ && "$5" =~ ^[0-9a-f]{64}$ && "$3" == "APPLY-47-$commit-$5" ]] || { echo 'logo apply confirmation rejected' >&2; exit 2; }
+    [[ $# == 5 && "$4" =~ ^(0|47)$ && "$5" =~ ^[0-9a-f]{64}$ && "$3" == "APPLY-47-$commit" ]] || { echo 'logo apply confirmation rejected' >&2; exit 2; }
     ;;
   *) echo 'invalid logo mode' >&2; exit 2 ;; esac
 root=/opt/festival-radar
@@ -31,19 +31,47 @@ grep -Fxq 'ExecStart=/opt/festival-radar/current/.runtime/node --experimental-st
 grep -Fxq 'StandardOutput=append:/run/festival-radar-logo-import/%i.audit' "$unit" &&
 grep -Fxq 'EnvironmentFile=/run/festival-radar-logo-import/%i.env' "$unit" &&
 grep -Fxq 'StandardError=null' "$unit" || { echo 'logo unit/release mismatch' >&2; exit 4; }
-# Fixed loopback health check while holding the deployment lock. Discard all raw output.
-if ! curl --fail --silent --max-time 10 http://127.0.0.1:3100/api/health/deployment/ 2>/dev/null |
-  "$release/.runtime/node" -e '
-    let data = ""; process.stdin.on("data", chunk => { data += chunk; if (data.length > 4096) process.exit(1); });
-    process.stdin.on("end", () => { try { const h = JSON.parse(data);
-      if (h.commit !== process.argv[1] || h.database !== "ok" || h.catalog !== "database") process.exitCode = 1;
-    } catch { process.exitCode = 1; } });
-  ' "$commit" >/dev/null 2>&1; then echo 'logo deployment health rejected' >&2; exit 4; fi
+# Run only fixed root-owned verifier code as root, never the app-owned Node runtime.
+proof_verifier=/usr/local/libexec/festival-radar/verify-logo-restore-proof.py
+if [[ "$mode" == proof || "$mode" == apply ]]; then
+  [[ -f "$proof_verifier" && ! -L "$proof_verifier" && "$(stat -c %u:%g:%a -- "$proof_verifier" 2>/dev/null)" == 0:0:644 ]] || { echo 'logo root verifier unavailable' >&2; exit 6; }
+fi
+# Health is fixed loopback, bounded and silent on all raw failures.
+if ! /usr/bin/python3 -I - "$commit" >/dev/null 2>&1 <<'PY_HEALTH'
+import json, sys, urllib.request
+try:
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs): raise ValueError()
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    with opener.open('http://127.0.0.1:3100/api/health/deployment/', timeout=10) as response:
+        data = response.read(4097)
+        if response.status != 200 or len(data) > 4096: raise ValueError()
+        health = json.loads(data)
+        if health['commit'] != sys.argv[1] or health['database'] != 'ok' or health['catalog'] != 'database': raise ValueError()
+except Exception:
+    sys.exit(1)
+PY_HEALTH
+then echo 'logo deployment health rejected' >&2; exit 4; fi
 audit_dir=/run/festival-radar-logo-import
 if [[ ! -e "$audit_dir" && ! -L "$audit_dir" ]]; then
   mkdir -m 0700 -- "$audit_dir" 2>/dev/null || { echo 'logo audit unavailable' >&2; exit 6; }
 fi
 [[ -d "$audit_dir" && ! -L "$audit_dir" && "$(stat -c %u:%a -- "$audit_dir" 2>/dev/null)" == 0:700 ]] || { echo 'logo audit unsafe' >&2; exit 6; }
+if [[ "$mode" == proof ]]; then
+  # Keep the original bytes private. Shell substitution would erase trailing
+  # newlines/NULs and could turn malformed worker output into an apparent success.
+  proof_audit_file="$(mktemp "$audit_dir/.proof.XXXXXXXX")" || { echo 'logo root proof audit unavailable' >&2; exit 6; }
+  trap 'rm -f -- "$proof_audit_file"' EXIT
+  [[ "$(stat -c %u:%g:%a -- "$proof_audit_file" 2>/dev/null)" == 0:0:600 ]] || { echo 'logo root proof audit unsafe' >&2; exit 6; }
+  if ! /usr/bin/python3 -I "$proof_verifier" issue "$commit" > "$proof_audit_file" 2>/dev/null; then
+    echo 'logo root restore proof rejected' >&2; exit 6
+  fi
+  if ! proof_output="$(/usr/bin/python3 -I "$proof_verifier" audit "$commit" < "$proof_audit_file" 2>/dev/null)"; then
+    echo 'logo root proof audit rejected' >&2; exit 6
+  fi
+  printf '%s\n' "$proof_output"
+  exit 0
+fi
 nonce="$(od -An -N32 -tx1 /dev/urandom | tr -d '[:space:]')"
 [[ "$nonce" =~ ^[0-9a-f]{64}$ ]] || { echo 'logo nonce unavailable' >&2; exit 6; }
 env_file="$audit_dir/$mode.env"
@@ -53,12 +81,19 @@ trap 'rm -f -- "$temporary" "$env_file" "$audit_file"' EXIT
 [[ "$(stat -c %u:%a -- "$temporary")" == 0:600 ]] || { echo 'logo environment unsafe' >&2; exit 6; }
 printf 'LOGO_IMPORT_NONCE=%s\nLOGO_IMPORT_COMMIT=%s\n' "$nonce" "$commit" > "$temporary"
 if [[ "$mode" == apply ]]; then
-  printf 'LOGO_IMPORT_CONFIRMATION=%s\nLOGO_IMPORT_EXPECTED_EXISTING=%s\nLOGO_IMPORT_EVIDENCE=%s\n' "$3" "$4" "$5" >> "$temporary"
+  printf 'LOGO_IMPORT_CONFIRMATION=%s\nLOGO_IMPORT_EXPECTED_EXISTING=%s\nLOGO_IMPORT_PROOF_DIGEST=%s\n' "$3" "$4" "$5" >> "$temporary"
 fi
 mv -fT -- "$temporary" "$env_file"
 temporary="$(mktemp "$audit_dir/.$mode.XXXXXXXX")" || { echo 'logo audit unavailable' >&2; exit 6; }
 [[ "$(stat -c %u:%a -- "$temporary")" == 0:600 ]] || { echo 'logo audit unsafe' >&2; exit 6; }
 mv -fT -- "$temporary" "$audit_file"
+# Repeat the root-file, archive/manifest, freshness, exact SHA and source checks
+# immediately before the write unit starts, while still holding the host lock.
+if [[ "$mode" == apply ]]; then
+  if ! /usr/bin/python3 -I "$proof_verifier" check "$commit" "$5" >/dev/null 2>&1; then
+    echo 'logo root restore proof rejected' >&2; exit 6
+  fi
+fi
 result=0
 systemctl start "festival-radar-logo-import@$mode.service" >/dev/null 2>&1 || result=6
 [[ -f "$audit_file" && ! -L "$audit_file" && "$(stat -c %u:%a -- "$audit_file" 2>/dev/null)" == 0:600 ]] || { echo 'logo audit unsafe' >&2; exit 6; }

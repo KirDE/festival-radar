@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-commit="${1:?usage: activate-release COMMIT [source-preview|source-apply|source-verify|source-diagnose|due-health|due-ingest-pilot|logo-preview|logo-verify|logo-apply CONFIRMATION EXISTING EVIDENCE]}"
+commit="${1:?usage: activate-release COMMIT [source-preview|source-apply|source-verify|source-diagnose|due-health|due-ingest-pilot|logo-preview|logo-verify|logo-proof|logo-apply CONFIRMATION EXISTING ROOT_PROOF]}"
 deploy_user="festival-radar-deploy"
 incoming="/var/lib/festival-radar-deploy/incoming"
 installer="/usr/local/libexec/festival-radar/install-release.sh"
@@ -14,12 +14,12 @@ installer="/usr/local/libexec/festival-radar/install-release.sh"
 exec 9>/run/festival-radar-activation.lock
 flock -n 9 || { echo "activation or source operation already running" >&2; exit 5; }
 if [[ $# == 5 ]]; then
-  [[ "$3" == "APPLY-47-$commit-$5" && "$4" =~ ^(0|47)$ && "$5" =~ ^[0-9a-f]{64}$ ]] || { echo 'logo apply authorization rejected' >&2; exit 2; }
+  [[ "$3" == "APPLY-47-$commit" && "$4" =~ ^(0|47)$ && "$5" =~ ^[0-9a-f]{64}$ ]] || { echo 'logo apply authorization rejected' >&2; exit 2; }
   flock -u 9
   exec /usr/local/libexec/festival-radar/start-logo-import "$commit" apply "$3" "$4" "$5"
 fi
 if [[ $# == 2 ]]; then
-  if [[ "$2" == logo-preview || "$2" == logo-verify ]]; then
+  if [[ "$2" == logo-preview || "$2" == logo-verify || "$2" == logo-proof ]]; then
     flock -u 9
     exec /usr/local/libexec/festival-radar/start-logo-import "$commit" "${2#logo-}"
   fi
