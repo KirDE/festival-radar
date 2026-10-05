@@ -1,0 +1,57 @@
+name: Explicit guarded legacy timer pause
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: festival-radar-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  recovery:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure constrained deployment SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host production
+            HostName $DEPLOY_HOST
+            Port $DEPLOY_PORT
+            User festival-radar-deploy
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+      - name: Pause only legacy ingestion timer and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit="$(mktemp)"
+          trap 'rm -f -- "$audit"' EXIT
+          # Keep transport bounded and suppress all unvalidated output.
+          result=0
+          (ulimit -f 4; timeout --signal=TERM --kill-after=5s 30s ssh -T -o BatchMode=yes -o ConnectTimeout=10 production sudo -n /usr/local/libexec/festival-radar/activate-release "$GITHUB_SHA" due-pause-legacy-timer > "$audit" 2>/dev/null) 2>/dev/null || result=$?
+          # SSH's transport-error status can never produce an accepted result.
+          if [[ "$result" != 0 && "$result" != 6 ]]; then
+            echo 'pause diagnostic unavailable' >&2
+            exit 1
+          fi
+          node scripts/validate-db-due-legacy-pause.mjs "$GITHUB_SHA" "$result" < "$audit"

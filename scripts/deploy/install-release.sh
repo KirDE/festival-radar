@@ -70,6 +70,22 @@ scheduler_mode=off
 if [[ -f "$scheduler_state/mode" && ! -L "$scheduler_state/mode" && "$(stat -c %u:%a "$scheduler_state/mode")" == 0:644 ]]; then
   scheduler_mode="$(cat "$scheduler_state/mode")"
 fi
+# Preserve an explicitly paused legacy timer across subsequent deployments.
+# A Persistent calendar timer can catch up on activation; do not automatically
+# rearm a disabled timer merely because the mode file still says legacy.
+legacy_timer_was_armed=true
+if [[ -f /etc/systemd/system/festival-radar-collection-ingestion.timer ]]; then
+  legacy_enabled="$(systemctl is-enabled festival-radar-collection-ingestion.timer 2>/dev/null || true)"
+  legacy_active="$(systemctl is-active festival-radar-collection-ingestion.timer 2>/dev/null || true)"
+  if [[ "$legacy_enabled" == enabled && "$legacy_active" == active ]]; then
+    legacy_timer_was_armed=true
+  elif [[ "$legacy_enabled" == disabled && "$legacy_active" == inactive ]]; then
+    legacy_timer_was_armed=false
+  else
+    echo "legacy timer state ambiguous; deployment refused" >&2
+    exit 6
+  fi
+fi
 # Installation never activates a new due timer, including on later deployments.
 # Existing DB-due mode requires an explicit exact-SHA re-arm after health gates.
 if [[ -f /etc/systemd/system/festival-radar-db-due.timer ]]; then
@@ -412,8 +428,11 @@ systemctl enable "$service"
 for collection_job in artist-identities playlists source-monitor; do
   systemctl enable --now "$service-collection-$collection_job.timer"
 done
-if [[ "$scheduler_mode" == legacy ]]; then
+if [[ "$scheduler_mode" == legacy && "$legacy_timer_was_armed" == true ]]; then
   systemctl enable --now "$service-collection-ingestion.timer"
+elif [[ "$scheduler_mode" == legacy ]]; then
+  # Preserve the failed oneshot for the separate reviewed recovery operation.
+  systemctl disable --now "$service-collection-ingestion.timer"
 else
   systemctl disable --now "$service-collection-ingestion.timer"
   systemctl stop "$service-collection@ingestion.service"
