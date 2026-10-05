@@ -44,7 +44,21 @@ async function harness() {
 printf '%s\\n' "$*" >> "$TEST_DIR/log"
 if [[ "$*" == *"$FAIL_MATCH"* && -n "$FAIL_MATCH" ]]; then exit 1; fi
 case "$1" in
-  show) if [[ -f "$TEST_DIR/active-$4" ]]; then echo active; else echo inactive; fi ;;
+  show)
+    if [[ "$2" == --all && "$3" == --property=LoadState,ActiveState,UnitFileState ]]; then
+      case "$HEALTH_CASE" in
+        unavailable) echo private-error >&2; exit 1 ;;
+        malformed) printf 'LoadState=loaded\\nActiveState=inactive\\nActiveState=active\\nUnitFileState=disabled\\n'; exit 0 ;;
+        missing) printf 'LoadState=not-found\\nActiveState=inactive\\nUnitFileState=\\n'; exit 0 ;;
+        unexpected) printf 'LoadState=loaded\\nActiveState=activating\\nUnitFileState=masked\\n'; exit 0 ;;
+      esac
+      active=inactive
+      [[ ! -f "$TEST_DIR/active-$4" ]] || active=active
+      [[ ! -f "$TEST_DIR/failed-$4" ]] || active=failed
+      enabled=disabled
+      [[ ! -f "$TEST_DIR/enabled-$4" ]] || enabled=enabled
+      printf 'LoadState=loaded\\nActiveState=%s\\nUnitFileState=%s\\n' "$active" "$enabled"
+    elif [[ -f "$TEST_DIR/active-$4" ]]; then echo active; else echo inactive; fi ;;
   is-enabled) echo enabled ;;
   enable) touch "$TEST_DIR/active-$3" ;;
   disable) rm -f "$TEST_DIR"/active-*.timer ;;
@@ -65,7 +79,7 @@ esac
   // Use numeric lock validation so USER is not needed by the test host.
   script = script.replace('stat -c %U:%a "$lock"', 'stat -c %u:%a "$lock"').replace(process.env.USER + ':644', process.getuid() + ':644');
   const file = path.join(dir, 'scheduler'); await writeFile(file, script);
-  const env = { ...process.env, PATH: bin + ':' + process.env.PATH, TEST_DIR: dir, FAIL_MATCH: '', CLOSED: 'true', PROBE_SHA: sha,
+  const env = { ...process.env, PATH: bin + ':' + process.env.PATH, TEST_DIR: dir, FAIL_MATCH: '', HEALTH_CASE: '', CLOSED: 'true', PROBE_SHA: sha,
     TEST_TICK: 'DB_DUE_TICK fetch_ok=0 idle=1 fetch_error=0 drain_ok=1 drain_error=0 delivered=3' };
   const run = (action, extra = {}) => spawnSync('bash', [file, sha, action], { encoding: 'utf8', env: { ...env, ...extra } });
   return { dir, root, state, sha, run, env };
@@ -226,4 +240,65 @@ test('deployment preserves db-due and inhibited mode and enables legacy only for
       else await assert.rejects(readFile(file), { code: 'ENOENT' });
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('read-only scheduler diagnostic rejects SHA drift and distinguishes active, failed and unknown units', async () => {
+  const h = await harness();
+  try {
+    const mode = await readFile(path.join(h.state, 'mode'), 'utf8');
+    const marker = path.join(h.root, 'releases', h.sha, 'DEPLOYED_COMMIT');
+    await writeFile(marker, 'b'.repeat(40));
+    let result = h.run('health');
+    assert.equal(result.status, 4); assert.equal(result.stdout, '');
+    await writeFile(marker, h.sha);
+    await rm(path.join(h.root, 'current'));
+    await symlink(path.join(h.root, 'releases', 'b'.repeat(40)), path.join(h.root, 'current'));
+    assert.equal(h.run('health').status, 4);
+    await rm(path.join(h.root, 'current')); await symlink(path.dirname(marker), path.join(h.root, 'current'));
+    for (const [service, field] of [['festival-radar-collection@ingestion.service', 'legacyServiceActive'], ['festival-radar-db-due@tick.service', 'dueServiceActive']]) {
+      for (const state of ['inactive', 'active', 'failed']) {
+        if (state !== 'inactive') await writeFile(path.join(h.dir, state + '-' + service), '');
+        result = h.run('health');
+        assert.equal(result.status, 0, result.stderr);
+        const record = JSON.parse(result.stdout.slice('DB_DUE_SCHEDULER_HEALTH '.length));
+        assert.equal(Object.hasOwn(record, 'commit'), false);
+        assert.equal(record[field], state);
+        await rm(path.join(h.dir, state + '-' + service), { force: true });
+      }
+    }
+    for (const [timer, prefix] of [['festival-radar-collection-ingestion.timer', 'legacy'], ['festival-radar-db-due.timer', 'due']]) {
+      for (const enabled of ['enabled', 'disabled']) {
+        for (const active of ['active', 'inactive']) {
+          if (enabled === 'enabled') await writeFile(path.join(h.dir, 'enabled-' + timer), '');
+          if (active === 'active') await writeFile(path.join(h.dir, 'active-' + timer), '');
+          result = h.run('health'); assert.equal(result.status, 0, result.stderr);
+          const record = JSON.parse(result.stdout.slice('DB_DUE_SCHEDULER_HEALTH '.length));
+          assert.equal(record[prefix + 'TimerEnabled'], enabled);
+          assert.equal(record[prefix + 'TimerActive'], active);
+          await rm(path.join(h.dir, 'enabled-' + timer), { force: true });
+          await rm(path.join(h.dir, 'active-' + timer), { force: true });
+        }
+      }
+    }
+    for (const [query, expected] of [['missing', 'missing'], ['malformed', 'error'], ['unavailable', 'error'], ['unexpected', 'error']]) {
+      result = h.run('health', { HEALTH_CASE: query });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stderr, ''); assert.doesNotMatch(result.stdout, /private/);
+      const record = JSON.parse(result.stdout.slice('DB_DUE_SCHEDULER_HEALTH '.length));
+      for (const field of ['legacyTimerEnabled', 'legacyTimerActive', 'dueTimerEnabled', 'dueTimerActive', 'legacyServiceActive', 'dueServiceActive']) {
+        assert.equal(record[field], expected);
+      }
+    }
+    assert.equal(await readFile(path.join(h.state, 'mode'), 'utf8'), mode);
+    await assert.rejects(readFile(path.join(h.state, 'last-tick')), { code: 'ENOENT' });
+    const log = await readFile(path.join(h.dir, 'log'), 'utf8');
+    assert.ok(log.trim().split('\n').every(line => line.startsWith('show --all --property=LoadState,ActiveState,UnitFileState ')));
+    await writeFile(path.join(h.state, 'mode'), 'private-invalid-mode\n');
+    assert.equal(JSON.parse(h.run('health').stdout.slice('DB_DUE_SCHEDULER_HEALTH '.length)).modeMissing, 1);
+    assert.equal(await readFile(path.join(h.state, 'mode'), 'utf8'), 'private-invalid-mode\n');
+    await rm(path.join(h.state, 'mode'));
+    const inhibited = JSON.parse(h.run('health').stdout.slice('DB_DUE_SCHEDULER_HEALTH '.length));
+    assert.equal(inhibited.modeMissing, 1); assert.equal(inhibited.modeLegacy, 0); assert.equal(inhibited.modeDbDue, 0);
+    await assert.rejects(readFile(path.join(h.state, 'mode')), { code: 'ENOENT' });
+  } finally { await rm(h.dir, { recursive: true, force: true }); }
 });

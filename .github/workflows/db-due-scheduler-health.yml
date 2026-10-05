@@ -1,0 +1,53 @@
+name: DB due scheduler read-only diagnostic
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: festival-radar-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure constrained deployment SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host production
+            HostName $DEPLOY_HOST
+            Port $DEPLOY_PORT
+            User festival-radar-deploy
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+      - name: Read and validate exact-SHA scheduler diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit="$(mktemp)"
+          trap 'rm -f -- "$audit"' EXIT
+          if ! (ulimit -f 8; ssh -T -o BatchMode=yes -o ConnectTimeout=10 production sudo -n /usr/local/libexec/festival-radar/activate-release "$GITHUB_SHA" due-scheduler-health > "$audit" 2>/dev/null); then
+            echo 'scheduler diagnostic unavailable' >&2
+            exit 1
+          fi
+          node scripts/validate-db-due-scheduler-health.mjs "$GITHUB_SHA" < "$audit"
