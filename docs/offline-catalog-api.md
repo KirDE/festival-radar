@@ -22,8 +22,36 @@ returns a bodyless 304 only after a successful fresh DB read. Missing current
 2027 editions or DB errors return a bodyless 503 with `Cache-Control: no-store`
 and no validator. There is no file fallback or retained process snapshot.
 
-This adds no client activation. The service worker, static JSON, navigation,
-scheduled operations and schema are unchanged.
+## Revision-aware client cache (#210 phase 5)
+
+The public service worker now warms this endpoint during installation (best
+effort) and refreshes it when the app opens after worker readiness. The offline
+page reads the same endpoint and renders festival briefs and timetable entries
+as text. With Next's `trailingSlash` configuration, network requests use
+`/api/offline/catalog/`; the worker accepts only that exact path and its bare
+alias, with no query string, and stores one canonical cache entry.
+
+Requests omit credentials and do not forward caller headers. Requests with
+explicit Authorization/Cookie headers are not intercepted; other APIs remain
+excluded. Only successful JSON with the expected envelope, an explicit public
+cache directive and matching revision/ETag headers is saved. Private, no-store,
+cookie-setting, auth-varying and redirected responses cannot populate the cache.
+
+Each read tries the network. `If-None-Match` is sent only with a usable saved
+body. A matching public 304 returns that body as a 200 and renews its retention
+stamp. An unexpected/mismatched 304 retries once without a validator; a second
+304 becomes an uncacheable 502. A changed 200 replaces both body and validator.
+Network failures can return only a previously validated public body, subject to
+the existing seven-day retention limit; HTTP errors are returned as errors.
+Cache Storage failures do not prevent a successful initial network read.
+
+The legacy static JSON remains precached, but is not substituted for DB JSON.
+DB failure does not block shell installation. A first offline visit without a
+saved DB response shows an explicit unavailable message. Navigation failure uses
+only this worker's public offline shell, never arbitrary caches or account pages.
+No timers, live Git reads, DB/API changes or scheduled operations are added.
+
+Client checks: `node --test tests/service-worker.test.mjs tests/offline-page.test.mjs`.
 
 Run unit checks with `node --import tsx --test tests/offline-catalog.test.mjs`.
 Run migration/seed parity and rollback-only DB mutation checks with

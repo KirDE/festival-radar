@@ -1,2 +1,57 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#171712"><title>Festival Radar · Offline</title><style>body{font:18px system-ui;margin:0;background:#f2efe7;color:#171712}main{max-width:42rem;margin:12vh auto;padding:2rem}a{color:inherit}</style></head><body><main><h1>You are offline</h1><p>Festival Radar could not load this page. Previously opened pages may still be available; reconnect to refresh festival and timetable data.</p><p><a href="/">Try the festival list</a></p></main></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#171712">
+  <title>Festival Radar · Offline</title>
+  <style>body{font:18px system-ui;margin:0;background:#f2efe7;color:#171712}main{max-width:42rem;margin:8vh auto;padding:2rem}a{color:inherit}li{margin:.6rem 0}h2{margin-top:2rem}</style>
+</head>
+<body>
+<main>
+  <h1>You are offline</h1>
+  <p>Reconnect to refresh festival and timetable data. Saved data may be outdated.</p>
+  <p><a href="/">Try the festival list</a></p>
+  <p id="catalog-status" role="status">Loading saved festival data…</p>
+  <section id="catalog" aria-label="Saved festivals"></section>
+</main>
+<script>
+  async function showCatalog() {
+    const status = document.getElementById("catalog-status");
+    const catalog = document.getElementById("catalog");
+    try {
+      const response = await fetch("/api/offline/catalog/", { credentials: "omit", cache: "no-cache" });
+      if (!response.ok) throw new Error("Catalogue unavailable");
+      const data = await response.json();
+      if (data.schemaVersion !== 1 || !Array.isArray(data.festivals) || !data.festivals.length) throw new Error("Catalogue unavailable");
+      const fragment = document.createDocumentFragment();
+      for (const festival of data.festivals) {
+        const heading = document.createElement("h2");
+        heading.textContent = festival.name;
+        fragment.append(heading);
+        const dates = document.createElement("p");
+        dates.textContent = [festival.startDate, festival.endDate].filter(Boolean).join(" – ") || "Dates not published";
+        fragment.append(dates);
+        const timetable = document.createElement("ul");
+        for (const entry of festival.timetable) {
+          const item = document.createElement("li");
+          item.textContent = `${entry.date} · ${entry.start} (${entry.timeZone}) · ${entry.stage} · ${entry.artist}${entry.status === "cancelled" ? " · Cancelled" : ""}`;
+          timetable.append(item);
+        }
+        if (festival.timetable.length) fragment.append(timetable);
+        else {
+          const empty = document.createElement("p");
+          empty.textContent = "Timetable not published";
+          fragment.append(empty);
+        }
+      }
+      catalog.replaceChildren(fragment);
+      status.textContent = "Saved public festival and timetable data. Reconnect to check for updates.";
+    } catch {
+      status.textContent = "No saved festival data is available. Open Festival Radar online to save it for your next visit.";
+    }
+  }
+  showCatalog();
+</script>
+</body>
+</html>
