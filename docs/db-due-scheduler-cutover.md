@@ -64,3 +64,52 @@ Numeric main exit status is therefore not necessarily the cause of the unit's
 failure, including when a failed unit retains `Result=success`. No exit age or date is emitted: reboot, suspend and property recycling
 prevent a reliable durable age from this snapshot. This diagnostic does not
 establish when or why the observed legacy failure originally occurred.
+
+## Explicit recovery with timers already paused (#210)
+
+The separate manual **Explicit paused legacy failed-state recovery** workflow
+calls `activate-release EXACT_SHA due-reset-legacy-failed`. It is restricted to
+main/dispatch, protected production and the shared production concurrency group.
+Deployment only installs this opt-in action; it never invokes it. The pilot is
+unchanged and still refuses a failed legacy service before its DB preflight.
+
+Recovery does **not** pause or rearm timers. Before an independently authorized
+controller pause, the reported enabled/active legacy timer makes this action
+ineligible. With both timers already disabled/inactive, the root-owned wrapper
+holds the deployment and source-fetch locks continuously across all snapshots,
+the single targeted reset and post-verification. It requires exact current SHA,
+root-owned valid legacy mode, loaded units with no pending jobs or configuration
+reload, the expected timer targets/persistence, and quiescent due tick, scheduler
+and manual ingest services. The legacy oneshot must be fully failed with no
+main/control PID or assigned control group, retained `Result=exit-code`, `ExecMainCode=1`, `ExecMainStatus=1`.
+This selects the observed retained signature; it does not assert its cause/date.
+It also requires oneshot/no-restart/control-group kill/no-remain-after-exit
+settings, no success/failure/other outgoing triggers or uphold dependencies, and
+only the expected incoming timer trigger. Missing, duplicate, malformed,
+unavailable or unexpected properties refuse the reset.
+
+Only `reset-failed` on the named legacy service is permitted. Afterwards all
+quiet-state gates must still pass, with legacy inactive/dead and Result success;
+the main exit pair may remain 1/1 or be cleared to 0/0. Output is one fixed enum:
+`DB_DUE_LEGACY_RECOVERY status=reset|refused|reset-error|postcheck-error`, validated
+against the remote exit status before display. Root/SHA/lock failures emit no
+marker. A reset-error or postcheck-error means the reset may already have happened; do not
+blindly retry. There is no timer start/stop/enable/disable, automatic rollback,
+mode write, DB access, worker invocation, journal read or source mutation.
+
+Safety assumes that independent privileged operators/configuration agents do
+not start/rearm or modify units during the locked maintenance window. These
+application locks serialize supported operations, not PID 1 or arbitrary root
+commands, and are not a privilege boundary against the application account.
+PID, empty ControlGroup and settled unit-state checks rely on the verified
+control-group kill policy and systemd accounting. Any assigned cgroup is refused,
+even if apparently empty; there is no untrusted path traversal or process census. Unsupported
+systemd property representations fail closed and require controller review.
+Local `systemctl(1)` documents that reset-failed also clears start-rate/restart
+counters; `systemd.timer(5)` documents that Persistent calendar timers may catch
+up when reactivated, subject to randomized delay. A failed unit is not proof
+that its timer cannot start it again. Timer pause interrupts scheduled ingestion;
+rearm can fetch immediately and is a separate authorized production decision.
+This action leaves both timers disabled, preserves their persistent timestamps
+and calendar settings, and never combines recovery with a pilot or preflight.
+No pause, reset, pilot or rearm was performed for this candidate.

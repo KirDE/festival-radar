@@ -4,9 +4,9 @@ set -euo pipefail
 [[ "$(id -u)" == 0 && $# == 2 ]] || exit 2
 commit="$1"; action="$2"
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || exit 2
-case "$action" in legacy|db-due|tick|health) ;; *) exit 2 ;; esac
-# Read-only callers receive only the fixed marker, including on local read errors.
-if [[ "$action" == health ]]; then exec 2>/dev/null; fi
+case "$action" in legacy|db-due|tick|health|reset-legacy-failed) ;; *) exit 2 ;; esac
+# Diagnostic/recovery callers receive only fixed markers, including on local read errors.
+if [[ "$action" == health || "$action" == reset-legacy-failed ]]; then exec 2>/dev/null; fi
 root=/opt/festival-radar
 state=/var/lib/festival-radar-scheduler
 release="$root/releases/$commit"
@@ -125,6 +125,69 @@ lock="$root/shared/ingestion/source-fetch.lock"
 [[ -f "$lock" && ! -L "$lock" && "$(stat -c %U:%a "$lock")" == www-data:640 ]] || exit 4
 exec 8<"$lock"
 flock -n 8 || exit 5
+# Explicit recovery only: the controller must already have paused both timers.
+# Never stop, enable, start or rearm here. All gates and the reset hold both locks.
+if [[ "$action" == reset-legacy-failed ]]; then
+  recovery_marker() { printf 'DB_DUE_LEGACY_RECOVERY status=%s\n' "$1"; }
+  recovery_unit() {
+    local unit="$1" kind="$2" phase="$3" record line key value
+    local properties=LoadState,ActiveState,SubState,Job,NeedDaemonReload
+    local -A expected=([LoadState]=loaded [ActiveState]=inactive [SubState]=dead [Job]='' [NeedDaemonReload]=no)
+    local -A seen=()
+    if [[ "$kind" == timer ]]; then
+      properties+=,UnitFileState,Unit,Persistent,UpheldBy
+      expected[UnitFileState]=disabled; expected[UpheldBy]=''
+      if [[ "$unit" == "$legacy_timer" ]]; then expected[Unit]="$legacy_service"; expected[Persistent]=yes
+      else expected[Unit]=festival-radar-db-due-scheduler.service; expected[Persistent]=no; fi
+    else
+      properties+=,Type,Restart,KillMode,RemainAfterExit,MainPID,ControlPID,ControlGroup,OnSuccess,OnFailure,UpheldBy,TriggeredBy,Triggers
+      expected[Type]=oneshot; expected[Restart]=no; expected[KillMode]=control-group; expected[RemainAfterExit]=no; expected[MainPID]=0; expected[ControlPID]=0
+      expected[ControlGroup]=''; expected[OnSuccess]=''; expected[OnFailure]=''; expected[UpheldBy]=''; expected[Triggers]=''
+      expected[TriggeredBy]=''
+      if [[ "$unit" == festival-radar-db-due-scheduler.service ]]; then expected[TriggeredBy]="$due_timer"; fi
+      if [[ "$unit" == "$legacy_service" ]]; then
+        properties+=,Result,ExecMainCode,ExecMainStatus
+        expected[TriggeredBy]="$legacy_timer"
+        # Narrow opt-in for the observed retained exit, not a diagnosis of cause.
+        expected[Result]=success; expected[ExecMainCode]=1; expected[ExecMainStatus]=1
+        if [[ "$phase" == before ]]; then expected[ActiveState]=failed; expected[SubState]=failed; expected[Result]=exit-code; fi
+        # reset-failed may retain the main-process exit fields or clear them.
+        # Post-verification checks state/result and accepts either canonical pair.
+      fi
+    fi
+    if ! record="$(systemctl show --all --property="$properties" "$unit" 2>/dev/null | tr '\000' '\001')"; then return 1; fi
+    [[ ${#record} -le 1024 && "$record" != *$'\001'* ]] || return 1
+    while IFS= read -r line; do
+      [[ "$line" == *=* ]] || return 1
+      key="${line%%=*}"; value="${line#*=}"
+      # Validate the key before indexing associative arrays.
+      case "$key" in LoadState|ActiveState|SubState|Job|NeedDaemonReload|UnitFileState|Unit|Persistent|UpheldBy|Type|Restart|KillMode|RemainAfterExit|MainPID|ControlPID|ControlGroup|OnSuccess|OnFailure|TriggeredBy|Triggers|Result|ExecMainCode|ExecMainStatus) ;; *) return 1 ;; esac
+      [[ -v expected[$key] && ! -v seen[$key] ]] || return 1
+      seen[$key]="$value"
+    done <<< "$record"
+    (( ${#seen[@]} == ${#expected[@]} )) || return 1
+    if [[ "$unit" == "$legacy_service" && "$phase" == after ]]; then
+      if [[ "${seen[ExecMainCode]}" == 0 && "${seen[ExecMainStatus]}" == 0 ]]; then
+        expected[ExecMainCode]=0; expected[ExecMainStatus]=0
+      fi
+    fi
+    for key in "${!expected[@]}"; do [[ "${seen[$key]}" == "${expected[$key]}" ]] || return 1; done
+  }
+  recovery_snapshot() {
+    read_mode && [[ "$mode" == legacy ]] || return 1
+    recovery_unit "$legacy_timer" timer "$1" &&
+      recovery_unit "$due_timer" timer "$1" &&
+      recovery_unit "$legacy_service" service "$1" &&
+      recovery_unit "$due_service" service "$1" &&
+      recovery_unit festival-radar-db-due-scheduler.service service "$1" &&
+      recovery_unit festival-radar-db-due@ingest.service service "$1"
+  }
+  if ! recovery_snapshot before; then recovery_marker refused; exit 6; fi
+  if ! systemctl reset-failed "$legacy_service" >/dev/null 2>&1; then recovery_marker reset-error; exit 6; fi
+  if ! recovery_snapshot after; then recovery_marker postcheck-error; exit 6; fi
+  recovery_marker reset
+  exit 0
+fi
 inactive() { [[ "$(systemctl show --property=ActiveState --value "$1" 2>/dev/null)" == inactive ]]; }
 write_mode() {
   local temp
