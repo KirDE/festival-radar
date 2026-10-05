@@ -231,8 +231,8 @@ cat > "/etc/systemd/system/$service-db-due.timer" <<UNIT
 [Unit]
 Description=Opt-in Festival Radar DB due schedule
 [Timer]
-OnBootSec=5min
-OnUnitInactiveSec=5min
+OnBootSec=10min
+OnUnitInactiveSec=10min
 AccuracySec=15s
 Unit=$service-db-due-scheduler.service
 [Install]

@@ -28,7 +28,9 @@ if [[ "$action" == health ]]; then
     if [[ "$record" =~ ^([0-9]{1,12})\ ([01])\ ([01])$ ]]; then
       stamp="${BASH_REMATCH[1]}"; fetch_error="${BASH_REMATCH[2]}"; drain_error="${BASH_REMATCH[3]}"
       now="$(date +%s)"; tick_missing=0
-      if (( now >= 10#$stamp && now - 10#$stamp <= 900 )); then tick_stale=0; fi
+      # 10m after service inactivity plus up to 1300s for a legitimate tick.
+      # Allow 40m before declaring a completed-tick heartbeat stale.
+      if (( now >= 10#$stamp && now - 10#$stamp <= 2400 )); then tick_stale=0; fi
     fi
   fi
   printf 'DB_DUE_SCHEDULER_HEALTH {"modeLegacy":%d,"modeDbDue":%d,"modeMissing":%d,"tickMissing":%d,"tickStale":%d,"fetchError":%d,"drainError":%d}\n' "$mode_legacy" "$mode_due" "$mode_missing" "$tick_missing" "$tick_stale" "$fetch_error" "$drain_error"

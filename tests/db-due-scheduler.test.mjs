@@ -99,6 +99,12 @@ test('tick validates idle/failure audits and health distinguishes stale, missing
     assert.match(health.stdout, /"tickMissing":0,"tickStale":0,"fetchError":0,"drainError":0/);
     assert.equal(h.run('tick', { TEST_TICK: 'DB_DUE_TICK fetch_ok=0 idle=0 fetch_error=1 drain_ok=1 drain_error=0 delivered=4', TICK_STATUS: '1' }).status, 1);
     assert.match(h.run('health').stdout, /"fetchError":1,"drainError":0/);
+    // A ten-minute idle interval plus a long but bounded tick must not
+    // falsely mark the most recent completed heartbeat stale.
+    await writeFile(path.join(h.state, 'last-tick'), `${Math.floor(Date.now() / 1000) - 1900} 0 0\n`);
+    assert.match(h.run('health').stdout, /"tickMissing":0,"tickStale":0/);
+    await writeFile(path.join(h.state, 'last-tick'), `${Math.floor(Date.now() / 1000) - 2500} 0 0\n`);
+    assert.match(h.run('health').stdout, /"tickMissing":0,"tickStale":1/);
     await writeFile(path.join(h.state, 'last-tick'), '1 0 1\n');
     assert.match(h.run('health').stdout, /"tickMissing":0,"tickStale":1,"fetchError":0,"drainError":1/);
     await writeFile(path.join(h.state, 'last-tick'), 'private-malformed\n');
@@ -152,6 +158,16 @@ test('deployment installs due assets without activating timer; scheduler rollbac
     assert.equal(await readFile(assets[0], 'utf8'), 'old timer');
     await assert.rejects(readFile(assets[1]), { code: 'ENOENT' }); await assert.rejects(readFile(assets[2]), { code: 'ENOENT' });
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('DB-due timer is ten minutes with a bounded long-tick stale window', async () => {
+  const installer = await readFile('scripts/deploy/install-release.sh', 'utf8');
+  const timer = installer.slice(installer.indexOf('Description=Opt-in Festival Radar DB due schedule'));
+  assert.match(timer, /OnBootSec=10min\nOnUnitInactiveSec=10min\nAccuracySec=15s/);
+  const timeout = Number(installer.match(/Description=Serialized bounded Festival Radar DB due tick[\s\S]*?TimeoutStartSec=(\d+)/)?.[1]);
+  assert.ok(timeout >= 1100 + 120 + 60 && timeout <= 1400);
+  const scheduler = await readFile('scripts/deploy/db-due-scheduler', 'utf8');
+  assert.match(scheduler, /now - 10#\$stamp <= 2400/);
 });
 
 test('tick CLI runs from relative path and symlink; rejects overrides before touching DB', async () => {
