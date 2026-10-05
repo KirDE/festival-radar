@@ -1,6 +1,7 @@
-/* Festival Radar public-only service worker. Bump DATA_VERSION when the offline payload changes. */
-const CACHE_VERSION = "festival-radar-public-v2";
+/* Festival Radar public-only service worker. DB catalogue freshness uses its ETag. */
+const CACHE_VERSION = "festival-radar-public-v3";
 const DATA_VERSION = "festivals-2027-v1";
+const CATALOG = "/api/offline/catalog";
 const MAX_ENTRIES = 80;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const OFFLINE_PAGE = "/offline.html";
@@ -68,6 +69,68 @@ async function trim(cache) {
   for (const key of keys.slice(0, Math.max(0, keys.length - MAX_ENTRIES))) await cache.delete(key);
 }
 
+function publicCatalogHeaders(response) {
+  const control = response.headers.get("cache-control") || "";
+  const revision = response.headers.get("x-catalog-revision");
+  const vary = response.headers.get("vary") || "";
+  return /(?:^|,)\s*public\s*(?:,|$)/i.test(control) &&
+    !/no-store|private/i.test(control) && !response.headers.has("set-cookie") &&
+    !/(?:^|,)\s*(?:\*|cookie|authorization)\s*(?:,|$)/i.test(vary) &&
+    !response.redirected && response.type !== "opaque" &&
+    /^[a-f0-9]{64}$/.test(revision || "") && response.headers.get("etag") === `"${revision}"`;
+}
+
+async function usableCatalog(response) {
+  if (!response || response.status !== 200 || !publicCatalogHeaders(response) ||
+      !/^application\/json(?:;|$)/i.test(response.headers.get("content-type") || "")) return false;
+  try {
+    const body = await response.clone().json();
+    return body.schemaVersion === 1 && body.editionYear === 2027 &&
+      Array.isArray(body.festivals) && body.festivals.length > 0;
+  } catch { return false; }
+}
+
+async function catalogResponse() {
+  // Cache Storage may be unavailable (quota/privacy settings). First fetch must still work.
+  const cache = await caches.open(CACHE_VERSION).catch(() => undefined);
+  let cached;
+  if (cache) {
+    try {
+      const candidate = await freshCached(cache, CATALOG);
+      if (await usableCatalog(candidate)) cached = candidate;
+      else if (candidate) await cache.delete(CATALOG);
+    } catch { /* Fetch unconditionally if storage cannot be read. */ }
+  }
+  // Next's trailingSlash configuration redirects the bare API path. Fetch its canonical URL.
+  const request = (etag) => new Request(new URL(`${CATALOG}/`, self.location.origin), {
+    credentials: "omit", cache: "no-store", redirect: "error",
+    headers: { Accept: "application/json", ...(etag ? { "If-None-Match": etag } : {}) },
+  });
+  const save = async (response) => {
+    if (cache) {
+      try { await cache.put(CATALOG, await stamped(response)); await trim(cache); }
+      catch { /* A successful network response remains usable even when storage fails. */ }
+    }
+    return response;
+  };
+  let response;
+  try {
+    response = await fetch(request(cached?.headers.get("etag")));
+    if (response.status === 304) {
+      if (cached && publicCatalogHeaders(response) &&
+          response.headers.get("etag") === cached.headers.get("etag")) return save(cached);
+      // Never expose a bodyless 304 to JSON consumers or accept a mismatched revision.
+      response = await fetch(request());
+    }
+  } catch (error) {
+    if (cached) return cached;
+    throw error;
+  }
+  if (response.status === 304) return new Response(null, { status: 502, headers: { "Cache-Control": "no-store" } });
+  if (await usableCatalog(response)) await save(response);
+  return response;
+}
+
 async function precache(cache) {
   await Promise.all(PRECACHE.map(async (url) => {
     const response = await fetch(url, { cache: "reload" });
@@ -77,7 +140,9 @@ async function precache(cache) {
 }
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_VERSION).then(precache).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_VERSION).then(precache)
+    // DB unavailability must not prevent the existing static offline shell installing.
+    .then(() => catalogResponse().catch(() => undefined)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
@@ -90,11 +155,20 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
+  if (sameOrigin(url) && (url.pathname === CATALOG || url.pathname === `${CATALOG}/`) &&
+      !url.search && request.mode !== "navigate" &&
+      !request.headers?.has("authorization") && !request.headers?.has("cookie")) {
+    event.respondWith(catalogResponse());
+    return;
+  }
   if (!sameOrigin(url) || isPrivatePath(url.pathname)) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(async () =>
-      (await caches.match(request)) || (await caches.match(OFFLINE_PAGE)) || Response.error()));
+    event.respondWith(fetch(request).catch(async () => {
+      const cache = await caches.open(CACHE_VERSION);
+      const page = await cache.match(OFFLINE_PAGE);
+      return cacheable(page) ? page : Response.error();
+    }));
     return;
   }
 
