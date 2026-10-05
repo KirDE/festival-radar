@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, lstat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -17,8 +17,23 @@ const input = z.object({
   force: z.boolean().optional().default(false),
 });
 
+// This fast probe is a deployment gate; authorization remains required for POST.
+// The authoritative mode check is inside flock in run-legacy-ingestion.sh.
+async function legacyRouteActive() {
+  try {
+    const file = "/var/lib/festival-radar-scheduler/mode";
+    const metadata = await lstat(file);
+    return metadata.isFile() && metadata.uid === 0 && (metadata.mode & 0o777) === 0o644 && (await readFile(file, "utf8")) === "legacy\n";
+  } catch { return false; }
+}
+
+export async function GET() {
+  return Response.json({ legacyRouteInactive: !await legacyRouteActive(), commit: process.env.DEPLOYED_COMMIT ?? null }, { headers: { "cache-control": "no-store" } });
+}
+
 export async function POST(request: Request) {
   if (!process.env.INTERNAL_API_SECRET || request.headers.get("authorization") !== `Bearer ${process.env.INTERNAL_API_SECRET}`) return error("Unauthorized.", 401);
+  if (!await legacyRouteActive()) return error("Legacy ingestion is inactive.", 409);
   if (!process.env.DATABASE_URL) return error("Durable ingestion is unavailable.", 503);
   const parsed = input.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return error("Invalid ingestion request.");
@@ -34,13 +49,14 @@ export async function POST(request: Request) {
       // The manual DB due pilot takes the same host lock before its health
       // preflight and holds it through the fetch. This covers both the timer
       // and the independently dispatched legacy HTTP workflow.
-      await execute("/usr/bin/flock", ["-n", "-F", "/opt/festival-radar/shared/ingestion/source-fetch.lock", process.execPath, ...args], {
+      await execute("/usr/bin/flock", ["-n", "-F", "/opt/festival-radar/shared/ingestion/source-fetch.lock", "/bin/bash", "scripts/deploy/run-legacy-ingestion.sh", process.execPath, ...args], {
         cwd: process.cwd(),
         env: { ...process.env, GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_SHA: process.env.DEPLOYED_COMMIT ?? "production" },
         timeout: 1_100_000,
         maxBuffer: 10 * 1024 * 1024,
       });
     } catch (cause) {
+      if (cause && typeof cause === "object" && "code" in cause && cause.code === 73) return error("Legacy ingestion is inactive.", 409);
       if (!(cause && typeof cause === "object" && "code" in cause && cause.code === 2)) throw cause;
     }
     const summary = JSON.parse(await readFile(path.join(outputDirectory, "summary.json"), "utf8"));

@@ -7,6 +7,10 @@ on:
         description: Optional festival slug
         required: false
 
+concurrency:
+  group: festival-radar-production
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -25,7 +29,7 @@ jobs:
       - name: Run durable ingestion inside production
         env:
           FESTIVAL: ${{ inputs.festival }}
-          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+          FORCE: "false"
           APP_URL: ${{ secrets.APP_URL }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
         run: |

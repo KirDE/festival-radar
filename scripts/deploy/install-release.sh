@@ -6,21 +6,27 @@ commit="${2:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
 env_source="${3:?usage: install-release.sh ARCHIVE COMMIT ENV_FILE}"
 db_due_backup=""
 db_due_assets_armed=false
+scheduler_assets_armed=false
+scheduler_backup=""
 logo_import_backup=""
 logo_import_unit_armed=false
 cleanup_install() {
   local status=$?
   if [[ "$status" -ne 0 ]]; then
+    if [[ "$scheduler_assets_armed" == true ]]; then
+      scheduler_restore_assets "$scheduler_backup"
+    fi
     if [[ "$logo_import_unit_armed" == true ]]; then
       logo_import_restore_unit "$logo_import_unit" "$logo_import_backup"
     fi
     if [[ "$db_due_assets_armed" == true ]]; then
       db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
     fi
-    if [[ "$logo_import_unit_armed" == true || "$db_due_assets_armed" == true ]]; then
+    if [[ "$logo_import_unit_armed" == true || "$db_due_assets_armed" == true || "$scheduler_assets_armed" == true ]]; then
       systemctl daemon-reload
     fi
   fi
+  if [[ -n "$scheduler_backup" ]]; then rm -rf -- "$scheduler_backup"; fi
   rm -f "$archive" "$env_source"
   if [[ -n "$db_due_backup" ]]; then rm -rf -- "$db_due_backup"; fi
   if [[ -n "$logo_import_backup" ]]; then rm -rf -- "$logo_import_backup"; fi
@@ -49,6 +55,28 @@ if [[ ! -e "$shared/ingestion/source-fetch.lock" && ! -L "$shared/ingestion/sour
 fi
 [[ -f "$shared/ingestion/source-fetch.lock" && ! -L "$shared/ingestion/source-fetch.lock" &&
    "$(stat -c %U:%a -- "$shared/ingestion/source-fetch.lock")" == www-data:640 ]] || { echo 'ingestion lock unsafe' >&2; exit 4; }
+# activate-release already holds the deployment lock. Serialize release changes
+# with all supported fetch paths too; no source execution occurs here.
+exec 8<"$shared/ingestion/source-fetch.lock"
+flock -n 8 || { echo 'source fetch already running' >&2; exit 5; }
+scheduler_state=/var/lib/festival-radar-scheduler
+if [[ ! -e "$scheduler_state" && ! -L "$scheduler_state" ]]; then
+  install -d -o root -g root -m 0755 "$scheduler_state"
+  printf 'legacy\n' > "$scheduler_state/mode"
+  chmod 0644 "$scheduler_state/mode"
+fi
+[[ -d "$scheduler_state" && ! -L "$scheduler_state" && "$(stat -c %u:%a "$scheduler_state")" == 0:755 ]] || exit 4
+scheduler_mode=off
+if [[ -f "$scheduler_state/mode" && ! -L "$scheduler_state/mode" && "$(stat -c %u:%a "$scheduler_state/mode")" == 0:644 ]]; then
+  scheduler_mode="$(cat "$scheduler_state/mode")"
+fi
+# Installation never activates a new due timer, including on later deployments.
+# Existing DB-due mode requires an explicit exact-SHA re-arm after health gates.
+if [[ -f /etc/systemd/system/festival-radar-db-due.timer ]]; then
+  systemctl disable --now festival-radar-db-due.timer
+  systemctl stop festival-radar-db-due-scheduler.service festival-radar-db-due@tick.service
+fi
+rm -f -- "$scheduler_state/last-tick"
 install -m 0600 "$env_source" "$staged_env"
 
 rm -rf "$release"
@@ -56,6 +84,10 @@ install -d -m 0755 "$release"
 tar -xzf "$archive" --strip-components=1 -C "$release"
 test "$(cat "$release/DEPLOYED_COMMIT")" = "$commit"
 source "$release/scripts/deploy/db-due-assets.sh"
+source "$release/scripts/deploy/db-due-scheduler-assets.sh"
+scheduler_backup="$(mktemp -d /run/festival-radar-scheduler.XXXXXXXX)"
+scheduler_snapshot_assets "$scheduler_backup"
+scheduler_assets_armed=true
 source "$release/scripts/deploy/logo-import-assets.sh"
 db_due_unit="/etc/systemd/system/$service-db-due@.service"
 db_due_wrapper=/usr/local/libexec/festival-radar/start-db-due
@@ -182,6 +214,31 @@ ReadWritePaths=$shared
 TimeoutStartSec=7500
 UNIT
 install -o root -g root -m 0755 "$release/scripts/deploy/start-db-due" "$db_due_wrapper"
+
+install -o root -g root -m 0755 "$release/scripts/deploy/db-due-scheduler" /usr/local/libexec/festival-radar/db-due-scheduler
+cat > "/etc/systemd/system/$service-db-due-scheduler.service" <<UNIT
+[Unit]
+Description=Serialized bounded Festival Radar DB due tick
+After=postgresql.service
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/libexec/festival-radar/db-due-scheduler $commit tick
+TimeoutStartSec=1300
+StandardError=null
+UNIT
+cat > "/etc/systemd/system/$service-db-due.timer" <<UNIT
+[Unit]
+Description=Opt-in Festival Radar DB due schedule
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+AccuracySec=15s
+Unit=$service-db-due-scheduler.service
+[Install]
+WantedBy=timers.target
+UNIT
+# Intentionally no enable/start for the new timer or service.
 
 cat > "/etc/systemd/system/$service-collection@.service" <<UNIT
 [Unit]
@@ -352,9 +409,15 @@ ln -sfn "$release" "$app_root/current"
 chown -R www-data:www-data "$release" "$shared"
 systemctl daemon-reload
 systemctl enable "$service"
-for collection_job in artist-identities ingestion playlists source-monitor; do
+for collection_job in artist-identities playlists source-monitor; do
   systemctl enable --now "$service-collection-$collection_job.timer"
 done
+if [[ "$scheduler_mode" == legacy ]]; then
+  systemctl enable --now "$service-collection-ingestion.timer"
+else
+  systemctl disable --now "$service-collection-ingestion.timer"
+  systemctl stop "$service-collection@ingestion.service"
+fi
 systemctl restart "$service"
 systemctl enable --now "$service-notifications.timer"
 systemctl enable --now "$service-analytics-retention.timer"
@@ -376,6 +439,8 @@ if [[ "$healthy" != true ]]; then
   if [[ -n "$previous" && -d "$previous" ]]; then
     ln -sfn "$previous" "$app_root/current"
   fi
+  scheduler_restore_assets "$scheduler_backup"
+  scheduler_assets_armed=false
   logo_import_restore_unit "$logo_import_unit" "$logo_import_backup"
   db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
   systemctl daemon-reload
@@ -395,6 +460,7 @@ fi
 
 logo_import_unit_armed=false
 db_due_assets_armed=false
+scheduler_assets_armed=false
 rm -f "$previous_env"
 
 find "$app_root/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' \

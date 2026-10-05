@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Root-owned serialization wrapper, NOT a privilege boundary against www-data.
+[[ "$(id -u)" == 0 && $# == 2 ]] || exit 2
+commit="$1"; action="$2"
+[[ "$commit" =~ ^[0-9a-f]{40}$ ]] || exit 2
+case "$action" in legacy|db-due|tick|health) ;; *) exit 2 ;; esac
+root=/opt/festival-radar
+state=/var/lib/festival-radar-scheduler
+release="$root/releases/$commit"
+exec 9>/run/festival-radar-activation.lock
+flock -n 9 || exit 5
+[[ "$(readlink -f "$root/current")" == "$release" && "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" ]] || exit 4
+[[ -d "$state" && ! -L "$state" && "$(stat -c %u:%a "$state")" == 0:755 ]] || exit 4
+mode_file="$state/mode"
+read_mode() {
+  [[ -f "$mode_file" && ! -L "$mode_file" && "$(stat -c %u:%a "$mode_file")" == 0:644 ]] || return 1
+  mode="$(cat "$mode_file")"
+  [[ "$mode" == legacy || "$mode" == db-due ]]
+}
+if [[ "$action" == health ]]; then
+  mode_legacy=0; mode_due=0; mode_missing=0; tick_missing=1; tick_stale=1; fetch_error=0; drain_error=0
+  if read_mode; then
+    if [[ "$mode" == legacy ]]; then mode_legacy=1; else mode_due=1; fi
+  else mode_missing=1; fi
+  if [[ -f "$state/last-tick" && ! -L "$state/last-tick" && "$(stat -c %u:%a "$state/last-tick")" == 0:644 ]]; then
+    record="$(head -c 256 "$state/last-tick")"
+    if [[ "$record" =~ ^([0-9]{1,12})\ ([01])\ ([01])$ ]]; then
+      stamp="${BASH_REMATCH[1]}"; fetch_error="${BASH_REMATCH[2]}"; drain_error="${BASH_REMATCH[3]}"
+      now="$(date +%s)"; tick_missing=0
+      if (( now >= 10#$stamp && now - 10#$stamp <= 900 )); then tick_stale=0; fi
+    fi
+  fi
+  printf 'DB_DUE_SCHEDULER_HEALTH {"modeLegacy":%d,"modeDbDue":%d,"modeMissing":%d,"tickMissing":%d,"tickStale":%d,"fetchError":%d,"drainError":%d}\n' "$mode_legacy" "$mode_due" "$mode_missing" "$tick_missing" "$tick_stale" "$fetch_error" "$drain_error"
+  exit 0
+fi
+lock="$root/shared/ingestion/source-fetch.lock"
+[[ -f "$lock" && ! -L "$lock" && "$(stat -c %U:%a "$lock")" == www-data:640 ]] || exit 4
+exec 8<"$lock"
+flock -n 8 || exit 5
+legacy_timer=festival-radar-collection-ingestion.timer
+legacy_service=festival-radar-collection@ingestion.service
+due_timer=festival-radar-db-due.timer
+due_service=festival-radar-db-due@tick.service
+inactive() { [[ "$(systemctl show --property=ActiveState --value "$1" 2>/dev/null)" == inactive ]]; }
+write_mode() {
+  local temp
+  temp="$(mktemp "$state/.mode.XXXXXXXX")"
+  printf '%s\n' "$1" > "$temp"
+  chmod 0644 "$temp"
+  mv -fT "$temp" "$mode_file"
+}
+fail_closed() {
+  # Remove the gate first, even if stopping systemd subsequently fails.
+  rm -f -- "$mode_file"
+  systemctl disable --now "$legacy_timer" "$due_timer" >/dev/null 2>&1 || true
+  systemctl stop "$legacy_service" "$due_service" >/dev/null 2>&1 || true
+  echo 'scheduler transition failed; both paths inhibited' >&2
+}
+if [[ "$action" == tick ]]; then
+  read_mode && [[ "$mode" == db-due ]] || exit 73
+  inactive "$legacy_timer" && inactive "$legacy_service" || exit 6
+  audit_dir=/run/festival-radar-db-due
+  if [[ ! -e "$audit_dir" && ! -L "$audit_dir" ]]; then install -d -o root -g root -m 0700 "$audit_dir"; fi
+  [[ ! -L "$audit_dir" && "$(stat -c %u:%a "$audit_dir")" == 0:700 ]] || exit 6
+  audit="$audit_dir/tick.audit"
+  temp="$(mktemp "$audit_dir/.tick.XXXXXXXX")"
+  mv -fT "$temp" "$audit"
+  trap 'rm -f -- "$audit"' EXIT
+  status=0
+  systemctl start "$due_service" >/dev/null 2>&1 || status=1
+  [[ -f "$audit" && ! -L "$audit" && "$(stat -c %u:%a "$audit")" == 0:600 && "$(stat -c %s "$audit")" -le 160 ]] || exit 6
+  record="$(cat "$audit")"
+  pattern='^DB_DUE_TICK fetch_ok=([01]) idle=([01]) fetch_error=([01]) drain_ok=([01]) drain_error=([01]) delivered=(0|[1-9][0-9]?|100)$'
+  [[ "$record" =~ $pattern ]] || exit 6
+  fetch_ok="${BASH_REMATCH[1]}"; idle="${BASH_REMATCH[2]}"; fetch_error="${BASH_REMATCH[3]}"
+  drain_ok="${BASH_REMATCH[4]}"; drain_error="${BASH_REMATCH[5]}"; delivered="${BASH_REMATCH[6]}"
+  (( fetch_ok + idle + fetch_error == 1 && drain_ok + drain_error == 1 )) || exit 6
+  (( drain_ok == 1 || delivered == 0 )) || exit 6
+  printf '%s\n' "$record" | cmp -s -- "$audit" - || exit 6
+  temp="$(mktemp "$state/.tick.XXXXXXXX")"
+  printf '%s %s %s\n' "$(date +%s)" "$fetch_error" "$drain_error" > "$temp"
+  chmod 0644 "$temp"; mv -fT "$temp" "$state/last-tick"
+  printf '%s\n' "$record"
+  (( status == 0 && fetch_error == 0 && drain_error == 0 ))
+  exit
+fi
+# Locks span every gate, mode write and timer activation. Failure never rolls
+# back automatically to a fetching path; explicit reviewed recovery is required.
+trap 'fail_closed' ERR
+systemctl disable --now "$legacy_timer" "$due_timer" >/dev/null 2>&1
+systemctl stop "$legacy_service" "$due_service" >/dev/null 2>&1
+inactive "$legacy_timer"
+inactive "$legacy_service"
+inactive "$due_timer"
+inactive "$due_service"
+write_mode "$action"
+if [[ "$action" == db-due ]]; then
+  # Public, count-free closure probe also checks the running application's SHA.
+  response="$(curl --silent --show-error --max-time 10 http://127.0.0.1:3100/api/ingestion/run/)"
+  [[ "$response" == "{\"legacyRouteInactive\":true,\"commit\":\"$commit\"}" ]]
+  systemctl enable --now "$due_timer" >/dev/null 2>&1
+  [[ "$(systemctl is-enabled "$due_timer")" == enabled ]]
+  [[ "$(systemctl show --property=ActiveState --value "$due_timer")" == active ]]
+else
+  response="$(curl --silent --show-error --max-time 10 http://127.0.0.1:3100/api/ingestion/run/)"
+  [[ "$response" == "{\"legacyRouteInactive\":false,\"commit\":\"$commit\"}" ]]
+  systemctl enable --now "$legacy_timer" >/dev/null 2>&1
+  [[ "$(systemctl is-enabled "$legacy_timer")" == enabled ]]
+  [[ "$(systemctl show --property=ActiveState --value "$legacy_timer")" == active ]]
+fi
+trap - ERR
+echo 'scheduler transition completed'
