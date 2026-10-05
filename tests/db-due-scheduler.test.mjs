@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile, symlink, rm } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { validateSchedulerHealth } from '../scripts/validate-db-due-scheduler-health.mjs';
 import { runTick } from '../scripts/db-due-tick.mjs';
 
 test('bounded tick drains on idle and fetch failure; audits drain failure separately', async () => {
@@ -45,7 +46,20 @@ printf '%s\\n' "$*" >> "$TEST_DIR/log"
 if [[ "$*" == *"$FAIL_MATCH"* && -n "$FAIL_MATCH" ]]; then exit 1; fi
 case "$1" in
   show)
-    if [[ "$2" == --all && "$3" == --property=LoadState,ActiveState,UnitFileState ]]; then
+    if [[ "$2" == --all && "$3" == --property=LoadState,ActiveState,Result,ExecMainCode,ExecMainStatus ]]; then
+      if [[ "$LEGACY_BINARY" == 1 ]]; then printf 'LoadState=loaded\\nActiveState=failed\\nResult=exit-code\\nExecMainCode=1\\000\\nExecMainStatus=1\\n'; exit 0; fi
+      if [[ -n "$LEGACY_FIXTURE" ]]; then printf '%s\\n' "$LEGACY_FIXTURE"; exit "\${LEGACY_QUERY_STATUS:-0}"; fi
+      case "$HEALTH_CASE" in
+        unavailable) echo private-error >&2; exit 1 ;;
+        malformed) printf 'LoadState=loaded\\nActiveState=failed\\nResult=exit-code\\nResult=success\\nExecMainCode=1\\nExecMainStatus=1\\n'; exit 0 ;;
+        missing) printf 'LoadState=not-found\\nActiveState=inactive\\n'; exit 0 ;;
+        unexpected) printf 'LoadState=loaded\\nActiveState=private\\nResult=success\\nExecMainCode=1\\nExecMainStatus=0\\n'; exit 0 ;;
+      esac
+      active=inactive
+      [[ ! -f "$TEST_DIR/active-$4" ]] || active=active
+      [[ ! -f "$TEST_DIR/failed-$4" ]] || active=failed
+      printf 'LoadState=loaded\\nActiveState=%s\\nResult=success\\nExecMainCode=1\\nExecMainStatus=0\\n' "$active"
+    elif [[ "$2" == --all && "$3" == --property=LoadState,ActiveState,UnitFileState ]]; then
       case "$HEALTH_CASE" in
         unavailable) echo private-error >&2; exit 1 ;;
         malformed) printf 'LoadState=loaded\\nActiveState=inactive\\nActiveState=active\\nUnitFileState=disabled\\n'; exit 0 ;;
@@ -79,7 +93,7 @@ esac
   // Use numeric lock validation so USER is not needed by the test host.
   script = script.replace('stat -c %U:%a "$lock"', 'stat -c %u:%a "$lock"').replace(process.env.USER + ':644', process.getuid() + ':644');
   const file = path.join(dir, 'scheduler'); await writeFile(file, script);
-  const env = { ...process.env, PATH: bin + ':' + process.env.PATH, TEST_DIR: dir, FAIL_MATCH: '', HEALTH_CASE: '', CLOSED: 'true', PROBE_SHA: sha,
+  const env = { ...process.env, PATH: bin + ':' + process.env.PATH, TEST_DIR: dir, FAIL_MATCH: '', HEALTH_CASE: '', LEGACY_FIXTURE: '', LEGACY_BINARY: '', CLOSED: 'true', PROBE_SHA: sha,
     TEST_TICK: 'DB_DUE_TICK fetch_ok=0 idle=1 fetch_error=0 drain_ok=1 drain_error=0 delivered=3' };
   const run = (action, extra = {}) => spawnSync('bash', [file, sha, action], { encoding: 'utf8', env: { ...env, ...extra } });
   return { dir, root, state, sha, run, env };
@@ -261,6 +275,8 @@ test('read-only scheduler diagnostic rejects SHA drift and distinguishes active,
         result = h.run('health');
         assert.equal(result.status, 0, result.stderr);
         const record = JSON.parse(result.stdout.slice('DB_DUE_SCHEDULER_HEALTH '.length));
+        assert.equal(result.stdout.split('\n').length, 2);
+        assert.equal(result.stdout.endsWith('\n'), true);
         assert.equal(Object.hasOwn(record, 'commit'), false);
         assert.equal(record[field], state);
         await rm(path.join(h.dir, state + '-' + service), { force: true });
@@ -292,7 +308,7 @@ test('read-only scheduler diagnostic rejects SHA drift and distinguishes active,
     assert.equal(await readFile(path.join(h.state, 'mode'), 'utf8'), mode);
     await assert.rejects(readFile(path.join(h.state, 'last-tick')), { code: 'ENOENT' });
     const log = await readFile(path.join(h.dir, 'log'), 'utf8');
-    assert.ok(log.trim().split('\n').every(line => line.startsWith('show --all --property=LoadState,ActiveState,UnitFileState ')));
+    assert.ok(log.trim().split('\n').every(line => /^show --all --property=LoadState,ActiveState,(UnitFileState|Result,ExecMainCode,ExecMainStatus) /.test(line)));
     await writeFile(path.join(h.state, 'mode'), 'private-invalid-mode\n');
     assert.equal(JSON.parse(h.run('health').stdout.slice('DB_DUE_SCHEDULER_HEALTH '.length)).modeMissing, 1);
     assert.equal(await readFile(path.join(h.state, 'mode'), 'utf8'), 'private-invalid-mode\n');
@@ -300,5 +316,70 @@ test('read-only scheduler diagnostic rejects SHA drift and distinguishes active,
     const inhibited = JSON.parse(h.run('health').stdout.slice('DB_DUE_SCHEDULER_HEALTH '.length));
     assert.equal(inhibited.modeMissing, 1); assert.equal(inhibited.modeLegacy, 0); assert.equal(inhibited.modeDbDue, 0);
     await assert.rejects(readFile(path.join(h.state, 'mode')), { code: 'ENOENT' });
+  } finally { await rm(h.dir, { recursive: true, force: true }); }
+});
+
+
+test('legacy oneshot classification uses retained properties without confusing a signal with an exit code', async () => {
+  const h = await harness();
+  const fixture = (state = 'failed', result = 'exit-code', code = '1', status = '203') =>
+    `Result=${result}\nExecMainStatus=${status}\nLoadState=loaded\nActiveState=${state}\nExecMainCode=${code}`;
+  const check = (input, expected, extra = {}) => {
+    const output = h.run('health', { LEGACY_FIXTURE: input, ...extra });
+    assert.equal(output.status, 0, output.stderr); assert.equal(output.stderr, '');
+    assert.equal(output.stdout.split('\n').length, 2);
+    const data = JSON.parse(output.stdout.slice('DB_DUE_SCHEDULER_HEALTH '.length));
+    assert.deepEqual([data.legacyServiceActive, data.legacyServiceResult, data.legacyServiceExitStatus], expected);
+    assert.equal(validateSchedulerHealth(Buffer.from(output.stdout), h.sha), output.stdout);
+    return output;
+  };
+  try {
+    const mode = await readFile(path.join(h.state, 'mode'), 'utf8');
+    check(fixture(), ['failed', 'exit-code', 203]); // systemd's pre-exec EXEC failure
+    check(fixture('inactive', 'success', '1', '0'), ['inactive', 'success', 0]);
+    check(fixture('active', 'success', '1', '0'), ['active', 'success', 0]); // RemainAfterExit oneshot
+    check(fixture('inactive', 'success', '0', '0'), ['inactive', 'success', 'unknown']); // never run
+    for (const [result, code, status] of [['signal', '2', '15'], ['core-dump', '3', '11'], ['timeout', '2', '9'], ['oom-kill', '2', '9'], ['start-limit-hit', '0', '0']]) {
+      check(fixture('failed', result, code, status), ['failed', result, 'unknown']);
+    }
+    check(fixture('activating', 'success', '0', '0'), ['unknown', 'unknown', 'unknown']);
+    check(fixture('failed', 'future-result'), ['failed', 'unknown', 'unknown']);
+    const missing = 'LoadState=not-found\nActiveState=inactive';
+    const defaults = ['Result=success', 'ExecMainCode=0', 'ExecMainStatus=0'];
+    const canonicalMissing = defaults.join('\n') + '\n' + missing;
+    check(missing, ['missing', 'unknown', 'unknown']);
+    check(canonicalMissing, ['missing', 'unknown', 'unknown']);
+    // Every nonempty proper subset is incomplete, even with valid values.
+    for (let mask = 1; mask < 7; mask++) {
+      check(missing + '\n' + defaults.filter((_, index) => mask & (1 << index)).join('\n'), ['error', 'error', 'error']);
+    }
+    for (const line of [...defaults, 'LoadState=not-found', 'ActiveState=inactive']) {
+      check(canonicalMissing + '\n' + line, ['error', 'error', 'error']);
+    }
+    for (const [key, values] of [['Result', ['exit-code', '', 'private']], ['ExecMainCode', ['1', '00', '', 'private']], ['ExecMainStatus', ['1', '00', '-1', '', 'private']]]) {
+      for (const value of values) {
+        const badDefaults = defaults.map(line => line.startsWith(key + '=') ? key + '=' + value : line);
+        check(missing + '\n' + badDefaults.join('\n'), ['error', 'error', 'error']);
+      }
+    }
+    check(canonicalMissing + '\nprivate text', ['error', 'error', 'error']);
+    check(missing + '\nUnexpected=private', ['error', 'error', 'error']);
+    // The numeric status remains supplemental; success does not explain failed.
+    check(fixture('failed', 'success', '1', '42'), ['failed', 'success', 42]);
+    for (const key of ['LoadState', 'ActiveState', 'Result', 'ExecMainCode', 'ExecMainStatus']) {
+      const lines = fixture().split('\n');
+      check(lines.filter(line => !line.startsWith(key + '=')).join('\n'), ['error', 'error', 'error']);
+      check(fixture() + '\n' + lines.find(line => line.startsWith(key + '=')), ['error', 'error', 'error']);
+    }
+    for (const malformed of [fixture('failed', 'exit-code', 'CLD_EXITED'), fixture('failed', '', '1', '0'), fixture('failed', 'exit-code', '1', '-1'),
+      fixture('failed', 'exit-code', '1', '256'), fixture('failed', 'exit-code', '1', '01'),
+      fixture('failed', 'exit-code', '1', 'private'), fixture() + '\nPrivate=secret', 'private', 'x'.repeat(513)]) {
+      check(malformed, ['error', 'error', 'error']);
+    }
+    check(fixture(), ['error', 'error', 'error'], { LEGACY_QUERY_STATUS: '1' });
+    check(fixture(), ['error', 'error', 'error'], { LEGACY_BINARY: '1' });
+    assert.equal(await readFile(path.join(h.state, 'mode'), 'utf8'), mode);
+    await assert.rejects(readFile(path.join(h.state, 'last-tick')), { code: 'ENOENT' });
+    assert.ok((await readFile(path.join(h.dir, 'log'), 'utf8')).trim().split('\n').every(line => line.startsWith('show --all --property=')));
   } finally { await rm(h.dir, { recursive: true, force: true }); }
 });

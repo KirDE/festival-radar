@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   diagnostic:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: production
@@ -39,14 +39,15 @@ jobs:
             StrictHostKeyChecking yes
           EOF
           chmod 600 ~/.ssh/config
-      - name: Read and validate exact-SHA scheduler diagnostic
+      - name: Read and validate exact-SHA scheduler and legacy failure diagnostic
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           audit="$(mktemp)"
           trap 'rm -f -- "$audit"' EXIT
-          if ! (ulimit -f 8; ssh -T -o BatchMode=yes -o ConnectTimeout=10 production sudo -n /usr/local/libexec/festival-radar/activate-release "$GITHUB_SHA" due-scheduler-health > "$audit" 2>/dev/null); then
+          # Bash file-size limits use 1024-byte blocks: at most 4 KiB.
+          if ! (ulimit -f 4; timeout --signal=TERM --kill-after=5s 30s ssh -T -o BatchMode=yes -o ConnectTimeout=10 production sudo -n /usr/local/libexec/festival-radar/activate-release "$GITHUB_SHA" due-scheduler-health > "$audit" 2>/dev/null) 2>/dev/null; then
             echo 'scheduler diagnostic unavailable' >&2
             exit 1
           fi
