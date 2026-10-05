@@ -23,7 +23,7 @@ if [[ $# == 2 ]]; then
     flock -u 9
     exec /usr/local/libexec/festival-radar/start-logo-import "$commit" "${2#logo-}"
   fi
-  if [[ "$2" == due-switch-db || "$2" == due-switch-legacy || "$2" == due-scheduler-health || "$2" == due-reset-legacy-failed ]]; then
+  if [[ "$2" == due-switch-db || "$2" == due-switch-legacy || "$2" == due-scheduler-health || "$2" == due-reset-legacy-failed || "$2" == due-pause-legacy-timer ]]; then
     # The switch retakes the deployment lock and also holds the shared source
     # lock across mode change and timer/service verification. A deployment
     # racing this unlock is rejected by its exact-release SHA check.
@@ -32,6 +32,7 @@ if [[ $# == 2 ]]; then
       due-switch-db) exec /usr/local/libexec/festival-radar/db-due-scheduler "$commit" db-due ;;
       due-switch-legacy) exec /usr/local/libexec/festival-radar/db-due-scheduler "$commit" legacy ;;
       due-reset-legacy-failed) exec /usr/local/libexec/festival-radar/db-due-scheduler "$commit" reset-legacy-failed ;;
+      due-pause-legacy-timer) exec /usr/local/libexec/festival-radar/db-due-scheduler "$commit" pause-legacy-timer ;;
       due-scheduler-health) exec /usr/local/libexec/festival-radar/db-due-scheduler "$commit" health ;;
     esac
   fi

@@ -235,7 +235,7 @@ test('deployment preserves db-due and inhibited mode and enables legacy only for
   const start = installer.indexOf('scheduler_state=/var/lib/festival-radar-scheduler');
   const end = installer.indexOf('install -m 0600 "$env_source"', start);
   const initialize = installer.slice(start, end);
-  const branch = installer.slice(installer.indexOf('if [[ "$scheduler_mode" == legacy ]]; then'), installer.indexOf('systemctl restart "$service"\nsystemctl enable'));
+  const branch = installer.slice(installer.indexOf('if [[ "$scheduler_mode" == legacy && "$legacy_timer_was_armed" == true ]]; then'), installer.indexOf('systemctl restart "$service"\nsystemctl enable'));
   const dir = await mkdtemp(path.join(tmpdir(), 'due-deploy-mode-'));
   try {
     await mkdir(path.join(dir, 'state'), { mode: 0o755 });

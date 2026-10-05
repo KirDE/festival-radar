@@ -113,3 +113,44 @@ rearm can fetch immediately and is a separate authorized production decision.
 This action leaves both timers disabled, preserves their persistent timestamps
 and calendar settings, and never combines recovery with a pilot or preflight.
 No pause, reset, pilot or rearm was performed for this candidate.
+
+## Separate guarded pause-only legacy timer operation
+
+The manual **Explicit guarded legacy timer pause** workflow is OFF by default:
+no schedule or inputs, main-only, protected production environment and shared
+production concurrency. Merge/deploy only installs the action; neither triggers
+it. After reviewing exact deployed SHA/Quality and a fresh read-only scheduler
+snapshot, separately authorize dispatch. It calls the constrained deploy-user
+entrypoint with exactly the workflow SHA and due-pause-legacy-timer. The root
+wrapper takes the activation and source-fetch locks, verifies the current
+release SHA and root-owned mode=legacy, and strictly checks all six loaded units:
+legacy timer enabled/active/waiting with Persistent=yes and expected target;
+DB-due timer disabled/inactive; legacy oneshot failed with retained exit-code/1;
+all other services quiescent, with no jobs, PIDs, cgroups, unexpected triggers,
+reloads or auto-restart paths. Unknown/transitional/malformed status refuses.
+
+Only after those checks does it run systemctl stop on the legacy timer and then
+systemctl disable on that timer. It neither stops nor resets the failed service,
+starts a worker, writes the scheduler mode, enables a timer, fetches, or switches
+modes. Postcheck requires both timers disabled/inactive, all six units quiet,
+and the identical nonzero retained monotonic main-process start and exit
+timestamps on the failed legacy oneshot. This checks that no new service
+invocation is observed across the operation, in addition to the systemd
+contract that stopping/disabling a timer does not run its target. A queued
+systemd job or a timer firing between snapshots fails closed; locks serialize
+supported app operations, not arbitrary root/systemd actors. If any step fails,
+inspect fresh read-only health before any further action; a partial pause can
+already have occurred. Fixed marker only: DB_DUE_LEGACY_PAUSE with status
+paused|refused|stop-error|disable-error|postcheck-error. The workflow validates
+the exact marker/remote exit and suppresses raw logs.
+
+The mode remains legacy, but the legacy timer stays disabled/inactive. Later
+deployments preserve its disabled state and do not stop the failed oneshot;
+ambiguous timer state fails before installation. The separate reset-failed
+operation can then run only on a fresh six-unit snapshot, leaving both timers
+off. Do not rearm in this operation or in reset. The legacy timer has
+OnCalendar=03:23 UTC, Persistent=true, and up to five minutes of randomized
+delay; after a missed occurrence, later reactivation can trigger an immediate
+catch-up fetch (possibly delayed randomly). Any rearm or scheduler switch is a
+separate reviewed production decision, after service failure and source/data
+preflight, with operator present. Keep beta/fallback assets intact.
