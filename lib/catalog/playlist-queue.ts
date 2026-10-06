@@ -259,3 +259,57 @@ export async function stagePlaylistPlan(db: PrismaClient, claim: PlaylistLease, 
     return plan;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }
+
+// DB-only provider checkpoints: unlike commitPlaylistRefresh, this does not
+// complete the job. Every checkpoint rolls back if the lease expires during it.
+export async function withPlaylistRefreshLease<T>(db: PrismaClient, claim: PlaylistLease, write: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  validateLease(claim);
+  return db.$transaction(async tx => {
+    await lockPlaylistLease(tx, claim);
+    const result = await write(tx);
+    await requirePlaylistLease(tx, claim);
+    return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+}
+
+export type SpotifyCreation = { marker: string; sent: boolean; playlistId: string | null };
+
+// A reservation is committed BEFORE the non-idempotent create call. Absence on
+// discovery after an unknown outcome is not evidence that resending is safe.
+export async function spotifyCreationState(
+  db: PrismaClient, claim: PlaylistLease, action: 'read' | 'reserve' | 'bind',
+  expectedUrl: string, playlistId?: string,
+): Promise<SpotifyCreation> {
+  validateLease(claim);
+  if (!['read', 'reserve', 'bind'].includes(action) || !['', 'NEW'].includes(expectedUrl)
+    || (action === 'bind' && !/^[A-Za-z0-9]{22}$/.test(playlistId ?? ''))) throw new Error('Invalid creation state request');
+  return db.$transaction(async tx => {
+    await lockPlaylistLease(tx, claim);
+    const publication = await tx.catalogPublication.findUniqueOrThrow({ where: { id: claim.publicationId } });
+    const edition = await tx.festivalEdition.findFirstOrThrow({ where: { year: publication.editionYear, recordState: 'CURRENT', festival: { slug: claim.festivalSlug } } });
+    const binding = await tx.festivalPlaylist.findUnique({ where: { editionId_provider: { editionId: edition.id, provider: 'spotify' } } });
+    if ((binding?.url ?? '') !== expectedUrl) throw new Error('Playlist binding changed');
+    if (await tx.catalogPlaylistRefresh.count({ where: { festivalSlug: claim.festivalSlug, status: 'SUCCEEDED', publication: { createdAt: { gt: publication.createdAt } } } })) throw new Error('Newer playlist publication completed');
+    // Intent belongs to the edition, across jobs/publications. A newer queued
+    // lineup must also recover an older job's ambiguous create, never create a
+    // second playlist. The festival advisory lock serializes these reservations.
+    const [row] = await tx.$queryRaw<{ id: string; spotifyCreation: SpotifyCreation }[]>`
+      SELECT job.id, job."spotifyCreation" FROM "CatalogPlaylistRefresh" AS job
+      JOIN "CatalogPublication" AS publication ON publication.id = job."publicationId"
+      WHERE job."festivalSlug" = ${claim.festivalSlug} AND publication."editionYear" = ${publication.editionYear}
+        AND job."spotifyCreation" IS NOT NULL
+      ORDER BY job."requestedAt", job.id LIMIT 1 FOR UPDATE OF job
+    `;
+    const state = row?.spotifyCreation ?? { marker: `festival-radar:${claim.id}`, sent: false, playlistId: null };
+    if (action === 'reserve') {
+      if (state.sent) throw new Error('Creation already sent; reconcile unknown outcome');
+      state.sent = true;
+    } else if (action === 'bind') {
+      if (!state.sent || (state.playlistId && state.playlistId !== playlistId)) throw new Error('Creation identity mismatch');
+      state.playlistId = playlistId!;
+    }
+    if (action !== 'read') await tx.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "spotifyCreation" = ${JSON.stringify(state)}::jsonb WHERE id = ${row?.id ?? claim.id} OR id = ${claim.id}`;
+    await requirePlaylistLease(tx, claim);
+    return state;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+}

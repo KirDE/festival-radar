@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import unicodedata
@@ -543,6 +544,12 @@ def main() -> int:
     )
     parser.add_argument('--pause-seconds', type=float, default=0.0)
     args = parser.parse_args()
+
+    if args.publish and os.environ.get('YOUTUBE_LEGACY_LOCK_HELD') != 'true':
+        # Standalone legacy writers cannot race a DB dispatch or bypass its
+        # durable activation mode. The child owns the lock through provider work.
+        runner = Path(__file__).resolve().parents[1] / 'playlist-lease-guard.ts'
+        return subprocess.run([os.environ.get('PLAYLIST_GUARD_NODE', 'node'), '--experimental-strip-types', str(runner), '--legacy-youtube', *sys.argv[1:]], check=False).returncode
 
     report_path = Path(args.report)
     source_report = load_json(report_path, {})
