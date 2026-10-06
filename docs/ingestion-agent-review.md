@@ -45,7 +45,8 @@ and order by start time, end time, then ID for deterministic ties.
 
 A candidate is marked stale when another latest attempt exists, its source is missing
 (or its URL changed), its source is disabled, its edition differs, or the source's `updatedAt`
-is later than the attempt's start. Stale candidates remain visible for audit but are not
+is later than the attempt's start, except when it exactly matches the latest attempt's
+`lastAttemptAt` acknowledgement at or after that attempt's end. Stale candidates remain visible for audit but are not
 actionable as candidate proposals. Manual source cases remain actionable for fresh official
 verification even if their attached candidate is stale. No reviewState is updated.
 
