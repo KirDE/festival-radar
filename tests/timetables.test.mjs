@@ -42,7 +42,7 @@ test("the DB importer rejects missing database configuration without mutating tr
   const input = path.join(directory, "input.json");
   await writeFile(input, JSON.stringify({ festivalSlug: festival.slug, entries: [base] }));
   const before = await readFile(new URL("../data/timetables.json", import.meta.url), "utf8");
-  const result = spawnSync(process.execPath, ["scripts/import-timetable.mjs", `--input=${input}`, "--check"], { cwd: new URL("..", import.meta.url), encoding: "utf8" });
+  const result = spawnSync(process.execPath, ["scripts/import-timetable.mjs", `--input=${input}`, "--check"], { cwd: new URL("..", import.meta.url), encoding: "utf8", env: { ...process.env, DATABASE_URL: "" } });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /DATABASE_URL/);
   assert.equal(await readFile(new URL("../data/timetables.json", import.meta.url), "utf8"), before);
