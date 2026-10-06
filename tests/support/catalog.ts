@@ -10,7 +10,7 @@ export const festival: Festival = {
 };
 export const artist: ArtistProfile = {
   slug: "sample-artist", name: "Sample Artist", aliases: [], genres: [], identities: {}, identityState: "unresolved",
-  links: [], topTracks: [], recentSetlists: [], provenance: [], freshness: Object.fromEntries(["profile", "music", "setlists"].map(key => [key, { checkedAt: "2026-01-01", refreshAfter: "2026-04-01", cadenceDays: 90 }])) as ArtistProfile["freshness"],
+  links: [], topTracks: [], recentSetlists: [{ date: "2026-02-01", venue: "Sample Hall", url: "https://setlist.example.test/sample" }], provenance: [], freshness: Object.fromEntries(["profile", "music", "setlists"].map(key => [key, { checkedAt: "2026-01-01", refreshAfter: "2026-04-01", cadenceDays: 90 }])) as ArtistProfile["freshness"],
 };
 export const catalogSeed: CatalogSeed = {
   festivals: [festival], artists: [artist], playlists: {},
