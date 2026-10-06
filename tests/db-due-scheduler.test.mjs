@@ -173,18 +173,42 @@ wait "$queued"
   } finally { await rm(h.dir, { recursive: true, force: true }); }
 });
 
-test('deployment installs due assets without activating timer; scheduler rollback restores assets', async () => {
+test('deployment only rearms previously armed DB-due timer after health; scheduler rollback restores assets', async () => {
   const installer = await readFile('scripts/deploy/install-release.sh', 'utf8');
-  assert.doesNotMatch(installer, /systemctl enable[^\n]*db-due/);
+  assert.ok(installer.indexOf('if [[ "$db_due_timer_was_armed" == true ]]') > installer.indexOf('if [[ "$healthy" != true ]]'));
+  assert.ok(installer.indexOf('systemctl enable --now "$service-db-due.timer"') > installer.indexOf('playlist_install_apply_mode'));
   assert.match(installer, /if \[\[ "\$scheduler_mode" == legacy/);
   const dir = await mkdtemp(path.join(tmpdir(), 'scheduler-assets-'));
   try {
-    const assets = [path.join(dir, 'timer'), path.join(dir, 'service'), path.join(dir, 'wrapper')];
+    const assets = [path.join(dir, 'timer'), path.join(dir, 'service'), path.join(dir, 'wrapper'), path.join(dir, 'condition')];
     await mkdir(path.join(dir, 'backup')); await writeFile(assets[0], 'old timer');
-    const result = spawnSync('bash', ['-c', 'source "$1"; scheduler_assets=("$2" "$3" "$4"); systemctl() { :; }; scheduler_snapshot_assets "$5"; for asset in "${scheduler_assets[@]}"; do printf new > "$asset"; done; scheduler_restore_assets "$5"', 'bash', path.resolve('scripts/deploy/db-due-scheduler-assets.sh'), ...assets, path.join(dir, 'backup')], { encoding: 'utf8' });
+    const result = spawnSync('bash', ['-c', 'source "$1"; scheduler_assets=("$2" "$3" "$4" "$5"); systemctl() { :; }; scheduler_snapshot_assets "$6"; for asset in "${scheduler_assets[@]}"; do printf new > "$asset"; done; scheduler_restore_assets "$6"', 'bash', path.resolve('scripts/deploy/db-due-scheduler-assets.sh'), ...assets, path.join(dir, 'backup')], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     assert.equal(await readFile(assets[0], 'utf8'), 'old timer');
-    await assert.rejects(readFile(assets[1]), { code: 'ENOENT' }); await assert.rejects(readFile(assets[2]), { code: 'ENOENT' });
+    for (const asset of assets.slice(1)) await assert.rejects(readFile(asset), { code: 'ENOENT' });
+    // An immediate OnBootSec tick while deployment holds the activation lock
+    // skips only the ExecStart worker. A released lock permits the next tick.
+    assert.match(installer, /ExecCondition=\/usr\/local\/libexec\/festival-radar\/check-db-due-tick-ready\nExecStart=/);
+    const guardSource = await readFile('scripts/deploy/check-db-due-tick-ready', 'utf8');
+    const lock = path.join(dir, 'activation.lock');
+    const guard = path.join(dir, 'condition-script');
+    await writeFile(lock, '');
+    await writeFile(guard, guardSource.replace('/run/festival-radar-activation.lock', lock)
+      .replace('$(id -u)" == 0', '$(id -u)" == ' + process.getuid())
+      .replace('$(stat -c %u "$lock")" == 0', '$(stat -c %u "$lock")" == ' + process.getuid()));
+    let check = spawnSync('bash', [guard], { encoding: 'utf8' });
+    assert.equal(check.status, 0, check.stderr);
+    check = spawnSync('flock', ['-n', '--close', lock, 'bash', guard], { encoding: 'utf8' });
+    assert.equal(check.status, 1, check.stderr);
+    assert.equal(check.stdout, 'DB_DUE_TICK_DEFERRED reason=activation-lock\n');
+    check = spawnSync('bash', [guard], { encoding: 'utf8' });
+    assert.equal(check.status, 0, check.stderr);
+    const badProbe = path.join(dir, 'bad-condition-script');
+    await writeFile(badProbe, (await readFile(guard, 'utf8')).replace('flock -n -E 1 9', '(exit 64)'));
+    check = spawnSync('bash', [badProbe], { encoding: 'utf8' });
+    assert.equal(check.status, 255); assert.equal(check.stdout, '');
+    await rm(lock); await symlink(guard, lock);
+    assert.equal(spawnSync('bash', [guard]).status, 255);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
@@ -241,11 +265,19 @@ test('deployment preserves db-due and inhibited mode and enables legacy only for
     await mkdir(path.join(dir, 'state'), { mode: 0o755 });
     for (const mode of ['legacy', 'db-due', null]) {
       const file = path.join(dir, 'state/mode');
+      if (mode === 'db-due') {
+        await writeFile(path.join(dir, 'due.timer'), 'timer');
+        await writeFile(path.join(dir, 'legacy.timer'), 'timer');
+      } else {
+        await rm(path.join(dir, 'due.timer'), { force: true });
+        await rm(path.join(dir, 'legacy.timer'), { force: true });
+      }
       if (mode) await writeFile(file, mode + '\n', { mode: 0o644 }); else await rm(file, { force: true });
-      const script = 'set -euo pipefail; systemctl() { printf "%s\\n" "$*"; }; ' + initialize
+      const script = 'set -euo pipefail; systemctl() { if [[ "$1" == is-enabled ]]; then echo disabled; elif [[ "$1" == is-active ]]; then echo inactive; else printf "%s\\n" "$*"; fi; }; ' + initialize
         .replace('scheduler_state=/var/lib/festival-radar-scheduler', 'scheduler_state="$1/state"')
         .replace('0:755', process.getuid() + ':755').replace('0:644', process.getuid() + ':644')
-        .replace('/etc/systemd/system/festival-radar-db-due.timer', path.join(dir, 'absent-timer'))
+        .replaceAll('/etc/systemd/system/festival-radar-db-due.timer', path.join(dir, 'due.timer'))
+        .replace('/etc/systemd/system/festival-radar-collection-ingestion.timer', path.join(dir, 'legacy.timer'))
         + '\nservice=festival-radar\n' + branch;
       const result = spawnSync('bash', ['-c', script, 'bash', dir], { encoding: 'utf8' });
       assert.equal(result.status, 0, result.stderr);

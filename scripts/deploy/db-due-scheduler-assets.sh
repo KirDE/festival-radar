@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Scheduler assets are restored on failed install; restored timers remain OFF.
-scheduler_assets=(/etc/systemd/system/festival-radar-db-due.timer /etc/systemd/system/festival-radar-db-due-scheduler.service /usr/local/libexec/festival-radar/db-due-scheduler)
+scheduler_assets=(/etc/systemd/system/festival-radar-db-due.timer /etc/systemd/system/festival-radar-db-due-scheduler.service /usr/local/libexec/festival-radar/db-due-scheduler /usr/local/libexec/festival-radar/check-db-due-tick-ready)
 scheduler_snapshot_assets() {
   local backup="$1" index
   for index in "${!scheduler_assets[@]}"; do

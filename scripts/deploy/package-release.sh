@@ -27,7 +27,7 @@ cp scripts/deploy/reconfigure-webserver.sh "$stage/app/scripts/deploy/"
 cp scripts/deploy/read-playlist-install-mode.ts scripts/deploy/playlist-timer-install.sh "$stage/app/scripts/deploy/"
 cp scripts/analytics/prune-production.sh "$stage/app/scripts/analytics/"
 cp scripts/deploy/run-legacy-playlists.sh scripts/deploy/run-collection-job.sh "$stage/app/scripts/deploy/"
-cp scripts/deploy/diagnose-legacy-ingestion.mjs scripts/deploy/db-due-scheduler-assets.sh scripts/deploy/db-due-scheduler scripts/deploy/run-legacy-ingestion.sh scripts/deploy/run-db-due-operation.sh scripts/deploy/start-db-due scripts/deploy/db-due-assets.sh "$stage/app/scripts/deploy/"
+cp scripts/deploy/diagnose-legacy-ingestion.mjs scripts/deploy/db-due-scheduler-assets.sh scripts/deploy/db-due-scheduler scripts/deploy/check-db-due-tick-ready scripts/deploy/run-legacy-ingestion.sh scripts/deploy/run-db-due-operation.sh scripts/deploy/start-db-due scripts/deploy/db-due-assets.sh "$stage/app/scripts/deploy/"
 cp scripts/notifications/dispatch-production.sh "$stage/app/scripts/notifications/"
 chmod 0755 "$stage/app/scripts/deploy/reconfigure-webserver.sh"
 chmod 0755 "$stage/app/scripts/analytics/prune-production.sh"
@@ -49,6 +49,7 @@ grep -Fxq 'app/.runtime/NPM_VERSION' "$archive_contents"
 grep -Fxq 'app/scripts/analytics/prune-production.sh' "$archive_contents"
 grep -Fxq 'app/scripts/deploy/run-collection-job.sh' "$archive_contents"
 grep -Fxq 'app/scripts/deploy/diagnose-legacy-ingestion.mjs' "$archive_contents"
+grep -Fxq 'app/scripts/deploy/check-db-due-tick-ready' "$archive_contents"
 if [[ "${DB_ONLY_RELEASE:-false}" == true ]]; then
   if grep -Eq '^app/(data/|public/(logos|offline)/|lib/catalog/(seed|backfill|logo-import)\.ts)' "$archive_contents"; then
     echo 'dynamic catalogue leaked into DB-only archive' >&2; exit 1
