@@ -33,6 +33,21 @@ test('disposable PostgreSQL: changed/unchanged, rollback, fencing, restart and r
     assert.equal(await db.operationalState.count({ where: { key: 'artist-enrichment' } }), 0, 'Use a fresh dedicated disposable database');
     await db.artist.create({ data: { slug, name, aliases: [], genres: [], topTracks: [], recentSetlists: [], freshness: {}, identityState: 'UNRESOLVED' } });
     lease = await claimOperationalState(db, 'artist-enrichment');
+    // Actual flat OperationalState import has no result/cache. Keep its proof
+    // and reviews, audit the missing search, and never publish from URLs alone.
+    const flat = structuredClone(payload.result);
+    flat.manualReview = [{ slug: `${slug}-review`, name: 'Synthetic review', reason: 'multiple_exact_matches', candidateIds: [id] }];
+    await lease.save(flat);
+    const flatReceipt = await publishArtistEnrichment(db, lease);
+    assert.equal(flatReceipt.changed, 0);
+    assert.ok(flatReceipt.reviews.some((r) => r.slug === slug && r.reason === 'missing_provider_search'));
+    assert.equal(await db.artistIdentity.count({ where: { artist: { slug } } }), 0);
+    const migrated = (await db.operationalState.findUniqueOrThrow({ where: { key: lease.key } })).payload;
+    assert.deepEqual(migrated.legacyImport.evidence, flat);
+    await lease.release();
+    lease = await claimOperationalState(db, 'artist-enrichment');
+    assert.equal((await publishArtistEnrichment(db, lease)).changed, 0);
+    assert.deepEqual((await db.operationalState.findUniqueOrThrow({ where: { key: lease.key } })).payload, migrated);
     await lease.save(payload);
     // Force a failure at the receipt write after all canonical writes. PostgreSQL
     // must roll back both artist rows and audit, leaving the result retryable.

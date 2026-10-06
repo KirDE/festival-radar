@@ -8,12 +8,34 @@ publication emits no repository files.
 ## Worker and transaction
 
 `scripts/enrich-artists.mjs` claims the existing two-hour OperationalState lease.
-Before the daily nextRunAt gate or any network request, it publishes an already
-persisted `artist-enrichment.payload.result`. It also publishes immediately after
-saving a new complete result. A crash between save and publication is retried on
-restart, even when nextRunAt is in the future. A transaction failure leaves that
-complete result pending; the next invocation retries. Intermediate cache saves
-occur only after the previous result has been published successfully.
+Before the daily gate or provider requests, it retries publication of durable
+results, including flat legacy imports. Flat `{schemaVersion, source,
+generatedAt, profiles, manualReview}` imports are migrated into `result` and
+an immutable `legacyImport: {hash, evidence}` snapshot. The snapshot preserves
+profiles and complete reviews, including candidate IDs. It is retained in every
+worker checkpoint and publication audit. Its SHA-256 hash uses sorted JSON keys
+so PostgreSQL JSONB key ordering does not break integrity checks.
+
+A flat import with no provider search produces explicit `missing_provider_search`
+reviews and zero canonical writes. Profile provenance URLs alone cannot authorize
+publication. Missing imported profiles in later results receive
+`imported_profile_not_in_result` reviews. Invalid/unsafe/oversized imports fail
+closed without replacing their original payload. Evidence is bounded by bytes,
+structure and string length; credential-bearing URLs and secret fields are
+rejected without echoing their contents.
+
+The worker checkpoints before provider work, after each fetched response, after
+each artist decision, and after failures. It retains existing profiles until
+fresh evidence establishes a replacement, and keeps imported reviews in legacy
+evidence. `work` tracks the catalog names/slugs and completed artists. Restart
+reuses checkpointed responses and skips completed artists. Network failures
+remain incomplete with a sanitized `source_unavailable` review and no daily gate.
+A complete run can include terminal manual-review decisions; it gets the daily
+gate only after every catalog artist has been handled. Missing cached profile
+proof also bypasses the gate. New scheduled runs fetch new provider evidence;
+legacy cache/progress without `work` is preserved for its first resumed run.
+A crash after the final save retries publication before the daily gate. Requests
+have a timeout and bounded retries; raw network/driver errors are never logged.
 
 Publication accepts the key/owner returned by claimOperationalState, never an
 external result. It locks that row, checks owner and expiry against the DB clock,
@@ -24,11 +46,13 @@ during publication. Reclaim cannot pass the same row lock; an expired or replace
 owner cannot publish even an unchanged receipt. The existing two-hour lease is
 not extended. Serialization errors propagate for retry on the next invocation.
 
-Limits: 1,000 profile/review entries, 10 MB serialized result/cache input,
+Limits: 1,000 profile/review entries, 10 MB serialized result/cache/legacy evidence,
 10,000 canonical artists, five genres and 50 links per profile, and a 30-second
 transaction. Exceeding a global bound fails closed, retaining the persisted
-result. The receipt records policyVersion=1, resultHash, changed, applied fields,
-review reasons and publication time. Repeating the same hash returns changed=0
+result. The receipt records policyVersion=2, resultHash, changed, applied fields,
+review reasons and publication time. The hash covers result, cache and legacy import. Changing or removing provider
+evidence invalidates a prior receipt and triggers validation again. Repeating the
+same hash returns changed=0
 without writes. A different result also leaves existing canonical values intact.
 
 ## Identity and field policy
@@ -86,49 +110,33 @@ by this bounded publication step, so it does not assert provider freshness.
 
 ## Verification
 
-Synthetic checks:
+Focused unit checks cover publication protections and lease rollback, flat import
+retention and review audit, missing/truncated/ambiguous search proof, receipt
+invalidation, safe evidence bounds, failed fetch, partial progress, re-entry after
+a search checkpoint, restart after final save, and idempotent restart:
 
 ```sh
 node --experimental-strip-types tests/artist-enrichment-publication.test.mjs
 node --experimental-strip-types tests/artist-enrichment.test.mjs
 npm run typecheck
-npm run build
 ```
 
-Disposable PostgreSQL integration uses a separate explicit
+Disposable PostgreSQL integration requires an explicit
 `ARTIST_ENRICHMENT_TEST_DATABASE_URL`. It must be a loopback PostgreSQL URL with
-`test` or `integration` in its database name and no host query override. It must
-point at a freshly migrated dedicated database without an artist-enrichment row.
-The test creates only synthetic artists, cleans up mutable rows, and leaves the
-append-only audit in the disposable database for destruction; it never reads
-production environment files or imports catalog fixtures. Without that explicit
-variable it reports SKIP. After applying repository migrations to that disposable
-database, run:
+`test` or `integration` in its database name and no host query override, pointing
+at a freshly migrated dedicated database without an artist-enrichment row.
+The E2E check exercises flat migration/retention across a JSONB round trip and
+restart, canonical publication, transaction rollback, lease fencing, ambiguity
+review, and a separate Node process retry after durable result save. It leaves
+append-only audit evidence in that disposable database. No database is started
+by the test; without the explicit variable it skips.
 
 ```sh
-npm run test:artist-enrichment-db
+node --experimental-strip-types tests/artist-enrichment-publication.e2e.test.mjs
 ```
 
-It checks changed publication and field provenance, exact repeat, persisted-result
-publication in a separate restarted Node process despite a future nextRunAt,
-expired/reclaimed fencing, ambiguity review, and invalid-input rollback.
-Synthetic tests additionally exercise expiry at the final write and manual field
-protection. Outside the restricted Codex sandbox, the controller ran a fresh
-loopback-only PostgreSQL 16 Docker container, applied all 20 migrations and
-verified the disposable integration; the container was stopped and removed.
-
-Validation in this sandbox: eight new synthetic tests and two existing artist
-checks passed; standalone typecheck passed. The default Next.js build compiled
-but its TypeScript CLI subprocess produced unparseable empty showConfig output
-(one attempt also segfaulted). A complete build passed with the temporary
-`experimental.useTypeScriptCli: false` compiler-API workaround; next.config.ts
-was restored afterward and no configuration change is committed.
-
-The broad test:data run passed 68 of 74 test files; its later TypeScript suites
-were not reached. The six failing files were db-due-legacy-artifact, db-due-pilot,
-deploy-bundled-npm, ingestion-publication, playlist-trigger and
-source-backfill-operation. Direct reruns exposed empty child-process output and
-sandbox `spawnSync bash/chmod EPERM` errors in unchanged code. These failures are
-not claimed as passing, and no unrelated fixes were made. Independently, the
-unmodified production build passed outside the Codex sandbox. The disposable
-PostgreSQL test was rerun after its append-only audit cleanup was corrected.
+Publication validates persisted bounded MusicBrainz search evidence; it does not
+itself make network calls or assert freshness. Manual review remains necessary
+for ambiguous, unbounded, truncated or unsupported evidence. No independent
+setlist.fm identity is inferred or published. No production/server actions are
+required for these changes.
