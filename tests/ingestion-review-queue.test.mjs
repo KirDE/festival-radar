@@ -64,6 +64,18 @@ test('newer attempt of any status stales pending review; manual source remains a
   }
 });
 
+test('routine due-scheduler completion does not stale its own review candidate', async () => {
+  const current = source({ strategies: ['official_markup'], parserKey: 'official_markup:rock',
+    updatedAt: '2026-02-02T12:00:00Z', lastAttemptAt: '2026-02-02T12:00:00Z' });
+  const reviewed = attempt({ endedAt: '2026-02-02T11:59:59Z' });
+  const result = await readReviewQueue(fakeDb([current], [candidate({ attempt: reviewed })], [reviewed]));
+  assert.equal(result.entries[0].actionable, true);
+  assert.deepEqual(result.entries[0].candidate.staleReasons, []);
+  const changed = source({ ...current, updatedAt: '2026-02-02T12:00:01Z' });
+  const uncertain = await readReviewQueue(fakeDb([changed], [candidate({ attempt: reviewed })], [reviewed]));
+  assert.deepEqual(uncertain.entries[0].candidate.staleReasons, ['source_updated_after_attempt']);
+});
+
 test('configuration update, edition change, disabled or missing sources mark stale', async () => {
   for (const [rows, reason] of [
     [[source({ updatedAt: '2026-03-01' })], 'source_updated_after_attempt'],
