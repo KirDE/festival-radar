@@ -277,6 +277,69 @@ function midgardsblot(html: string): AdapterResult | undefined {
   };
 }
 
+const jeraMonths = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+// The title is the edition anchor on both pages. The info page must independently
+// agree on all three dates before proposing a date change for human review.
+function jeraTitleDates(title: string): { page: string; month: number; days: number[]; startDate: string; endDate: string } | undefined {
+  const match = title.match(/^(Information|Line up) - Jera On Air 2027 - ([A-Za-z]+) (\d{1,2})-(\d{1,2})-(\d{1,2})$/i);
+  if (!match) return undefined;
+  const month = jeraMonths.indexOf(match[2].toLowerCase()) + 1;
+  const days = match.slice(3).map(Number);
+  if (!month || days.some((day) => day < 1 || day > 31)) return undefined;
+  const dates = days.map((day) => new Date(Date.UTC(2027, month - 1, day)));
+  if (dates.some((date) => date.getUTCMonth() !== month - 1) || dates[1].getTime() - dates[0].getTime() !== 86400000 || dates[2].getTime() - dates[1].getTime() !== 86400000) return undefined;
+  return { page: match[1].toLowerCase(), month, days, startDate: dates[0].toISOString().slice(0, 10), endDate: dates[2].toISOString().slice(0, 10) };
+}
+
+// The two exact official URLs are independent DB sources. Ignore navigation,
+// footer, artist popups, and archived editions.
+function jeraOnAir(html: string, source: FestivalSource): AdapterResult | undefined {
+  if (source.editionYear !== 2027) return undefined;
+  let page: URL;
+  try { page = new URL(source.url); } catch { return undefined; }
+  if (page.origin !== "https://www.jeraonair.nl" || page.search || page.hash) return undefined;
+  const path = page.pathname.replace(/\/?$/, "/");
+  if (path !== "/en/info/" && path !== "/en/line-up/") return undefined;
+
+  const title = decode(html.match(/<title\b[^>]*>([^<]+)<\/title>/i)?.[1] ?? "");
+  const titleDates = jeraTitleDates(title);
+  if (!titleDates) return undefined;
+  if (path === "/en/info/") {
+    if (titleDates.page !== "information") return undefined;
+    const general = html.match(/<div class="text">\s*<h2>GENERAL<\/h2>\s*<p>[\s\S]*?<\/p>\s*<p>([\s\S]*?)<\/p>/i)?.[1];
+    const statement = general && decode(general.replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " "));
+    const dates = statement?.match(/\b2027 is edition #33 of Jera On Air and will take place on (\d{1,2}), (\d{1,2}) and (\d{1,2}) ([A-Za-z]+)\b/i);
+    if (!dates || [Number(dates[1]), Number(dates[2]), Number(dates[3])].some((day, index) => day !== titleDates.days[index])) return undefined;
+    const month = jeraMonths.indexOf(dates[4].toLowerCase()) + 1;
+    if (month !== titleDates.month) return undefined;
+    return { editionYear: 2027, startDate: titleDates.startDate, endDate: titleDates.endDate, excerpt: title + "; " + dates[0] };
+  }
+
+  if (titleDates.page !== "line up" || !/<form\b[^>]*class="line-up-header"[^>]*>[\s\S]*?<h1>Line up<\/h1>/i.test(html)) return undefined;
+  const start = html.search(/<div\b[^>]*class="line-up-grid tile_grid"[^>]*id="lineup"[^>]*>/i);
+  if (start < 0) return undefined;
+  const end = html.indexOf("<dialog id=\"performance-dialog\">", start);
+  if (end < 0) return undefined;
+  const grid = html.slice(start, end);
+  const cards = [...grid.matchAll(/<div\b[^>]*class="item"[^>]*data-title="[^"]+"[^>]*>/gi)];
+  const lineup: string[] = [];
+  for (let index = 0; index < cards.length; index++) {
+    const card = grid.slice(cards[index].index, cards[index + 1]?.index ?? grid.length);
+    const link = card.match(/^<div\b([^>]*)>\s*<a\b([^>]*)>/i);
+    const performance = card.match(/<div\b[^>]*class="item-popup-link performance"[^>]*>[\s\S]*?<div\b[^>]*class="item-text"[^>]*>\s*<span\b[^>]*class="title"[^>]*>([^<]+)<\/span>/i);
+    const name = decode(performance?.[1] ?? "");
+    const href = link && attribute(link[2], "href");
+    if (!name || name.length > 100 || name !== (link && attribute(link[2], "title")) || name.toLocaleLowerCase() !== (link && attribute(link[1], "data-title"))?.toLocaleLowerCase()) return undefined;
+    if (!href || !/^\/en\/line-up\/[a-z0-9-]+\/$/.test(href) || /\b(?:19|20)\d{2}\b/.test(name) || lineup.some((other) => other.toLocaleLowerCase() === name.toLocaleLowerCase())) return undefined;
+    lineup.push(name);
+  }
+  // The initial 2027 grid contains 21 artists. A partial/filtered/empty page
+  // cannot propose mass removals; smaller legitimate removals require review.
+  if (lineup.length < 16 || lineup.length > 120) return undefined;
+  return { editionYear: 2027, lineup, excerpt: title + "; " + lineup.length + " official artist cards: " + lineup.slice(0, 3).join(", ") };
+}
+
 function trees(html: string): AdapterResult | undefined {
   const date = html.match(/(\d{1,2})(?:st|nd|rd|th)\s*[-–—]\s*(\d{1,2})(?:st|nd|rd|th)\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(20\d{2})/i);
   if (!date) return undefined;
@@ -295,9 +358,10 @@ function leyendas(html: string): AdapterResult | undefined {
   return title ? { excerpt: title[0].replace(/<[^>]+>/g, " ").trim() } : undefined;
 }
 
-const adapters: Record<string, (html: string) => AdapterResult | undefined> = {
+const adapters: Record<string, (html: string, source: FestivalSource) => AdapterResult | undefined> = {
   "2000trees": trees,
   "greenfield": greenfield,
+  "jera-on-air": jeraOnAir,
   "hurricane": fkpLineup,
   "mera-luna": meraLuna,
   "pinkpop": pinkpop,
@@ -318,7 +382,7 @@ export function hasOfficialMarkupAdapter(slug: string): boolean {
 
 export function extractOfficialMarkupCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const candidate: FestivalCandidate = { schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] };
-  const result = adapters[source.festivalSlug]?.(html);
+  const result = adapters[source.festivalSlug]?.(html, source);
   if (!result) {
     candidate.warnings.push(`Official markup adapter found no trustworthy fields for ${source.festivalSlug}`);
     return candidate;
