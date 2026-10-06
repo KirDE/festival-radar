@@ -8,10 +8,10 @@ export type PlaylistLease = { id: string; publicationId: string; festivalSlug: s
 export type PlaylistClaimCursor = { requestedAt: Date; id: string };
 export type PlaylistClaimPage = { claim: PlaylistLease; nextCursor: null } | { claim: null; nextCursor: PlaylistClaimCursor | null };
 const CLAIM_PAGE_SIZE = 16;
+const MAX_LEASE_LIFETIME_MS = 7_200_000;
 
-function validate(owner: string, now: Date, ttlMs: number) {
+function validate(owner: string, ttlMs: number) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(owner)) throw new Error("Invalid playlist lease owner");
-  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error("Invalid playlist lease time");
   if (!Number.isInteger(ttlMs) || ttlMs < 1_000 || ttlMs > 3_600_000) throw new Error("Invalid playlist lease duration");
 }
 
@@ -32,18 +32,19 @@ export async function enqueuePlaylistRefresh(db: PrismaClient, publicationId: st
 // Read a bounded page of distinct festivals before taking any advisory locks.
 // Filtering with pg_try_advisory_xact_lock before ORDER BY/LIMIT could lock
 // every eligible festival, so only call it for one chosen festival at a time.
+// Eligibility and timestamps use the live DB clock, including after locks;
+// transaction-start CURRENT_TIMESTAMP would be stale after contention.
 // The optional hook is used to synchronize transaction-boundary E2E tests.
 export async function claimPlaylistRefresh(
   db: PrismaClient,
-  input: { owner: string; now: Date; ttlMs: number; cursor?: PlaylistClaimCursor | null },
+  input: { owner: string; ttlMs: number; cursor?: PlaylistClaimCursor | null },
   afterFestivalLock?: (festivalSlug: string) => Promise<void>,
 ): Promise<PlaylistClaimPage> {
-  validate(input.owner, input.now, input.ttlMs);
+  validate(input.owner, input.ttlMs);
   if (input.cursor && (!(input.cursor.requestedAt instanceof Date) || !Number.isFinite(input.cursor.requestedAt.getTime())
     || typeof input.cursor.id !== "string" || !/^[a-z0-9]{20,40}$/.test(input.cursor.id))) {
     throw new Error("Invalid playlist claim cursor");
   }
-  const expiry = new Date(input.now.getTime() + input.ttlMs);
   return db.$transaction(async (tx) => {
     let cursor = input.cursor ?? null;
     // DISTINCT ON runs before keyset pagination: even thousands of jobs
@@ -56,9 +57,13 @@ export async function claimPlaylistRefresh(
       FROM (
         SELECT DISTINCT ON (job."festivalSlug") job.id, job."festivalSlug", job."requestedAt"
         FROM "CatalogPlaylistRefresh" AS job
-        WHERE (job.status = 'PENDING'
-          OR (job.status = 'FAILED' AND job."retryAt" <= ${input.now})
-          OR (job.status = 'RUNNING' AND job."leaseOwner" IS NOT NULL AND job."leaseExpiresAt" <= ${input.now}))
+        JOIN "CatalogPublication" AS publication ON publication.id = job."publicationId"
+        WHERE publication."festivalSlug" = job."festivalSlug" AND publication."lineupChanged" = true
+          AND (job.status = 'PENDING'
+            OR (job.status = 'FAILED' AND job."retryAt" <= (clock_timestamp() AT TIME ZONE 'UTC'))
+            OR (job.status = 'RUNNING' AND job."leaseOwner" IS NOT NULL AND job."leaseExpiresAt" IS NOT NULL AND job."startedAt" IS NOT NULL
+              AND (job."leaseExpiresAt" <= (clock_timestamp() AT TIME ZONE 'UTC')
+                OR job."startedAt" + ${MAX_LEASE_LIFETIME_MS} * interval '1 millisecond' <= (clock_timestamp() AT TIME ZONE 'UTC'))))
           AND NOT EXISTS (
             SELECT 1 FROM "CatalogPlaylistRefresh" AS sibling
             WHERE sibling."festivalSlug" = job."festivalSlug"
@@ -83,10 +88,14 @@ export async function claimPlaylistRefresh(
       // unleased legacy rows) blocks another job in the same festival.
       const jobs = await tx.$queryRaw<{ id: string }[]>`
         SELECT job.id FROM "CatalogPlaylistRefresh" AS job
-        WHERE job."festivalSlug" = ${candidate.festivalSlug}
+        JOIN "CatalogPublication" AS publication ON publication.id = job."publicationId"
+        WHERE publication."festivalSlug" = job."festivalSlug" AND publication."lineupChanged" = true
+          AND job."festivalSlug" = ${candidate.festivalSlug}
           AND (job.status = 'PENDING'
-            OR (job.status = 'FAILED' AND job."retryAt" <= ${input.now})
-            OR (job.status = 'RUNNING' AND job."leaseOwner" IS NOT NULL AND job."leaseExpiresAt" <= ${input.now}))
+            OR (job.status = 'FAILED' AND job."retryAt" <= (clock_timestamp() AT TIME ZONE 'UTC'))
+            OR (job.status = 'RUNNING' AND job."leaseOwner" IS NOT NULL AND job."leaseExpiresAt" IS NOT NULL AND job."startedAt" IS NOT NULL
+              AND (job."leaseExpiresAt" <= (clock_timestamp() AT TIME ZONE 'UTC')
+                OR job."startedAt" + ${MAX_LEASE_LIFETIME_MS} * interval '1 millisecond' <= (clock_timestamp() AT TIME ZONE 'UTC'))))
           AND NOT EXISTS (
             SELECT 1 FROM "CatalogPlaylistRefresh" AS sibling
             WHERE sibling."festivalSlug" = job."festivalSlug"
@@ -97,11 +106,13 @@ export async function claimPlaylistRefresh(
       `;
       if (!jobs.length) continue;
       const rows = await tx.$queryRaw<PlaylistLease[]>`
+        WITH stamp AS MATERIALIZED (SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now)
         UPDATE "CatalogPlaylistRefresh" AS job
           SET status = 'RUNNING', attempts = job.attempts + 1,
-              "leaseOwner" = ${input.owner}, "leaseExpiresAt" = ${expiry},
-              "startedAt" = ${input.now}, "completedAt" = NULL, "retryAt" = NULL,
-              "lastError" = NULL, "updatedAt" = ${input.now}
+              "leaseOwner" = ${input.owner}, "leaseExpiresAt" = stamp.now + ${input.ttlMs} * interval '1 millisecond',
+              "startedAt" = stamp.now, "completedAt" = NULL, "retryAt" = NULL,
+              "lastError" = NULL, "updatedAt" = stamp.now
+        FROM stamp
         WHERE job.id = ${jobs[0].id}
         RETURNING job.id, job."publicationId", job."festivalSlug", job.attempts,
                   job."leaseOwner", job."leaseExpiresAt"
@@ -117,7 +128,8 @@ export class PlaylistLeaseLostError extends Error {
 }
 
 function validateLease(claim: PlaylistLease) {
-  validate(claim.leaseOwner, claim.leaseExpiresAt, 1_000);
+  validate(claim.leaseOwner, 1_000);
+  if (!(claim.leaseExpiresAt instanceof Date) || !Number.isFinite(claim.leaseExpiresAt.getTime())) throw new Error("Invalid playlist lease time");
   if (!claim.id || !claim.publicationId || !claim.festivalSlug || !Number.isSafeInteger(claim.attempts) || claim.attempts < 1) {
     throw new Error("Invalid playlist lease identity");
   }
@@ -131,7 +143,7 @@ async function lockPlaylistLease(tx: Prisma.TransactionClient, claim: PlaylistLe
   await requirePlaylistLease(tx, claim);
 }
 
-async function requirePlaylistLease(tx: Prisma.TransactionClient, claim: PlaylistLease, now?: Date) {
+async function requirePlaylistLease(tx: Prisma.TransactionClient, claim: PlaylistLease) {
   const rows = await tx.$queryRaw<{ id: string }[]>`
     SELECT job.id FROM "CatalogPlaylistRefresh" AS job
     JOIN "CatalogPublication" AS publication ON publication.id = job."publicationId"
@@ -141,7 +153,7 @@ async function requirePlaylistLease(tx: Prisma.TransactionClient, claim: Playlis
       AND job.status = 'RUNNING' AND job."leaseOwner" = ${claim.leaseOwner}
       AND job.attempts = ${claim.attempts}
       AND job."leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
-      ${now ? Prisma.sql`AND job."leaseExpiresAt" > (${now}::timestamptz AT TIME ZONE 'UTC')` : Prisma.empty}
+      AND job."startedAt" + ${MAX_LEASE_LIFETIME_MS} * interval '1 millisecond' > (clock_timestamp() AT TIME ZONE 'UTC')
       AND NOT EXISTS (
         SELECT 1 FROM "CatalogPlaylistRefresh" AS sibling
         WHERE sibling."festivalSlug" = job."festivalSlug" AND sibling.id <> job.id AND sibling.status = 'RUNNING'
@@ -171,32 +183,38 @@ export async function commitPlaylistRefresh<T>(
     const result = await write(tx, { festivalSlug: claim.festivalSlug, editionYear: publication.editionYear, publicationId: claim.publicationId });
     await requirePlaylistLease(tx, claim);
     const count = await tx.$executeRaw`
-      UPDATE "CatalogPlaylistRefresh" SET status = 'SUCCEEDED', "completedAt" = (clock_timestamp() AT TIME ZONE 'UTC'),
-        "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC'), "leaseOwner" = NULL, "leaseExpiresAt" = NULL, "retryAt" = NULL
-      WHERE id = ${claim.id}
-        AND "leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
+      WITH stamp AS MATERIALIZED (SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now)
+      UPDATE "CatalogPlaylistRefresh" AS job SET status = 'SUCCEEDED', "completedAt" = stamp.now,
+        "updatedAt" = stamp.now, "leaseOwner" = NULL, "leaseExpiresAt" = NULL, "retryAt" = NULL
+      FROM stamp
+      WHERE job.id = ${claim.id}
+        AND job."leaseExpiresAt" > stamp.now
+        AND job."startedAt" + ${MAX_LEASE_LIFETIME_MS} * interval '1 millisecond' > stamp.now
     `;
     if (count !== 1) throw new PlaylistLeaseLostError();
     return result;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }
 
-export async function finishPlaylistRefresh(db: PrismaClient, claim: PlaylistLease, now: Date, outcome: "SUCCEEDED" | "FAILED") {
+// Completion changes state once. Repeats return false; commit repeats throw
+// lease loss before calling write. Neither infers ownership from terminal status.
+export async function finishPlaylistRefresh(db: PrismaClient, claim: PlaylistLease, outcome: "SUCCEEDED" | "FAILED") {
   validateLease(claim);
-  if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error("Invalid playlist completion time");
-  // Failed attempts cannot hot-loop. Caller time can tighten expiry, never
-  // bypass DB time; retain it for the existing retry/completion contract.
+  if (outcome !== "SUCCEEDED" && outcome !== "FAILED") throw new Error("Invalid playlist completion outcome");
+  // Failed attempts cannot hot-loop; backoff starts at DB completion time.
   const retryDelayMs = Math.min(86_400_000, 60_000 * 2 ** Math.min(11, Math.max(0, claim.attempts - 1)));
   try {
     return await db.$transaction(async (tx) => {
       await lockPlaylistLease(tx, claim);
-      await requirePlaylistLease(tx, claim, now);
       const count = await tx.$executeRaw`
-        UPDATE "CatalogPlaylistRefresh" SET status = ${outcome}::"CatalogPlaylistRefreshStatus",
-          "completedAt" = ${now}, "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC'),
+        WITH stamp AS MATERIALIZED (SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now)
+        UPDATE "CatalogPlaylistRefresh" AS job SET status = ${outcome}::"CatalogPlaylistRefreshStatus",
+          "completedAt" = stamp.now, "updatedAt" = stamp.now,
           "leaseOwner" = NULL, "leaseExpiresAt" = NULL,
-          "retryAt" = ${outcome === "FAILED" ? new Date(now.getTime() + retryDelayMs) : null}
-        WHERE id = ${claim.id} AND "leaseExpiresAt" > (clock_timestamp() AT TIME ZONE 'UTC')
+          "retryAt" = CASE WHEN ${outcome} = 'FAILED' THEN stamp.now + ${retryDelayMs} * interval '1 millisecond' ELSE NULL END
+        FROM stamp
+        WHERE job.id = ${claim.id} AND job."leaseExpiresAt" > stamp.now
+          AND job."startedAt" + ${MAX_LEASE_LIFETIME_MS} * interval '1 millisecond' > stamp.now
       `;
       if (count !== 1) throw new PlaylistLeaseLostError();
       return true;
@@ -205,4 +223,28 @@ export async function finishPlaylistRefresh(db: PrismaClient, claim: PlaylistLea
     if (error instanceof PlaylistLeaseLostError) return false;
     throw error;
   }
+}
+
+// Renewal never changes startedAt or attempts. Expired work requires a new
+// claim; no heartbeat can keep one attempt alive beyond two hours.
+export async function renewPlaylistRefreshLease(db: PrismaClient, claim: PlaylistLease, ttlMs: number): Promise<PlaylistLease> {
+  validateLease(claim);
+  validate(claim.leaseOwner, ttlMs);
+  return db.$transaction(async (tx) => {
+    await lockPlaylistLease(tx, claim);
+    const rows = await tx.$queryRaw<PlaylistLease[]>`
+      WITH stamp AS MATERIALIZED (SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now)
+      UPDATE "CatalogPlaylistRefresh" AS job
+      SET "leaseExpiresAt" = LEAST(job."startedAt" + ${MAX_LEASE_LIFETIME_MS} * interval '1 millisecond',
+            GREATEST(job."leaseExpiresAt", stamp.now + ${ttlMs} * interval '1 millisecond')),
+          "updatedAt" = stamp.now
+      FROM stamp
+      WHERE job.id = ${claim.id} AND job."leaseExpiresAt" > stamp.now
+        AND job."startedAt" + ${MAX_LEASE_LIFETIME_MS} * interval '1 millisecond' > stamp.now
+      RETURNING job.id, job."publicationId", job."festivalSlug", job.attempts,
+                job."leaseOwner", job."leaseExpiresAt"
+    `;
+    if (rows.length !== 1) throw new PlaylistLeaseLostError();
+    return rows[0];
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }

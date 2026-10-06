@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { claimPlaylistRefresh as claimPage, enqueuePlaylistRefresh, finishPlaylistRefresh, assertPlaylistRefreshLease, commitPlaylistRefresh, PlaylistLeaseLostError } from "../lib/catalog/playlist-queue.ts";
+import { claimPlaylistRefresh as claimPage, enqueuePlaylistRefresh, finishPlaylistRefresh, assertPlaylistRefreshLease, commitPlaylistRefresh, PlaylistLeaseLostError, renewPlaylistRefreshLease } from "../lib/catalog/playlist-queue.ts";
 import type { PlaylistClaimCursor } from "../lib/catalog/playlist-queue.ts";
 
 const url = process.env.DATABASE_URL;
@@ -11,8 +11,12 @@ const first = new PrismaClient();
 const second = new PrismaClient();
 const ownerA = randomUUID();
 const ownerB = randomUUID();
+// Only a stable queue-order key, never a lease clock.
 const base = new Date("2027-03-01T00:00:00.000Z");
-const input = (owner: string, now = base) => ({ owner, now, ttlMs: 60_000 });
+async function expireLease(id: string) {
+  await first.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "leaseExpiresAt" = (clock_timestamp() AT TIME ZONE 'UTC') - interval '1 second' WHERE id = ${id}`;
+}
+const input = (owner: string) => ({ owner, ttlMs: 60_000 });
 // Convenience for older scenarios; production callers own this continuation
 // across calls, never inside a single interactive transaction.
 async function claimPlaylistRefresh(
@@ -76,21 +80,30 @@ test("atomic claim, expiry reclaim and attempt-fenced completion", async () => {
   const claim = a?.id === jobId ? a : b?.id === jobId ? b : null;
   assert.ok(claim);
   assert.equal([a, b].filter((value) => value?.id === jobId).length, 1);
-  assert.equal(await finishPlaylistRefresh(first, claim, new Date(base.getTime() + 60_000), "SUCCEEDED"), false);
-  const reclaimed = await claimPlaylistRefresh(second, input(ownerB, new Date(base.getTime() + 60_001)));
+  await expireLease(claim.id);
+  assert.equal(await finishPlaylistRefresh(first, claim, "SUCCEEDED"), false);
+  const reclaimed = await claimPlaylistRefresh(second, input(ownerB));
   assert.equal(reclaimed?.id, jobId);
   assert.equal(reclaimed.attempts, claim.attempts + 1);
-  assert.equal(await finishPlaylistRefresh(first, claim, new Date(base.getTime() + 60_002), "FAILED"), false);
-  assert.equal(await finishPlaylistRefresh(second, reclaimed, new Date(base.getTime() + 60_002), "FAILED"), true);
-  assert.equal(await finishPlaylistRefresh(second, reclaimed, new Date(base.getTime() + 60_003), "SUCCEEDED"), false);
+  assert.equal(await finishPlaylistRefresh(first, claim, "FAILED"), false);
+  assert.equal(await finishPlaylistRefresh(second, reclaimed, "FAILED"), true);
+  const failedSnapshot = await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: jobId } });
+  assert.equal(await finishPlaylistRefresh(second, reclaimed, "FAILED"), false);
+  assert.equal(await finishPlaylistRefresh(second, reclaimed, "SUCCEEDED"), false);
   const failedRow = await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: jobId } });
-  assert.equal(failedRow.retryAt?.getTime(), base.getTime() + 180_002);
-  assert.equal(await claimPlaylistRefresh(first, input(ownerA, new Date(base.getTime() + 180_001))), null);
-  const retried = await claimPlaylistRefresh(first, input(ownerA, new Date(base.getTime() + 180_002)));
+  assert.deepEqual(failedRow, failedSnapshot);
+  assert.equal(failedRow.retryAt!.getTime() - failedRow.completedAt!.getTime(), 120_000);
+  assert.equal(failedRow.completedAt!.getTime(), failedRow.updatedAt.getTime());
+  const [{ now }] = await first.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now`;
+  assert.ok(failedRow.completedAt! <= now);
+  assert.ok(now.getTime() - failedRow.completedAt!.getTime() < 5_000);
+  assert.equal(await claimPlaylistRefresh(first, input(ownerA)), null);
+  await first.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "retryAt" = (clock_timestamp() AT TIME ZONE 'UTC') - interval '1 second' WHERE id = ${jobId}`;
+  const retried = await claimPlaylistRefresh(first, input(ownerA));
   assert.equal(retried?.id, jobId);
-  assert.equal(await finishPlaylistRefresh(first, retried, new Date(base.getTime() + 180_003), "SUCCEEDED"), true);
+  assert.equal(await finishPlaylistRefresh(first, retried, "SUCCEEDED"), true);
   assert.equal((await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: jobId } })).status, "SUCCEEDED");
-  assert.equal(await claimPlaylistRefresh(second, input(ownerB, new Date(base.getTime() + 180_004))), null);
+  assert.equal(await claimPlaylistRefresh(second, input(ownerB)), null);
 });
 
 test("malformed claims fail before any DB access", async () => {
@@ -123,11 +136,11 @@ test("simultaneous festival claims serialize siblings but permit other festivals
   const other = [a, b].find((claim) => claim?.id === otherId) ?? await claimPlaylistRefresh(second, input(ownerB));
   assert.equal(other?.id, otherId);
   assert.equal(await claimPlaylistRefresh(first, input(ownerA)), null);
-  assert.equal(await finishPlaylistRefresh(first, active, new Date(base.getTime() + 1_000), "SUCCEEDED"), true);
-  const next = await claimPlaylistRefresh(second, input(ownerB, new Date(base.getTime() + 1_001)));
+  assert.equal(await finishPlaylistRefresh(first, active, "SUCCEEDED"), true);
+  const next = await claimPlaylistRefresh(second, input(ownerB));
   assert.equal(next?.id, siblingIds.find((id) => id !== active.id));
-  assert.equal(await finishPlaylistRefresh(second, next!, new Date(base.getTime() + 1_002), "SUCCEEDED"), true);
-  assert.equal(await finishPlaylistRefresh(first, other!, new Date(base.getTime() + 1_003), "SUCCEEDED"), true);
+  assert.equal(await finishPlaylistRefresh(second, next!, "SUCCEEDED"), true);
+  assert.equal(await finishPlaylistRefresh(first, other!, "SUCCEEDED"), true);
 });
 
 test("expired sibling cannot be claimed beside a RUNNING festival row; legacy rows block", async () => {
@@ -151,13 +164,14 @@ test("expired sibling cannot be claimed beside a RUNNING festival row; legacy ro
   await first.catalogPlaylistRefresh.update({ where: { id: legacy.id }, data: { status: "FAILED", retryAt: null } });
   const claimed = await claimPlaylistRefresh(first, input(ownerA));
   assert.equal(claimed?.id, secondId);
-  assert.equal(await claimPlaylistRefresh(second, input(ownerB, new Date(base.getTime() + 59_999))), null);
-  const reclaimed = await claimPlaylistRefresh(second, input(ownerB, new Date(base.getTime() + 60_001)));
+  assert.equal(await claimPlaylistRefresh(second, input(ownerB)), null);
+  await expireLease(claimed.id);
+  const reclaimed = await claimPlaylistRefresh(second, input(ownerB));
   assert.equal(reclaimed?.id, secondId);
   assert.equal(reclaimed.attempts, claimed.attempts + 1);
-  assert.equal(await finishPlaylistRefresh(first, claimed, new Date(base.getTime() + 60_002), "SUCCEEDED"), false);
-  assert.equal(await finishPlaylistRefresh(second, reclaimed, new Date(base.getTime() + 60_002), "SUCCEEDED"), true);
-  assert.equal(await claimPlaylistRefresh(first, input(ownerA, new Date(base.getTime() + 60_003))), null);
+  assert.equal(await finishPlaylistRefresh(first, claimed, "SUCCEEDED"), false);
+  assert.equal(await finishPlaylistRefresh(second, reclaimed, "SUCCEEDED"), true);
+  assert.equal(await claimPlaylistRefresh(first, input(ownerA)), null);
 });
 
 test("claiming A while its transaction is paused does not lock B", async () => {
@@ -193,7 +207,7 @@ test("claiming A while its transaction is paused does not lock B", async () => {
     assert.equal((await second.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: lockedId } })).status, "PENDING");
     const claim = await claimPlaylistRefresh(second, input(ownerB));
     assert.equal(claim?.id, availableId);
-    assert.equal(await finishPlaylistRefresh(second, claim!, new Date(base.getTime() + 1_000), "SUCCEEDED"), true);
+    assert.equal(await finishPlaylistRefresh(second, claim!, "SUCCEEDED"), true);
   } finally {
     release();
     next = await holding;
@@ -201,7 +215,7 @@ test("claiming A while its transaction is paused does not lock B", async () => {
   assert.equal(next?.id, lockedId);
   // While the first A lease runs, its other 34 jobs must not be claimable.
   assert.equal(await claimPlaylistRefresh(second, input(ownerB)), null);
-  assert.equal(await finishPlaylistRefresh(first, next!, new Date(base.getTime() + 1_001), "SUCCEEDED"), true);
+  assert.equal(await finishPlaylistRefresh(first, next!, "SUCCEEDED"), true);
   // This disposable suite shares one database; leave no A siblings claimable.
   await first.catalogPlaylistRefresh.updateMany({
     where: { festivalSlug: slugA, status: "PENDING" }, data: { status: "SUCCEEDED" },
@@ -224,10 +238,9 @@ test("a newly RUNNING sibling after advisory lock blocks a stale candidate", asy
     assert.equal(lockedSlug, slug);
     // Separate connection commits between advisory lock and fresh-snapshot
     // SELECT FOR UPDATE. An earlier candidate snapshot still saw both PENDING.
-    await second.catalogPlaylistRefresh.update({ where: { id: ids[1] }, data: {
-      status: "RUNNING", startedAt: base, leaseOwner: ownerB,
-      leaseExpiresAt: new Date(base.getTime() + 60_000),
-    } });
+    await second.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET status = 'RUNNING',
+      "startedAt" = (clock_timestamp() AT TIME ZONE 'UTC'), "leaseOwner" = ${ownerB},
+      "leaseExpiresAt" = (clock_timestamp() AT TIME ZONE 'UTC') + interval '1 minute' WHERE id = ${ids[1]}`;
   });
   assert.equal(page.claim, null);
   assert.equal(page.nextCursor, null);
@@ -276,7 +289,7 @@ test("multiple bounded calls resume past >32 contended festivals", async () => {
     const page = await claimPage(second, { ...input(ownerB), cursor });
     assert.equal(page.claim?.id, availableId);
     assert.equal(page.nextCursor, null);
-    assert.equal(await finishPlaylistRefresh(second, page.claim!, new Date(base.getTime() + 1_000), "SUCCEEDED"), true);
+    assert.equal(await finishPlaylistRefresh(second, page.claim!, "SUCCEEDED"), true);
   } finally {
     release();
     await holding;
@@ -284,8 +297,7 @@ test("multiple bounded calls resume past >32 contended festivals", async () => {
   }
 });
 
-// DB fencing scenarios use real database time rather than the historical
-// claim scanner's injected clock. No Spotify or live consumer is involved.
+// All lease scenarios use database time. No Spotify or live consumer is involved.
 async function fencedFixture(ttlMs = 60_000) {
   const slug = `queue-fence-${randomUUID()}`;
   const festival = await first.festival.create({ data: {
@@ -297,8 +309,7 @@ async function fencedFixture(ttlMs = 60_000) {
     editionYear: 2027, actorLabel: "test", fields: ["lineup"], lineupChanged: true,
   } });
   const job = await enqueuePlaylistRefresh(first, publication.id);
-  const [{ now }] = await first.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now`;
-  const page = await claimPage(first, { owner: ownerA, now, ttlMs });
+  const page = await claimPage(first, { owner: ownerA, ttlMs });
   assert.equal(page.claim?.id, job.id);
   return { claim: page.claim!, editionId: festival.editions[0].id, slug };
 }
@@ -318,17 +329,16 @@ test("DB fence rejects wrong identities, expiry, reclaimed owners and commits ne
     const wrong = { ...claim, ...changed };
     await assert.rejects(assertPlaylistRefreshLease(first, wrong), PlaylistLeaseLostError);
     await assert.rejects(commitPlaylistRefresh(first, wrong, write), PlaylistLeaseLostError);
-    assert.equal(await finishPlaylistRefresh(first, wrong, new Date(), "SUCCEEDED"), false);
+    assert.equal(await finishPlaylistRefresh(first, wrong, "SUCCEEDED"), false);
   }
   await assertPlaylistRefreshLease(first, claim);
-  // Even a forged future expiry and stale caller clock cannot bypass DB time.
+  // A forged future expiry cannot bypass DB time.
   await first.catalogPlaylistRefresh.update({ where: { id: claim.id }, data: { leaseExpiresAt: new Date(0) } });
   await assert.rejects(assertPlaylistRefreshLease(first, { ...claim, leaseExpiresAt: base }), PlaylistLeaseLostError);
   await assert.rejects(commitPlaylistRefresh(first, claim, write), PlaylistLeaseLostError);
-  assert.equal(await finishPlaylistRefresh(first, claim, new Date(0), "SUCCEEDED"), false);
-  const [{ now }] = await second.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now`;
+  assert.equal(await finishPlaylistRefresh(first, claim, "SUCCEEDED"), false);
   // A new owner can commit; the old owner and old attempt cannot.
-  const reclaimed = (await claimPage(second, { owner: ownerB, now, ttlMs: 60_000 })).claim!;
+  const reclaimed = (await claimPage(second, { owner: ownerB, ttlMs: 60_000 })).claim!;
   assert.equal(reclaimed.id, claim.id);
   assert.equal(reclaimed.attempts, claim.attempts + 1);
   await assert.rejects(commitPlaylistRefresh(first, claim, write), PlaylistLeaseLostError);
@@ -345,7 +355,9 @@ test("DB fence rejects wrong identities, expiry, reclaimed owners and commits ne
   assert.equal(completed.leaseOwner, null);
   assert.equal(completed.leaseExpiresAt, null);
   assert.ok(completed.completedAt);
-  await assert.rejects(commitPlaylistRefresh(first, reclaimed, write), PlaylistLeaseLostError);
+  await assert.rejects(commitPlaylistRefresh(first, reclaimed, async () => { assert.fail("repeat must not execute catalog writes"); }), PlaylistLeaseLostError);
+  assert.equal(await finishPlaylistRefresh(second, reclaimed, "SUCCEEDED"), false);
+  assert.deepEqual(await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: claim.id } }), completed);
 });
 
 test("DB fence rolls back catalog writes on callback error and expiry during transaction", async () => {
@@ -378,10 +390,9 @@ test("DB fence serializes same-festival commit vs claimant and competing complet
   });
   try {
     await lockHeld;
-    // Artificially advanced scanner clock makes this row reclaim-eligible;
-    // the shared festival lock still prevents reclaim during catalog commit.
-    assert.equal((await claimPage(second, { owner: ownerB, now: new Date(claim.leaseExpiresAt.getTime() + 1), ttlMs: 60_000 })).claim, null);
-    const competing = finishPlaylistRefresh(second, claim, new Date(), "FAILED");
+    // The shared festival lock prevents a claim during catalog commit.
+    assert.equal((await claimPage(second, { owner: ownerB, ttlMs: 60_000 })).claim, null);
+    const competing = finishPlaylistRefresh(second, claim, "FAILED");
     release();
     await holding;
     assert.equal(await competing, false);
@@ -398,16 +409,177 @@ test("DB fence refuses unleased legacy RUNNING and any RUNNING sibling", async (
   const legacy = await enqueuePlaylistRefresh(first, legacyPublication.id);
   await first.catalogPlaylistRefresh.update({ where: { id: legacy.id }, data: { status: "RUNNING", attempts: 1 } });
   await assert.rejects(assertPlaylistRefreshLease(first, claim), PlaylistLeaseLostError);
+  await assert.rejects(renewPlaylistRefreshLease(first, claim, 60_000), PlaylistLeaseLostError);
+  assert.equal(await finishPlaylistRefresh(first, claim, "SUCCEEDED"), false);
   await assert.rejects(commitPlaylistRefresh(first, claim, playlistWrite(editionId, "https://example.test/legacy")), PlaylistLeaseLostError);
   await first.catalogPlaylistRefresh.update({ where: { id: claim.id }, data: { status: "SUCCEEDED" } });
   const forged = { ...claim, id: legacy.id, publicationId: legacy.publicationId };
   await assert.rejects(assertPlaylistRefreshLease(first, forged), PlaylistLeaseLostError);
+  await assert.rejects(renewPlaylistRefreshLease(first, forged, 60_000), PlaylistLeaseLostError);
   assert.equal((await claimPage(second, input(ownerB))).claim, null);
   // Partially populated legacy rows with an expired timestamp but no owner
   // must not be implicitly resurrected either.
   await first.catalogPlaylistRefresh.update({ where: { id: legacy.id }, data: { leaseExpiresAt: new Date(0) } });
   assert.equal((await claimPage(second, input(ownerB))).claim, null);
-  assert.equal(await finishPlaylistRefresh(first, forged, new Date(), "SUCCEEDED"), false);
+  assert.equal(await finishPlaylistRefresh(first, forged, "SUCCEEDED"), false);
   assert.equal(await first.festivalPlaylist.count({ where: { editionId } }), 0);
+  // An owner without an expiry, or an expiry without startedAt, is incomplete.
+  await first.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "leaseOwner" = ${ownerA}, "leaseExpiresAt" = NULL,
+    "startedAt" = (clock_timestamp() AT TIME ZONE 'UTC') - interval '3 hours' WHERE id = ${legacy.id}`;
+  assert.equal((await claimPage(second, input(ownerB))).claim, null);
+  await first.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "leaseExpiresAt" = (clock_timestamp() AT TIME ZONE 'UTC') - interval '1 second',
+    "startedAt" = NULL WHERE id = ${legacy.id}`;
+  assert.equal((await claimPage(second, input(ownerB))).claim, null);
   await first.catalogPlaylistRefresh.updateMany({ where: { festivalSlug: slug }, data: { status: "SUCCEEDED" } });
+});
+
+test("claim timestamps use DB time after the festival lock, ignoring extra client time", async () => {
+  const publication = await first.catalogPublication.create({ data: {
+    source: "ADMIN", sourceId: `playlist-clock:${randomUUID()}`, festivalSlug: `queue-clock-${randomUUID()}`,
+    editionYear: 2027, actorLabel: "test", fields: ["lineup"], lineupChanged: true,
+  } });
+  const job = await enqueuePlaylistRefresh(first, publication.id);
+  let afterLock!: Date;
+  const options = { owner: ownerA, ttlMs: 1_000, now: new Date(0) };
+  const page = await claimPage(first, options, async () => {
+    // A transaction-start clock would precede this timestamp by >1s.
+    await second.$queryRaw`SELECT 1 FROM pg_sleep(1.1)`;
+    const [stamp] = await second.$queryRaw<{ now: Date }[]>`SELECT clock_timestamp() AT TIME ZONE 'UTC' AS now`;
+    afterLock = stamp.now;
+  });
+  assert.equal(page.claim?.id, job.id);
+  const row = await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: job.id } });
+  assert.ok(row.startedAt! >= afterLock);
+  assert.equal(row.updatedAt.getTime(), row.startedAt!.getTime());
+  assert.equal(row.leaseExpiresAt!.getTime() - row.startedAt!.getTime(), 1_000);
+  assert.equal(await finishPlaylistRefresh(first, page.claim!, "SUCCEEDED"), true);
+});
+
+test("renewal preserves attempt identity, extends from DB time, and serializes concurrent renewals", async () => {
+  const { claim } = await fencedFixture(10_000);
+  const initial = await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: claim.id } });
+  for (const change of [{ leaseOwner: ownerB }, { attempts: claim.attempts + 1 }, { publicationId: jobId }, { festivalSlug: "wrong" }]) {
+    await assert.rejects(renewPlaylistRefreshLease(second, { ...claim, ...change }, 60_000), PlaylistLeaseLostError);
+  }
+  const renewals = await Promise.all([
+    renewPlaylistRefreshLease(first, claim, 60_000), renewPlaylistRefreshLease(second, claim, 120_000),
+  ]);
+  assert.ok(renewals.every((renewed) => renewed.leaseExpiresAt > claim.leaseExpiresAt));
+  const row = await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: claim.id } });
+  assert.equal(row.leaseExpiresAt!.getTime(), Math.max(...renewals.map((renewed) => renewed.leaseExpiresAt.getTime())));
+  assert.ok(row.leaseExpiresAt!.getTime() - row.updatedAt.getTime() > 119_000);
+  assert.ok(row.leaseExpiresAt!.getTime() - row.updatedAt.getTime() <= 120_000);
+  assert.equal(row.startedAt!.getTime(), initial.startedAt!.getTime());
+  assert.equal(row.attempts, initial.attempts);
+  assert.equal(row.leaseOwner, initial.leaseOwner);
+  assert.equal((await claimPage(second, input(ownerB))).claim, null);
+  // The original handle remains valid: caller expiry is not authoritative.
+  await assertPlaylistRefreshLease(first, claim);
+  await expireLease(claim.id);
+  await assert.rejects(renewPlaylistRefreshLease(first, claim, 60_000), PlaylistLeaseLostError);
+  const reclaimed = (await claimPage(second, input(ownerB))).claim!;
+  assert.equal(reclaimed.id, claim.id);
+  assert.equal(reclaimed.attempts, claim.attempts + 1);
+  await assert.rejects(renewPlaylistRefreshLease(first, claim, 60_000), PlaylistLeaseLostError);
+  assert.equal(await finishPlaylistRefresh(first, claim, "SUCCEEDED"), false);
+  assert.equal(await finishPlaylistRefresh(second, reclaimed, "SUCCEEDED"), true);
+});
+
+test("renewal checks live DB expiry after waiting for the festival and row locks", async () => {
+  const { claim, slug } = await fencedFixture();
+  let pending!: Promise<unknown>;
+  await first.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(210, hashtext(${slug}))`;
+    await tx.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "leaseExpiresAt" = (clock_timestamp() AT TIME ZONE 'UTC') + interval '100 milliseconds' WHERE id = ${claim.id}`;
+    pending = assert.rejects(renewPlaylistRefreshLease(second, claim, 60_000), PlaylistLeaseLostError);
+    await tx.$queryRaw`SELECT 1 FROM pg_sleep(0.2)`;
+  });
+  await pending;
+  const reclaimed = (await claimPage(second, input(ownerB))).claim!;
+  assert.equal(reclaimed.id, claim.id);
+  assert.equal(await finishPlaylistRefresh(second, reclaimed, "SUCCEEDED"), true);
+});
+
+test("renewal caps expiry at two hours from startedAt and cannot restart that lifetime", async () => {
+  const { claim, editionId } = await fencedFixture();
+  await first.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "startedAt" = (clock_timestamp() AT TIME ZONE 'UTC') - interval '119 minutes' WHERE id = ${claim.id}`;
+  const aged = await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: claim.id } });
+  const renewed = await renewPlaylistRefreshLease(first, claim, 3_600_000);
+  assert.equal(renewed.leaseExpiresAt.getTime(), aged.startedAt!.getTime() + 7_200_000);
+  const again = await renewPlaylistRefreshLease(second, claim, 3_600_000);
+  assert.equal(again.leaseExpiresAt.getTime(), renewed.leaseExpiresAt.getTime());
+  // Even a future leaseExpiresAt cannot bypass the absolute lifetime.
+  await first.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "startedAt" = (clock_timestamp() AT TIME ZONE 'UTC') - interval '2 hours', "leaseExpiresAt" = (clock_timestamp() AT TIME ZONE 'UTC') + interval '1 hour' WHERE id = ${claim.id}`;
+  await assert.rejects(renewPlaylistRefreshLease(first, claim, 1_000), PlaylistLeaseLostError);
+  await assert.rejects(assertPlaylistRefreshLease(first, claim), PlaylistLeaseLostError);
+  await assert.rejects(commitPlaylistRefresh(first, claim, async () => { assert.fail("max lifetime must fence callback"); }), PlaylistLeaseLostError);
+  assert.equal(await finishPlaylistRefresh(first, claim, "FAILED"), false);
+  const reclaimed = (await claimPage(second, input(ownerB))).claim!;
+  assert.equal(reclaimed.id, claim.id);
+  assert.equal(reclaimed.attempts, claim.attempts + 1);
+  await assert.rejects(commitPlaylistRefresh(first, claim, playlistWrite(editionId, "https://example.test/stale")), PlaylistLeaseLostError);
+  assert.equal(await first.festivalPlaylist.count({ where: { editionId } }), 0);
+  assert.equal(await finishPlaylistRefresh(second, reclaimed, "SUCCEEDED"), true);
+});
+
+test("maximum lifetime during callback rolls back catalog writes", async () => {
+  const { claim, editionId } = await fencedFixture();
+  await first.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "startedAt" = (clock_timestamp() AT TIME ZONE 'UTC') - interval '2 hours' + interval '1 second' WHERE id = ${claim.id}`;
+  await assert.rejects(commitPlaylistRefresh(first, claim, async (tx) => {
+    await playlistWrite(editionId, "https://example.test/lifetime")(tx);
+    await tx.$queryRaw`SELECT 1 FROM pg_sleep(1.1)`;
+  }), PlaylistLeaseLostError);
+  assert.equal(await first.festivalPlaylist.count({ where: { editionId } }), 0);
+  assert.equal((await first.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: claim.id } })).status, "RUNNING");
+  await first.catalogPlaylistRefresh.update({ where: { id: claim.id }, data: { status: "SUCCEEDED" } });
+});
+
+test("concurrent catalog completions execute one callback and repeats never report success", async () => {
+  const { claim, editionId } = await fencedFixture();
+  let calls = 0;
+  const write = async (tx: import("@prisma/client").Prisma.TransactionClient) => {
+    calls++;
+    return playlistWrite(editionId, "https://example.test/once")(tx);
+  };
+  const results = await Promise.allSettled([
+    commitPlaylistRefresh(first, claim, write), commitPlaylistRefresh(second, claim, write),
+  ]);
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  const rejected = results.find((result) => result.status === "rejected") as PromiseRejectedResult;
+  assert.ok(rejected.reason instanceof PlaylistLeaseLostError);
+  assert.equal(calls, 1);
+  assert.equal(await finishPlaylistRefresh(first, claim, "SUCCEEDED"), false);
+  await assert.rejects(commitPlaylistRefresh(second, claim, write), PlaylistLeaseLostError);
+  assert.equal(calls, 1);
+});
+
+test("claim rechecks DB retry eligibility after the festival lock", async () => {
+  const publication = await first.catalogPublication.create({ data: {
+    source: "ADMIN", sourceId: `playlist-retry-clock:${randomUUID()}`, festivalSlug: `queue-retry-clock-${randomUUID()}`,
+    editionYear: 2027, actorLabel: "test", fields: ["lineup"], lineupChanged: true,
+  } });
+  const job = await enqueuePlaylistRefresh(first, publication.id);
+  const page = await claimPage(first, input(ownerA), async () => {
+    await second.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET status = 'FAILED',
+      "retryAt" = (clock_timestamp() AT TIME ZONE 'UTC') + interval '1 hour' WHERE id = ${job.id}`;
+  });
+  assert.equal(page.claim, null);
+  assert.equal((await claimPage(second, input(ownerB))).claim, null);
+  await first.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "retryAt" = (clock_timestamp() AT TIME ZONE 'UTC') - interval '1 second' WHERE id = ${job.id}`;
+  const claim = (await claimPage(second, input(ownerB))).claim!;
+  assert.equal(claim.id, job.id);
+  assert.equal(await finishPlaylistRefresh(second, claim, "SUCCEEDED"), true);
+});
+
+test("persisted publication/festival mismatch blocks renewal, completion and fresh claim", async () => {
+  const { claim } = await fencedFixture();
+  const slug = `queue-mismatch-${randomUUID()}`;
+  await first.catalogPlaylistRefresh.update({ where: { id: claim.id }, data: { festivalSlug: slug } });
+  const mismatched = { ...claim, festivalSlug: slug };
+  await assert.rejects(renewPlaylistRefreshLease(first, mismatched, 60_000), PlaylistLeaseLostError);
+  await assert.rejects(commitPlaylistRefresh(first, mismatched, async () => { assert.fail("mismatch must fence writes"); }), PlaylistLeaseLostError);
+  assert.equal(await finishPlaylistRefresh(first, mismatched, "SUCCEEDED"), false);
+  await expireLease(claim.id);
+  assert.equal((await claimPage(second, input(ownerB))).claim, null);
+  await first.catalogPlaylistRefresh.update({ where: { id: claim.id }, data: { status: "SUCCEEDED" } });
 });
