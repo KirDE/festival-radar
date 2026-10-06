@@ -63,6 +63,38 @@ test("empty, truncated, mismatched, and drifted pages never propose removals", (
   assert.deepEqual(extract(lineup(), "https://attacker.example/en/line-up/").evidence, []);
 });
 
+test("consistent 2027 date moves produce review-required date changes", () => {
+  const moved = info.replace("June 24-25-26", "July 29-30-31").replace("24, 25&nbsp;and 26 June", "29, 30&nbsp;and 31 July");
+  const candidate = extract(moved, infoUrl);
+  assert.equal(candidate.startDate, "2027-07-29");
+  assert.equal(candidate.endDate, "2027-07-31");
+  assert.deepEqual(candidate.observedEditionYears, [2027]);
+  assert.deepEqual(candidate.evidence.map(({ field }) => field), ["startDate", "endDate"]);
+  const result = evaluateCandidate(current, candidate);
+  assert.equal(result.publishable, false);
+  assert.deepEqual(result.changes.map(({ kind, reviewRequired }) => [kind, reviewRequired]), [["date_changed", true], ["date_changed", true]]);
+  assert.match(result.reviewReasons.join("; "), /date_changed requires review/);
+  const wrongEdition = evaluateCandidate({ ...current, editionYear: 2028 }, candidate);
+  assert.equal(wrongEdition.publishable, false);
+  assert.match(wrongEdition.reviewReasons.join("; "), /does not match catalogue edition 2028/);
+});
+
+test("title/body disagreements and invalid date triples fail closed", () => {
+  const bad = [
+    info.replace("June 24-25-26", "June 25-26-27"),
+    info.replace("24, 25&nbsp;and 26 June", "25, 26&nbsp;and 27 June"),
+    info.replace("June 24-25-26", "July 24-25-26"),
+    info.replace("June 24-25-26", "June 29-30-31").replace("24, 25&nbsp;and 26 June", "29, 30&nbsp;and 31 June"),
+    info.replace("June 24-25-26", "February 28-29-30").replace("24, 25&nbsp;and 26 June", "28, 29&nbsp;and 30 February"),
+    info.replace("June 24-25-26", "June 24-26-27").replace("24, 25&nbsp;and 26 June", "24, 26&nbsp;and 27 June"),
+  ];
+  for (const html of bad) {
+    const candidate = extract(html, infoUrl);
+    assert.deepEqual(candidate.evidence, []);
+    assert.deepEqual(evaluateCandidate(current, candidate).changes, []);
+  }
+});
+
 test("date prose and edition drift fail closed despite matching site title", () => {
   for (const html of [info.replace("2027&nbsp;is edition", "2026&nbsp;is edition"), info.replace("24, 25&nbsp;and 26 June", "24, 25&nbsp;and 27 June"), info.replace("<h2>GENERAL</h2>", "<h2>HISTORY</h2>"), info.replace("Information - Jera On Air 2027", "Information - Jera On Air 2026")]) {
     assert.deepEqual(extract(html, infoUrl).evidence, []);
