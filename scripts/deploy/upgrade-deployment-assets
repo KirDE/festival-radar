@@ -16,10 +16,13 @@ flock -n 9 || { echo "deployment or manual operation busy" >&2; exit 5; }
 temporary="$(mktemp -d)"
 trap 'rm -rf "$temporary"' EXIT
 
-main_sha="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+# Read the entire API response before parsing: head on a live curl pipe can
+# close early and yield SIGPIPE/141 under pipefail during deployment.
+curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
   --max-time 20 "https://api.github.com/repos/$repository/commits/main" \
-  | sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' \
-  | head -n 1)"
+  --output "$temporary/main.json"
+main_sha="$(sed -n 's/.*"sha"[[:space:]]*:[[:space:]]*"\([0-9a-f]\{40\}\)".*/\1/p' "$temporary/main.json" \
+  | sed -n '1p')"
 [[ "$main_sha" == "$commit" ]] || { echo "commit is not the current main head" >&2; exit 4; }
 
 for asset in activate-release install-release.sh upgrade-deployment-assets; do
