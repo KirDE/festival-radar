@@ -1,5 +1,6 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { copenhell } from "./copenhell.ts";
+import { rockstadt } from "./rockstadt.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
 type AdapterResult = { editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; excerpt: string; warning?: string };
@@ -397,6 +398,7 @@ function leyendas(html: string): AdapterResult | undefined {
 const adapters: Record<string, (html: string, source: FestivalSource) => AdapterResult | undefined> = {
   "2000trees": trees,
   copenhell,
+  rockstadt,
   "dynamo-metal-fest": dynamoMetalFest,
   "greenfield": greenfield,
   "jera-on-air": jeraOnAir,
@@ -438,7 +440,7 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
   // lineup changes would enqueue automatic provider playlist creation. Keep
   // them in the assistant-owned review queue until that separate action is authorized.
   if ((source.festivalSlug === "copenhell" && result.headliners?.length) ||
-      (source.festivalSlug === "dynamo-metal-fest" && result.lineup?.length))
+      (["dynamo-metal-fest", "rockstadt"].includes(source.festivalSlug) && result.lineup?.length))
     candidate.warnings.push("Agent review required before lineup-triggered provider activity");
   if (!candidate.evidence.length && !candidate.warnings.length) candidate.warnings.push("Official title confirms the current edition but exposes no supported structured field");
   return candidate;
