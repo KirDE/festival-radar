@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("search clear icon resets query and restores input focus", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/en/");
+  await expect(page.locator(".filterBar .search")).toHaveAttribute("data-ready", "true");
   const search = page.getByRole("textbox", { name: "Search festivals, artists or cities" });
   await search.fill("not-a-real-festival");
   const clear = page.getByRole("button", { name: "Clear search" });
