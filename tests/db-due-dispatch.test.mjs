@@ -31,7 +31,7 @@ test('health emits numeric aggregates only and partitions due, live, expired and
   assert.doesNotMatch(JSON.stringify(result), /private-festival|untrusted/);
 });
 
-test('manual unit is fixed-mode, read-only except private temporary output, and due timer stays inactive during install', async () => {
+test('manual unit is fixed-mode and due timer rearms only after exact-release checks', async () => {
   const [installer, starter, runner, packageScript] = await Promise.all([
     'scripts/deploy/install-release.sh', 'scripts/deploy/start-db-due',
     'scripts/deploy/run-db-due-operation.sh', 'scripts/deploy/package-release.sh',
@@ -45,7 +45,8 @@ test('manual unit is fixed-mode, read-only except private temporary output, and 
   assert.match(cleanup, /if \[\[ "\$db_due_assets_armed" == true \]\]; then\s+db_due_restore_assets "\$db_due_unit" "\$db_due_wrapper" "\$db_due_backup"/);
   assert.match(cleanup, /if \[\[ "\$db_due_assets_armed" == true \|\| "\$scheduler_assets_armed" == true \]\]; then\s+systemctl daemon-reload/);
   assert.ok(installer.includes('ExecStart=$release/scripts/deploy/run-db-due-operation.sh %i $commit'));
-  assert.doesNotMatch(installer, /systemctl enable[^\n]*db-due/);
+  assert.match(installer, /if \[\[ "\$db_due_timer_was_armed" == true \]\]/);
+  assert.match(installer, /systemctl enable --now "\$service-db-due.timer"/);
   assert.ok(installer.includes('User=www-data') && installer.includes('ProtectSystem=strict'));
   assert.match(starter, /flock -n 9/);
   assert.match(starter, /deployed commit mismatch/);
