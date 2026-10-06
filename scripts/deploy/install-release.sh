@@ -8,22 +8,51 @@ db_due_backup=""
 db_due_assets_armed=false
 scheduler_assets_armed=false
 scheduler_backup=""
+prior_release_is_active() {
+  [[ -n "$previous" && "$previous_commit" =~ ^[0-9a-f]{40}$ &&
+     "$previous" == "$app_root/releases/$previous_commit" &&
+     "$(readlink -f "$app_root/current" 2>/dev/null)" == "$previous" &&
+     "$(cat "$previous/DEPLOYED_COMMIT" 2>/dev/null)" == "$previous_commit" ]]
+}
 cleanup_install() {
-  local status=$?
+  local status=$? cleanup_failed=false retain_backups=false
   if [[ "$status" -ne 0 ]]; then
-    if [[ "$scheduler_assets_armed" == true ]]; then
-      scheduler_restore_assets "$scheduler_backup"
-    fi
-    if [[ "$db_due_assets_armed" == true ]]; then
-      db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
-    fi
-    if [[ "$db_due_assets_armed" == true || "$scheduler_assets_armed" == true ]]; then
-      systemctl daemon-reload
+    # Even a failed activation command may have switched current. Restore old
+    # assets only when the actual current still selects the prior stamped
+    # release (or rollback really selected it). Unknown current/stamp fails closed.
+    if prior_release_is_active; then
+      if [[ "$scheduler_assets_armed" == true ]]; then
+        scheduler_restore_assets "$scheduler_backup" || cleanup_failed=true
+      fi
+      if [[ "$db_due_assets_armed" == true ]]; then
+        db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup" || cleanup_failed=true
+      fi
+      if [[ "$db_due_assets_armed" == true || "$scheduler_assets_armed" == true ]]; then
+        systemctl daemon-reload || cleanup_failed=true
+      fi
+    elif [[ "$db_due_assets_armed" == true || "$scheduler_assets_armed" == true ]]; then
+      # Current may have moved or lost its stamp: leave the installed assets
+      # untouched, load those units into systemd, and keep snapshots for a
+      # deliberate manual recovery. The DB-due timer remains quiesced.
+      retain_backups=true
+      systemctl daemon-reload || cleanup_failed=true
     fi
   fi
-  if [[ -n "$scheduler_backup" ]]; then rm -rf -- "$scheduler_backup"; fi
-  rm -f "$archive" "$env_source"
-  if [[ -n "$db_due_backup" ]]; then rm -rf -- "$db_due_backup"; fi
+  # Keep recovery snapshots if any restore/reload failed; do not turn a failed
+  # installation into success or discard its only remaining recovery evidence.
+  if [[ "$cleanup_failed" == true || "$retain_backups" == true ]]; then
+    if [[ "$cleanup_failed" == true ]]; then
+      echo "asset cleanup failed; recovery snapshots retained: $scheduler_backup $db_due_backup" >&2
+    else
+      echo "active release uncertain; old assets not restored; recovery snapshots retained: $scheduler_backup $db_due_backup" >&2
+    fi
+    [[ "$status" -ne 0 ]] || status=1
+  else
+    if [[ -n "$scheduler_backup" ]]; then rm -rf -- "$scheduler_backup" || status=1; fi
+    if [[ -n "$db_due_backup" ]]; then rm -rf -- "$db_due_backup" || status=1; fi
+  fi
+  rm -f "$archive" "$env_source" || status=1
+  return "$status"
 }
 trap cleanup_install EXIT
 app_root="${APP_ROOT:-/opt/festival-radar}"
@@ -32,7 +61,8 @@ domain="${APP_DOMAIN:-festivals.kir-it.de}"
 port="${PORT:-3100}"
 release="$app_root/releases/$commit"
 shared="$app_root/shared"
-previous="$(readlink -f "$app_root/current" 2>/dev/null || true)"
+previous="$(readlink -e "$app_root/current" 2>/dev/null || true)"
+previous_commit="$(cat "$previous/DEPLOYED_COMMIT" 2>/dev/null || true)"
 env_file="$shared/production.env"
 staged_env="$shared/.production.env.$commit.tmp"
 previous_env="$shared/.production.env.$commit.previous"
@@ -430,9 +460,12 @@ for _ in $(seq 1 20); do
 done
 
 if [[ "$healthy" != true ]]; then
-  if [[ -n "$previous" && -d "$previous" ]]; then
+  if [[ -n "$previous" && -d "$previous" && "$previous_commit" =~ ^[0-9a-f]{40}$ &&
+        "$previous" == "$app_root/releases/$previous_commit" &&
+        "$(cat "$previous/DEPLOYED_COMMIT" 2>/dev/null)" == "$previous_commit" ]]; then
     ln -sfn "$previous" "$app_root/current"
   fi
+  prior_release_is_active || { echo "release health check failed; prior stamped release not restored; active assets retained" >&2; exit 1; }
   scheduler_restore_assets "$scheduler_backup"
   scheduler_assets_armed=false
   db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"

@@ -63,20 +63,22 @@ test('failed cleanup restores DB due only when armed; success never restores', a
   const cleanup = installer.slice(installer.indexOf('cleanup_install()'), installer.indexOf('trap cleanup_install EXIT'));
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'db-due-rollback-'));
   try {
-    for (const [armed, failed, expected] of [
-      [true, true, ['restore', 'daemon-reload']],
-      [false, true, []],
-      [true, false, []],
+    for (const [armed, failed, priorActive, expected] of [
+      [true, true, true, ['restore', 'daemon-reload']],
+      [true, true, false, ['daemon-reload']],
+      [false, true, true, []],
+      [true, false, true, []],
     ]) {
       const script = 'set -euo pipefail; ' + cleanup + '\n' +
         'db_due_restore_assets() { printf "restore\n"; }; systemctl() { printf "%s\n" "$*"; }; ' +
-        'scheduler_assets_armed=false; scheduler_backup=""; ' +
+        'prior_release_is_active() { [[ "$PRIOR_ACTIVE" == true ]]; }; scheduler_assets_armed=false; scheduler_backup=""; ' +
         'db_due_assets_armed="$ARMED"; db_due_unit=unit; db_due_wrapper=wrapper; db_due_backup=""; ' +
         'archive="$TEMP/archive"; env_source="$TEMP/env"; ' +
         (failed ? 'false || cleanup_install' : 'cleanup_install');
       const result = spawnSync('bash', ['-c', script], { encoding: 'utf8',
-        env: { ...process.env, TEMP: temporary, ARMED: armed ? 'true' : 'false' } });
-      assert.equal(result.status, 0, result.stderr);
+        env: { ...process.env, TEMP: temporary, ARMED: armed ? 'true' : 'false',
+          PRIOR_ACTIVE: priorActive ? 'true' : 'false' } });
+      assert.equal(result.status, failed ? 1 : 0, result.stderr);
       assert.deepEqual(result.stdout.trim().split('\n').filter(Boolean), expected);
     }
   } finally { await rm(temporary, { recursive: true, force: true }); }

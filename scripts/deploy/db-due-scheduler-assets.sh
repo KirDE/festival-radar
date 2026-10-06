@@ -11,13 +11,13 @@ scheduler_snapshot_assets() {
 }
 scheduler_restore_assets() {
   local backup="$1" index
-  systemctl disable --now festival-radar-db-due.timer >/dev/null 2>&1 || true
-  systemctl stop festival-radar-db-due-scheduler.service festival-radar-db-due@tick.service >/dev/null 2>&1 || true
+  systemctl disable --now festival-radar-db-due.timer >/dev/null 2>&1 || return
+  systemctl stop festival-radar-db-due-scheduler.service festival-radar-db-due@tick.service >/dev/null 2>&1 || return
   for index in "${!scheduler_assets[@]}"; do
     if [[ -e "$backup/$index" || -L "$backup/$index" ]]; then
-      cp -a -- "$backup/$index" "${scheduler_assets[$index]}"
+      cp -a -- "$backup/$index" "${scheduler_assets[$index]}" || return
     else
-      rm -f -- "${scheduler_assets[$index]}"
+      rm -f -- "${scheduler_assets[$index]}" || return
     fi
   done
 }

@@ -56,6 +56,7 @@ async function fixture(t, { rows = [{ payload: receipt }], states = {}, proofErr
   const oldRelease = dir + '/app/releases/' + 'e'.repeat(40);
   if (previous) {
     await mkdir(oldRelease, { recursive: true });
+    await writeFile(oldRelease + '/DEPLOYED_COMMIT', 'e'.repeat(40));
     await symlink(oldRelease, dir + '/app/current');
   }
   await writeFile(stage + '/DEPLOYED_COMMIT', sha);
