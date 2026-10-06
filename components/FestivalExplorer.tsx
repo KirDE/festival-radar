@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Festival } from "@/lib/domain/festival";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
@@ -31,6 +31,7 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
   const { locale, t } = useLanguage();
   const planner = useLocalPlanner();
   const [query, setQuery] = useState(planner.savedFilters.query);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [country, setCountry] = useState(planner.savedFilters.country);
   const [announcedOnly, setAnnouncedOnly] = useState(planner.savedFilters.announcedOnly);
   const [month, setMonth] = useState(planner.savedFilters.month);
@@ -70,7 +71,7 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
 
   return <section className="explorer">
     <div className="filterBar">
-      <label className="search"><span aria-hidden="true">⌕</span><input aria-label={t("filterSearch")} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("search")} /></label>
+      <div className="search"><span aria-hidden="true">⌕</span><input ref={searchRef} aria-label={t("filterSearch")} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("search")} />{query && <button type="button" aria-label={t("clearSearch")} onClick={() => { setQuery(""); searchRef.current?.focus(); }}><span aria-hidden="true">✕</span></button>}</div>
       <select aria-label={t("countries")} value={country} onChange={(event) => setCountry(event.target.value)}><option value="all">{t("allCountries")}</option>{countries.map((value) => <option value={value} key={value}>{displayNames.of(value) || value}</option>)}</select>
       <select aria-label={t("filterMonth")} value={month} onChange={(event) => setMonth(event.target.value)}><option value="all">{t("allMonths")}</option>{[4,5,6,7,8,9].map((value) => <option key={value} value={String(value).padStart(2, "0")}>{new Intl.DateTimeFormat(locale, { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(2027, value - 1, 1)))}</option>)}</select>
       <select aria-label={t("filterGenre")} value={genre} onChange={(event) => setGenre(event.target.value)}><option value="all">{t("allGenres")}</option>{genres.map((value) => <option key={value} value={value}>{value}</option>)}</select>
