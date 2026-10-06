@@ -9,7 +9,7 @@ export async function seedCatalog(client: PrismaClient, fixture: CatalogSeed) {
     const artistIds = new Map<string, string>();
     for (const artist of fixture.artists) {
       const data = {
-        name: artist.name, aliases: artist.aliases, genres: artist.genres,
+        name: artist.name, aliases: artist.aliases, genres: artist.genres, biography: artist.biography,
         identityState: "UNRESOLVED" as const, topTracks: artist.topTracks,
         recentSetlists: artist.recentSetlists, freshness: artist.freshness,
       };

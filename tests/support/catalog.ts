@@ -9,7 +9,7 @@ export const festival: Festival = {
   updatedAt: "2026-01-01T00:00:00.000Z", genres: ["doom metal"], coordinates: { latitude: 50, longitude: 10 }, editionYear: 2027,
 };
 export const artist: ArtistProfile = {
-  slug: "sample-artist", name: "Sample Artist", aliases: [], genres: [], identities: {}, identityState: "unresolved",
+  slug: "sample-artist", name: "Sample Artist", aliases: [], genres: [], biography: "Fictional artist for localization tests.", identities: {}, identityState: "unresolved",
   links: [], topTracks: [], recentSetlists: [{ date: "2026-02-01", venue: "Sample Hall", url: "https://setlist.example.test/sample" }], provenance: [], freshness: Object.fromEntries(["profile", "music", "setlists"].map(key => [key, { checkedAt: "2026-01-01", refreshAfter: "2026-04-01", cadenceDays: 90 }])) as ArtistProfile["freshness"],
 };
 export const catalogSeed: CatalogSeed = {
