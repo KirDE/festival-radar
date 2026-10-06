@@ -35,6 +35,11 @@ test('release preserves old cadence and supported consumers share the same proce
   assert.match(installer, /install_collection_timer playlists-db '\*-\*-\* \*:00\/10:00 UTC'/);
   assert.match(installer, /for collection_job in artist-identities playlists source-monitor; do/);
   assert.doesNotMatch(installer, /enable[^\n]*playlists-db/);
+  const legacy = await readFile('scripts/deploy/run-legacy-playlists.sh', 'utf8');
+  assert.match(legacy, /work="\$output\/work"/);
+  assert.match(legacy, /cd "\$work"/);
+  assert.match(legacy, /FESTIVAL_CATALOG="\$work\/tmp\/festival-playlist-catalog\.json"/);
+  assert.match(legacy, /umask 077/);
   for (const file of ['app/api/playlists/run/route.ts', 'scripts/playlist-dispatch.ts', 'scripts/playlist-worker.ts', 'scripts/playlist-cutover.ts']) {
     const source = await readFile(file, 'utf8');
     assert.match(source, /acquirePlaylistProcessLock/);
