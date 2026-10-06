@@ -53,7 +53,9 @@
     "playlists:worker": "tsx scripts/playlist-worker.ts",
     "pretest:final-cutover-db": "node scripts/prepare-cutover-test-db.mjs",
     "operational:import": "tsx scripts/import-operational-state.ts",
-    "playlists:cutover": "tsx scripts/playlist-cutover.ts"
+    "playlists:cutover": "tsx scripts/playlist-cutover.ts",
+    "catalog:audit-preservation": "node --experimental-strip-types scripts/audit-file-db-preservation.mjs",
+    "test:preservation": "node --experimental-strip-types --test tests/file-db-preservation.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
