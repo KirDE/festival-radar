@@ -15,6 +15,8 @@
     "ingest": "node scripts/ingest-festivals.mjs",
     "timetables:import": "node scripts/import-timetable.mjs",
     "enrich:artists": "node scripts/enrich-artists.mjs",
+    "test:artist-enrichment": "node --experimental-strip-types --test tests/artist-enrichment-publication.test.mjs tests/artist-enrichment.test.mjs",
+    "test:artist-enrichment-db": "node --experimental-strip-types --test tests/artist-enrichment-publication.e2e.test.mjs",
     "resolve:artists": "node scripts/resolve-artist-identities.mjs",
     "test:data": "node --import tsx --test $(find tests -maxdepth 1 -name '*.test.mjs' ! -name '*.e2e.test.mjs' -print) && node --experimental-strip-types --test tests/selection-playlist.test.ts && node --import tsx --test tests/domain-boundary.test.ts tests/source-configuration.test.ts tests/playlist-queue.test.ts",
     "test:routes": "node scripts/test-locale-routes.mjs",
@@ -47,13 +49,15 @@
     "test": "python3 -m unittest discover -s tests",
     "test:admin-auth": "node --import tsx --test tests/admin-auth.test.ts",
     "admin:assign-role": "node scripts/assign-admin-role.mjs",
-    "test:final-cutover": "node --import tsx --test tests/final-cutover-release.test.mjs tests/playlist-cutover.test.ts tests/logo-serving.test.ts tests/festival-logo.test.ts && python3 -m unittest discover -s tests -p test_playlist_plan.py",
+    "test:final-cutover": "node --import tsx --test tests/final-cutover-release.test.mjs tests/playlist-cutover.test.ts tests/playlist-timer-install.test.mjs tests/logo-serving.test.ts tests/festival-logo.test.ts && python3 -m unittest discover -s tests -p test_playlist_plan.py",
     "test:final-cutover-db": "node --import tsx --test tests/final-cutover.e2e.test.ts",
     "catalog:audit-final": "tsx scripts/audit-final-cutover.ts",
     "playlists:worker": "tsx scripts/playlist-worker.ts",
     "pretest:final-cutover-db": "node scripts/prepare-cutover-test-db.mjs",
     "operational:import": "tsx scripts/import-operational-state.ts",
-    "playlists:cutover": "tsx scripts/playlist-cutover.ts"
+    "playlists:cutover": "tsx scripts/playlist-cutover.ts",
+    "catalog:audit-preservation": "node --experimental-strip-types scripts/audit-file-db-preservation.mjs",
+    "test:preservation": "node --experimental-strip-types --test tests/file-db-preservation.test.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

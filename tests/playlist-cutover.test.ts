@@ -33,8 +33,9 @@ test('release preserves old cadence and supported consumers share the same proce
   const installer = await readFile('scripts/deploy/install-release.sh', 'utf8');
   assert.match(installer, /install_collection_timer playlists 'Tue,Fri \*-\*-\* 04:17:00 UTC'/);
   assert.match(installer, /install_collection_timer playlists-db '\*-\*-\* \*:00\/10:00 UTC'/);
-  assert.match(installer, /for collection_job in artist-identities playlists source-monitor; do/);
-  assert.doesNotMatch(installer, /enable[^\n]*playlists-db/);
+  assert.match(installer, /for collection_job in artist-identities source-monitor; do/);
+  assert.match(installer, /playlist_install_select_mode/);
+  assert.match(installer, /playlist_install_apply_mode/);
   const legacy = await readFile('scripts/deploy/run-legacy-playlists.sh', 'utf8');
   assert.match(legacy, /work="\$output\/work"/);
   assert.match(legacy, /cd "\$work"/);
@@ -54,6 +55,7 @@ test('review commands are real, packaged, and CI DB tests generate/apply schema 
   assert.match(setup, /\['generate'\]/); assert.match(setup, /\['migrate', 'deploy'\]/);
   const packager = await readFile('scripts/deploy/package-release.sh', 'utf8');
   for (const file of ['import-operational-state.ts', 'audit-final-cutover.ts', 'playlist-cutover.ts', 'playlist-dispatch.ts']) assert.ok(packager.includes("grep -Fxq 'app/scripts/" + file + "'"));
+  for (const file of ['read-playlist-install-mode.ts', 'playlist-timer-install.sh']) assert.ok(packager.includes("grep -Fxq 'app/scripts/deploy/" + file + "'"));
   const deploy = await readFile('.github/workflows/deploy.yml', 'utf8');
   assert.match(deploy, /vars.DB_ONLY_RELEASE/); assert.match(deploy, /secrets.DB_ONLY_CUTOVER_ATTESTATION/);
 });

@@ -45,9 +45,9 @@ Network failures can return only a previously validated public body, subject to
 the existing seven-day retention limit; HTTP errors are returned as errors.
 Cache Storage failures do not prevent a successful initial network read.
 
-The legacy static JSON remains precached, but is not substituted for DB JSON.
-DB failure does not block shell installation. A first offline visit without a
-saved DB response shows an explicit unavailable message. Navigation failure uses
+Installation precaches only the offline HTML shell, manifest and icons; no static
+JSON snapshot is shipped or required. DB failure does not block shell installation.
+A first offline visit without a saved DB response shows an explicit unavailable message. Navigation failure uses
 only this worker's public offline shell, never arbitrary caches or account pages.
 No timers, live Git reads, DB/API changes or scheduled operations are added.
 

@@ -128,6 +128,10 @@ export DEPLOYED_COMMIT="$commit" PORT="$port" HOSTNAME=127.0.0.1
 "$release/.runtime/node" node_modules/prisma/build/index.js generate
 "$release/.runtime/node" node_modules/prisma/build/index.js migrate deploy
 
+source "$release/scripts/deploy/playlist-timer-install.sh"
+playlist_install_select_mode
+playlist_install_quiesce_other
+
 cat > "/etc/systemd/system/$service.service" <<UNIT
 [Unit]
 Description=Festival Radar Next.js application
@@ -297,7 +301,7 @@ UNIT
 install_collection_timer artist-identities '*-*-* *:17:00 UTC'
 install_collection_timer ingestion '*-*-* 03:23:00 UTC'
 install_collection_timer playlists 'Tue,Fri *-*-* 04:17:00 UTC'
-# Installed dormant; enable only after explicit locked queue reconciliation/activation.
+# A new installation stays dormant; validated durable cutover preserves DB mode.
 install_collection_timer playlists-db '*-*-* *:00/10:00 UTC'
 install_collection_timer source-monitor '*-*-01,04,07,10,13,16,19,22,25,28 04:17:00 UTC'
 
@@ -427,7 +431,7 @@ ln -sfn "$release" "$app_root/current"
 chown -R www-data:www-data "$release" "$shared"
 systemctl daemon-reload
 systemctl enable "$service"
-for collection_job in artist-identities playlists source-monitor; do
+for collection_job in artist-identities source-monitor; do
   systemctl enable --now "$service-collection-$collection_job.timer"
 done
 if [[ "$scheduler_mode" == legacy && "$legacy_timer_was_armed" == true ]]; then
@@ -478,6 +482,10 @@ if [[ "$healthy" != true ]]; then
   echo "release health check failed; previous release restored" >&2
   exit 1
 fi
+
+# Rearm only the playlist path selected by durable proof, after release health.
+# This does not rearm the separately gated DB-due ingestion scheduler.
+playlist_install_apply_mode
 
 logo_import_unit_armed=false
 db_due_assets_armed=false
