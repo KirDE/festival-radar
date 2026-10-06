@@ -278,6 +278,41 @@ function midgardsblot(html: string): AdapterResult | undefined {
   };
 }
 
+function dynamoMetalFest(html: string, source: FestivalSource): AdapterResult | undefined {
+  // This exact article, not homepage navigation, SEO metadata or past posts.
+  if (source.editionYear !== 2027 || source.url !== "https://dynamo-metalfest.nl/first-names-dmf-27/") return undefined;
+  const title = decode(html.match(/<title\b[^>]*>([^<]*)<\/title>/i)?.[1] ?? "");
+  const canonical = html.match(/<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/i)?.[0];
+  if (title !== "FIRST NAMES DMF 27 - Dynamo Metalfest" || !canonical || attribute(canonical, "href") !== source.url) return undefined;
+  const widget = html.match(/<div\b[^>]*\bdata-widget_type=["']theme-post-content\.default["'][^>]*>\s*<div class=["']elementor-widget-container["']>([\s\S]*?)<\/div>\s*<\/div>/i)?.[1];
+  if (!widget || !/<h1\b[^>]*>\s*FIRST NAMES DMF 27\s*<\/h1>/i.test(html.slice(0, html.indexOf(widget)))) return undefined;
+  const paragraphs = [...widget.matchAll(/<p\b[^>]*class=["']wp-block-paragraph["'][^>]*>([\s\S]*?)<\/p>/gi)].map((match) => match[1]);
+  if (paragraphs.length < 4 || !/^Here is the complete overview of the first names announced for Dynamo Metalfest 2027!/i.test(decode(paragraphs[0].replace(/<[^>]*>/g, " ")))) return undefined;
+  const artistBlock = paragraphs[1].match(/^\s*<strong>([\s\S]*?)<\/strong>\s*$/i)?.[1];
+  if (!artistBlock || !/^And this is only the beginning\.$/i.test(decode(paragraphs[2].replace(/<[^>]*>/g, " ")))) return undefined;
+  const rawNames = artistBlock.split(/<br\s*\/?\s*>/i);
+  if (rawNames.length !== 9 || rawNames.some((name) => /<[^>]*>/.test(name))) return undefined;
+  const lineup: string[] = [];
+  for (const raw of rawNames) {
+    const label = decode(raw).replace(/[’‘]/g, "'");
+    // Strip only the three published performance labels, never arbitrary suffixes.
+    const name = label.replace(/^CAVALERA\s+[–—-]\s+CHAOS A\.D\.$/i, "CAVALERA")
+      .replace(/^MADBALL\s+[–—-]\s+D\.O\.A\. '95 SET$/i, "MADBALL")
+      .replace(/^I AM MORBID\s+[–—-]\s+D\.O\.A\. '91$/i, "I AM MORBID");
+    if (!/^[A-Z][A-Z\s]+$/.test(name) || name.length > 90 || /\b(?:19|20)\d{2}\b/.test(name)) return undefined;
+    const artist = name === "LEFT TO SUFFER" ? "Left to Suffer" : fkpArtistName(name);
+    if (lineup.some((existing) => existing.toLowerCase() === artist.toLowerCase())) return undefined;
+    lineup.push(artist);
+  }
+  const statement = decode(paragraphs[3].replace(/<[^>]*>/g, " "));
+  const dates = statement.match(/^Three days of metal return to Eindhoven on August (\d{1,2}), (\d{1,2}) & (\d{1,2}), (2027)\.$/i);
+  if (!dates) return undefined;
+  const days = dates.slice(1, 4).map(Number);
+  if (days[0] < 1 || days[2] > 31 || days[1] !== days[0] + 1 || days[2] !== days[1] + 1) return undefined;
+  return { editionYear: 2027, startDate: "2027-08-" + pad(dates[1]), endDate: "2027-08-" + pad(dates[3]),
+    city: "Eindhoven", lineup, excerpt: statement + " First names: " + rawNames.map(decode).join(", ") };
+}
+
 const jeraMonths = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 
 // The title is the edition anchor on both pages. The info page must independently
@@ -362,6 +397,7 @@ function leyendas(html: string): AdapterResult | undefined {
 const adapters: Record<string, (html: string, source: FestivalSource) => AdapterResult | undefined> = {
   "2000trees": trees,
   copenhell,
+  "dynamo-metal-fest": dynamoMetalFest,
   "greenfield": greenfield,
   "jera-on-air": jeraOnAir,
   "hurricane": fkpLineup,
