@@ -20,7 +20,9 @@ cp scripts/db-due-tick.mjs scripts/report-db-due-health.mjs scripts/report-db-du
 cp scripts/import-operational-state.ts scripts/audit-final-cutover.ts scripts/import-timetable.mjs scripts/enrich-artists.mjs scripts/playlist-dispatch.ts scripts/playlist-cutover.ts scripts/playlist-worker.ts scripts/playlist-lease-guard.ts scripts/resolve-artist-identities.mjs scripts/check-festival-sources.mjs scripts/export-playlist-catalog.mjs scripts/build-playlist-status.mjs "$stage/app/scripts/"
 cp -a scripts/spotify_gmm_2026/. "$stage/app/scripts/spotify_gmm_2026/"
 cp requirements.txt "$stage/app/"
-python3 -m pip install --disable-pip-version-check --no-input --target "$stage/app/.python" -r requirements.txt
+# The CI builder may run a newer interpreter than the production Python 3.9.
+# Resolve wheels for the runtime, not for the builder; fail closed on sdists.
+python3 -m pip install --disable-pip-version-check --no-input --only-binary=:all: --python-version 3.9 --target "$stage/app/.python" -r requirements.txt
 cp scripts/deploy/reconfigure-webserver.sh "$stage/app/scripts/deploy/"
 cp scripts/analytics/prune-production.sh "$stage/app/scripts/analytics/"
 cp scripts/deploy/run-legacy-playlists.sh scripts/deploy/run-collection-job.sh "$stage/app/scripts/deploy/"

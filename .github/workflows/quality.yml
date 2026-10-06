@@ -69,4 +69,10 @@ jobs:
       - run: npm run test:final-cutover
       - run: python3 -m unittest discover -s tests
       - run: npm run build
+      # Exercise the actual archive: builder is Python 3.11, production is 3.9.
+      - run: bash scripts/deploy/package-release.sh "$GITHUB_SHA" "$RUNNER_TEMP/python39-release.tar.gz"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - run: bash scripts/deploy/check-python39-release.sh "$RUNNER_TEMP/python39-release.tar.gz"
       - run: npm run test:routes
