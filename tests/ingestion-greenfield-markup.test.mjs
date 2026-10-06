@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getFestivalSource } from "../data/festival-sources.ts";
+import { parserSource as getFestivalSource } from "./support/parser-source.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 
 const markup = `
@@ -34,8 +34,6 @@ const markup = `
 
 test("Greenfield extracts the edition-matched 2027 lineup and billing tiers", () => {
   const source = getFestivalSource("greenfield");
-  assert.deepEqual(source?.strategies, ["official_markup"]);
-  assert.equal(source?.refreshPolicy, "daily");
   const candidate = extractFestivalCandidate(markup, source, "2026-09-29T11:11:00Z");
   assert.equal(candidate.startDate, "2027-06-10");
   assert.equal(candidate.endDate, "2027-06-12");

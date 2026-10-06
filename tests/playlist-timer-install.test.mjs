@@ -67,7 +67,7 @@ exit 0
 `, { mode: 0o755 });
   await cp('lib/catalog/playlist-cutover.ts', stage + '/lib/catalog/playlist-cutover.ts');
   const scripts = ['read-playlist-install-mode.ts', 'playlist-timer-install.sh', 'db-due-assets.sh',
-    'db-due-scheduler-assets.sh', 'logo-import-assets.sh'];
+    'db-due-scheduler-assets.sh'];
   for (const script of scripts) await writeFile(stage + '/scripts/deploy/' + script,
     mapped(await readFile('scripts/deploy/' + script, 'utf8')));
   for (const script of ['start-db-due', 'db-due-scheduler', 'reconfigure-webserver.sh'])

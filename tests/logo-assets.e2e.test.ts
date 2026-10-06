@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { logoFixture } from "./support/logo-fixtures.ts";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
+import { requireLocalDisposableDatabase } from "./support/disposable-db.ts";
+requireLocalDisposableDatabase(process.env.DATABASE_URL);
 import { MAX_LOGO_BYTES, readFestivalLogo, saveFestivalLogo, validateLogo } from "../lib/catalog/logo-assets.ts";
 
 const url = process.env.DATABASE_URL;
@@ -11,12 +13,10 @@ if (!url || !/(?:test|integration)/i.test(new URL(url).pathname)) {
 }
 const db = new PrismaClient();
 const slugs = [randomUUID(), randomUUID()].map((id) => 'asset-test-' + id);
-// Some repository .png names contain JPEG bytes; MIME must follow content, not extension.
-const logos = ["greenfield.png", "rock-for-people.png", "barcelona-rock-fest.png"];
 let images: Buffer[];
 
 test.before(async () => {
-  images = await Promise.all(logos.map((file) => readFile(new URL('../public/logos/' + file, import.meta.url))));
+  images = (await Promise.all([logoFixture(), logoFixture("image/png", "#884422"), logoFixture("image/jpeg")])).map(row => row.bytes);
   for (const slug of slugs) await db.festival.create({ data: {
     slug, name: "Disposable asset test", country: "DE", countryCode: "DE", officialUrl: "https://example.org",
     genres: [],

@@ -8,28 +8,22 @@ db_due_backup=""
 db_due_assets_armed=false
 scheduler_assets_armed=false
 scheduler_backup=""
-logo_import_backup=""
-logo_import_unit_armed=false
 cleanup_install() {
   local status=$?
   if [[ "$status" -ne 0 ]]; then
     if [[ "$scheduler_assets_armed" == true ]]; then
       scheduler_restore_assets "$scheduler_backup"
     fi
-    if [[ "$logo_import_unit_armed" == true ]]; then
-      logo_import_restore_unit "$logo_import_unit" "$logo_import_backup"
-    fi
     if [[ "$db_due_assets_armed" == true ]]; then
       db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
     fi
-    if [[ "$logo_import_unit_armed" == true || "$db_due_assets_armed" == true || "$scheduler_assets_armed" == true ]]; then
+    if [[ "$db_due_assets_armed" == true || "$scheduler_assets_armed" == true ]]; then
       systemctl daemon-reload
     fi
   fi
   if [[ -n "$scheduler_backup" ]]; then rm -rf -- "$scheduler_backup"; fi
   rm -f "$archive" "$env_source"
   if [[ -n "$db_due_backup" ]]; then rm -rf -- "$db_due_backup"; fi
-  if [[ -n "$logo_import_backup" ]]; then rm -rf -- "$logo_import_backup"; fi
 }
 trap cleanup_install EXIT
 app_root="${APP_ROOT:-/opt/festival-radar}"
@@ -104,16 +98,11 @@ source "$release/scripts/deploy/db-due-scheduler-assets.sh"
 scheduler_backup="$(mktemp -d /run/festival-radar-scheduler.XXXXXXXX)"
 scheduler_snapshot_assets "$scheduler_backup"
 scheduler_assets_armed=true
-source "$release/scripts/deploy/logo-import-assets.sh"
 db_due_unit="/etc/systemd/system/$service-db-due@.service"
 db_due_wrapper=/usr/local/libexec/festival-radar/start-db-due
 db_due_backup="$(mktemp -d /run/festival-radar-db-due.XXXXXXXX)"
 db_due_snapshot_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
 db_due_assets_armed=true
-logo_import_unit="/etc/systemd/system/$service-logo-import@.service"
-logo_import_backup="$(mktemp -d /run/festival-radar-logo-import.XXXXXXXX)"
-logo_import_snapshot_unit "$logo_import_unit" "$logo_import_backup"
-logo_import_unit_armed=true
 
 cd "$release"
 test -x "$release/.runtime/node"
@@ -157,55 +146,6 @@ ReadWritePaths=$app_root
 
 [Install]
 WantedBy=multi-user.target
-UNIT
-
-# Manual-only unit: never enable or schedule it. A privileged fixed-mode wrapper
-# controls invocation; the database operation itself runs as the application user.
-cat > "/etc/systemd/system/$service-source-backfill@.service" <<UNIT
-[Unit]
-Description=Manual Festival Radar source configuration operation %i
-After=postgresql.service
-
-[Service]
-Type=oneshot
-User=www-data
-Group=www-data
-WorkingDirectory=$app_root/current
-EnvironmentFile=$shared/production.env
-EnvironmentFile=/run/festival-radar-source-backfill/%i.env
-Environment=NODE_ENV=production
-ExecStart=$app_root/current/.runtime/node --experimental-strip-types $app_root/current/scripts/deploy/run-source-backfill.ts %i
-StandardOutput=append:/run/festival-radar-source-backfill/%i.audit
-StandardError=journal
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-TimeoutStartSec=120
-UNIT
-
-# Manual-only fixed-mode logo operation. Apply requires separate explicit dispatch. Never enable or schedule.
-# PID 1 opens the root-owned audit before dropping privileges to www-data.
-cat > "/etc/systemd/system/$service-logo-import@.service" <<UNIT
-[Unit]
-Description=Manual Festival Radar reviewed logo audit %i
-After=postgresql.service
-
-[Service]
-Type=oneshot
-User=www-data
-Group=www-data
-WorkingDirectory=$app_root/current
-EnvironmentFile=$shared/production.env
-EnvironmentFile=/run/festival-radar-logo-import/%i.env
-Environment=NODE_ENV=production
-ExecStart=$app_root/current/.runtime/node --experimental-strip-types $app_root/current/scripts/deploy/run-reviewed-logo-import.ts %i
-StandardOutput=append:/run/festival-radar-logo-import/%i.audit
-StandardError=null
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-TimeoutStartSec=120
 UNIT
 
 # Manual-only, operator-triggered, fixed-mode DB due operation. The application
@@ -466,10 +406,8 @@ if [[ "$healthy" != true ]]; then
   fi
   scheduler_restore_assets "$scheduler_backup"
   scheduler_assets_armed=false
-  logo_import_restore_unit "$logo_import_unit" "$logo_import_backup"
   db_due_restore_assets "$db_due_unit" "$db_due_wrapper" "$db_due_backup"
   systemctl daemon-reload
-  logo_import_unit_armed=false
   db_due_assets_armed=false
   if [[ "$had_previous_env" == true ]]; then
     mv -f "$previous_env" "$env_file"
@@ -487,7 +425,6 @@ fi
 # This does not rearm the separately gated DB-due ingestion scheduler.
 playlist_install_apply_mode
 
-logo_import_unit_armed=false
 db_due_assets_armed=false
 scheduler_assets_armed=false
 rm -f "$previous_env"

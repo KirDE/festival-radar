@@ -279,7 +279,7 @@ model Festival {
   @@index([countryCode, slug])
 }
 
-// Content-addressed storage. UI logos still come from /public/logos pending cutover.
+// Content-addressed storage for database-served festival logos.
 model AssetBlob {
   sha256    String         @id @db.Char(64)
   mimeType String

@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { artistProfiles } from "../data/artists.ts";
-import { festivalEditions } from "../data/editions.ts";
-import { festivals } from "../data/festivals.ts";
-import playlistStatus from "../data/playlist-status.json" with { type: "json" };
-import { backfillCatalog } from "../lib/catalog/backfill.ts";
+import { requireLocalDisposableDatabase } from "./support/disposable-db.ts";
+requireLocalDisposableDatabase(process.env.DATABASE_URL);
+import { seedCatalog } from "./support/seed-catalog.ts";
 import { DatabaseCatalogRepository, readCatalog } from "../lib/catalog/repository.ts";
-import { catalogSeed } from "../lib/catalog/seed.ts";
+import { catalogSeed } from "./support/catalog.ts";
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl || !/(?:test|integration)/i.test(new URL(databaseUrl).pathname)) {
@@ -23,17 +21,17 @@ async function clearCatalog() {
 
 test.before(async () => {
   await clearCatalog();
-  await backfillCatalog(db, catalogSeed);
+  await seedCatalog(db, catalogSeed);
 });
 test.after(async () => { await clearCatalog(); await db.$disconnect(); });
 
 test("database repository preserves the public catalogue projection", async () => {
   const snapshot = await new DatabaseCatalogRepository(db).read();
-  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.festivals)), JSON.parse(JSON.stringify(festivals)));
-  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.artists)), JSON.parse(JSON.stringify(artistProfiles)));
-  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.playlists)), JSON.parse(JSON.stringify(playlistStatus)));
-  assert.equal(snapshot.editions.length, festivalEditions.length);
-  assert.equal(snapshot.editions.find(({ slug, editionYear }) => slug === "wacken-open-air" && editionYear === 2026)?.recordState, "archived");
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.festivals)), JSON.parse(JSON.stringify(catalogSeed.festivals)));
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.artists)), JSON.parse(JSON.stringify(catalogSeed.artists)));
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.playlists)), JSON.parse(JSON.stringify(catalogSeed.playlists)));
+  assert.equal(snapshot.editions.length, catalogSeed.editions.length);
+  assert.equal(snapshot.editions.find(({ slug, editionYear }) => slug === "synthetic-fest" && editionYear === 2026)?.recordState, "archived");
 });
 
 test("database reads fail closed without a file fallback", async () => {

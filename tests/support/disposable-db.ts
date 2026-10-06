@@ -1,6 +1,6 @@
 // This integration test mutates its database. Never let a remote or ambiguous
 // connection string through, even when its database name contains "test".
-export function requireLocalDisposableLogoDatabase(databaseUrl: string | undefined): string {
+export function requireLocalDisposableDatabase(databaseUrl: string | undefined): string {
   if (!databaseUrl) throw new Error('Local disposable test/integration DATABASE_URL required');
   const target = new URL(databaseUrl);
   const name = decodeURIComponent(target.pathname.slice(1));

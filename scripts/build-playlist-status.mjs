@@ -1,8 +1,8 @@
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 const reportDir = process.argv[2] || "outputs/festival_playlists";
-const outputFile = process.argv[3] || "data/playlist-status.json";
+const outputFile = process.argv[3] || "outputs/playlist-status.json";
 const youtubeReportDir = process.argv[4] || "outputs/youtube_music";
 
 const status = process.env.PLAYLIST_STATUS_MERGE === "1"
@@ -33,5 +33,6 @@ for (const filename of await readdir(youtubeReportDir).catch(() => [])) {
   status[slug] = { ...current, youtubeMusicUrl: url, artists: Number(report.artists_count) || current.artists || 0, tracks: Number(report.track_count) || current.tracks || 0, updatedAt: report.updated_at || current.updatedAt || new Date().toISOString() };
 }
 
+await mkdir(path.dirname(outputFile), { recursive: true });
 await writeFile(outputFile, `${JSON.stringify(status, null, 2)}\n`, "utf8");
 console.log(`Wrote ${Object.keys(status).length} playlist statuses to ${outputFile}`);

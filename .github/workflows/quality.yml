@@ -40,13 +40,12 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npm run test:logo-assets
       - run: npm run test:playlist-queue
+      - run: npm run test:sources
       - run: npm run test:catalog-db
-      - run: npm run catalog:backfill
+      - run: npm run test:seed
       - run: node --import tsx --test tests/offline-catalog.e2e.test.ts
-      - run: npm run test:logo-import
       - run: npm run test:logo-serving
       - run: npm run test:logo-serving-db
-      - run: node --import tsx --test tests/logo-production-audit.test.ts tests/logo-apply-gates.test.mjs
       - run: npm run test:due-worker
       # Prisma binds Date as timestamptz; exercise the source lease and fenced
       # publication against UTC-naive columns with a non-UTC database session.
@@ -58,7 +57,7 @@ jobs:
       - run: npm run test:integration
       - run: npm run test:admin:integration
       - run: npx prisma migrate reset --force
-      - run: npm run catalog:backfill
+      - run: npm run test:seed
       - run: npx playwright install --with-deps chromium
       - run: npm run test:admin:e2e
       - run: npm run typecheck

@@ -1,17 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { artistProfiles } from "../data/artists.ts";
-import { allArtists } from "../data/festivals.ts";
 import { classify, dueArtists, dueEnrichment, freshState } from "../scripts/resolve-artist-identities.mjs";
-
-test("every catalog artist has an explicit identity state and no search provenance", () => {
-  assert.equal(artistProfiles.length, allArtists.length);
-  for (const artist of artistProfiles) {
-    assert.match(artist.identityState, /^(linked|ambiguous|unresolved|retryable)$/);
-    assert.equal(artist.links.some((link) => /\/search[/?]/.test(link.url)), false);
-    assert.equal(artist.provenance.some((item) => /\/search[/?]/.test(item.url)), false);
-  }
-});
 
 test("aliases and homonyms fail closed unless one direct cross-provider relation matches", () => {
   const spotify = [{ id: "correct", name: "Alias", url: "https://open.spotify.com/artist/1234567890123456789012" }];

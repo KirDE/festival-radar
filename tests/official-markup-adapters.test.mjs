@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { getFestivalSource } from "../data/festival-sources.ts";
+import { parserSource as getFestivalSource } from "./support/parser-source.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 
 const fixture = (slug) => readFile(new URL(`./fixtures/official-markup/${slug}.html`, import.meta.url), "utf8");
@@ -30,10 +30,8 @@ test("Tolminator official homepage extracts its cross-month 2027 range", async (
 });
 
 for (const slug of ["full-force", "motocultor", "leyendas-del-rock", "mad-cool", "firenze-rocks", "pistoia-blues", "dynamo-metal-fest", "copenhell", "rockstadt"]) {
-  test(`${slug} is explicit manual-review with a reason and weekly cadence`, async () => {
-    const source = getFestivalSource(slug);
-    assert.equal(source.refreshPolicy, "weekly");
-    assert.deepEqual(source.strategies, ["manual_review"]);
+  test(`${slug} manual-review strategy emits warnings without extracting fields`, async () => {
+    const source = getFestivalSource(slug, { strategies: ["manual_review"], refreshPolicy: "weekly", manualReviewReason: "Synthetic source requires a human review before publication" });
     const result = extractFestivalCandidate(await fixture(slug), source, observedAt);
     assert.equal(result.evidence.length, 0);
     assert.match(result.warnings[0], /^Manual review only: .{20,}/);

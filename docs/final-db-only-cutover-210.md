@@ -1,5 +1,30 @@
 # Final cutover candidate and release gates for #210
 
+## Final Git retirement
+
+All 13 `data/*` files, `lib/catalog/seed.ts`, and 47 `public/logos/*` assets are
+removed. No live catalogue is copied into test fixtures. Parsers use fabricated
+source configurations; DB and browser tests use a small synthetic catalogue and
+generated plain-color images. `npm run test:seed` is guarded for local disposable
+DBs, resets their test catalogue, and stays outside release archives.
+
+One-off catalogue/source/logo imports, operational file import, file-vs-DB audit,
+their dispatch workflows and deployment hooks are retired. DB source validation,
+readers, due scheduling/leases, asset storage, publication, operational progress,
+playlist workers/cutover and the read-only DB inventory audit remain. The ingestion
+CLI requires `DATABASE_URL`, including with local HTML `--fixture`; generic parser
+and fixture-runner tests still operate without a DB.
+
+Release packaging no longer copies `data` or retired helpers. The existing
+`DB_ONLY_RELEASE=true` receipt validation and stripping/archive absence checks
+remain, including checks for stale build artifacts. Historical logo URLs continue
+to resolve through the DB route; the UI falls back directly to initials.
+
+This implementation performs no production migration, activation, timer change,
+provider write, or issue closure. The sections below retain the historical cutover
+record; commands for removed import/backfill/file-audit tools are obsolete.
+
+
 Repository-only work against `05accea5c038b5eba91bc1e322530f4389c7508d`, left uncommitted. No production access, migrations, deployment or worker activation was performed here. The controller reports a fresh production backup and successful isolated restore; those facts still need to be bound to the protected cutover receipt. Full preservation parity between remaining files and the authoritative DB has **not** been verified. Standard deployment deliberately preserves those files until that specific blocker is resolved. This candidate does not complete #210.
 
 ## Commands and CI

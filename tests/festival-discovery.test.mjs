@@ -1,20 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { festivals } from "../data/festivals.ts";
+import { festival } from "./support/catalog.ts";
+const festivals = [festival];
 import { distanceKm, festivalGenres, festivalMatchesDiscoveryFilters } from "../lib/festival-discovery.ts";
 
-test("all production festivals have normalized genres and venue coordinates", () => {
-  for (const item of festivals) {
-    assert.ok(item.genres.length > 0, `${item.name} needs a genre`);
-    assert.deepEqual(item.genres, item.genres.map((genre) => genre.trim().toLowerCase()));
-    assert.ok(item.coordinates, `${item.name} needs coordinates`);
-    assert.ok(Math.abs(item.coordinates.latitude) <= 90);
-    assert.ok(Math.abs(item.coordinates.longitude) <= 180);
-  }
-});
-
 test("genre filtering uses exact normalized genre values", () => {
-  const roadburn = festivals.find(({ slug }) => slug === "roadburn");
+  const roadburn = festival;
   assert.ok(roadburn);
   assert.equal(festivalMatchesDiscoveryFilters(roadburn, { genre: "  Doom   Metal " }), true);
   assert.equal(festivalMatchesDiscoveryFilters(roadburn, { genre: "power metal" }), false);
@@ -22,11 +13,11 @@ test("genre filtering uses exact normalized genre values", () => {
 });
 
 test("distance filtering uses documented origin and festival coordinates", () => {
-  const berlin = { latitude: 52.52, longitude: 13.405 };
-  const wacken = festivals.find(({ slug }) => slug === "wacken-open-air");
-  const madrid = festivals.find(({ slug }) => slug === "mad-cool");
+  const berlin = { latitude: 0, longitude: 0 };
+  const wacken = { ...festival, coordinates: { latitude: 0, longitude: 3 } };
+  const madrid = { ...festival, coordinates: { latitude: 0, longitude: 30 } };
   assert.ok(wacken?.coordinates && madrid?.coordinates);
-  assert.ok(distanceKm(berlin, wacken.coordinates) > 250 && distanceKm(berlin, wacken.coordinates) < 350);
+  assert.ok(distanceKm(berlin, wacken.coordinates) > 330 && distanceKm(berlin, wacken.coordinates) < 340);
   assert.equal(festivalMatchesDiscoveryFilters(wacken, { origin: berlin, maxDistanceKm: 500 }), true);
   assert.equal(festivalMatchesDiscoveryFilters(madrid, { origin: berlin, maxDistanceKm: 500 }), false);
 });

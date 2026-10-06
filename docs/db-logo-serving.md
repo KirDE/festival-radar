@@ -1,5 +1,16 @@
 # DB logo serving and UI fallback (#210)
 
+Current contract after Git retirement: `/api/logos/<slug>.png` and the historical
+`/logos/<slug>.png` alias both read the current database binding. Valid new slugs
+need no inventory deployment; MIME follows stored bytes. Missing bindings return
+uncached 404, corrupt assets/database failures return uncached 503, and content
+hash ETags support GET/HEAD revalidation. UI image failure displays initials.
+There is no static asset retry. Unit and DB route tests use tiny generated PNG/JPEG
+fixtures; asset storage, replacement, deduplication and immutability tests remain.
+
+The remainder records the earlier rollout and its retired inventory importer.
+
+
 `GET` and `HEAD /api/logos/<reviewed-filename>` read the festival binding and blob
 from PostgreSQL. With the current inventory, filenames are `<slug>.png`; actual
 MIME comes from the reviewed stored content (39 PNG, eight JPEG). Only the exact

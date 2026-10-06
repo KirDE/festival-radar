@@ -26,7 +26,7 @@ export function validateLogo(bytes: Uint8Array, mimeType: LogoMimeType) {
   return { sha256: createHash("sha256").update(image).digest("hex"), sizeBytes: image.length, image };
 }
 
-/** Storage for reviewed logos. Static UI lookup stays separate from DB serving. */
+/** Content-addressed storage for reviewed database-served logos. */
 export async function saveFestivalLogo(db: PrismaClient, slug: string, bytes: Uint8Array, mimeType: LogoMimeType) {
   const { sha256, sizeBytes, image } = validateLogo(bytes, mimeType);
   return db.$transaction(async (tx) => {

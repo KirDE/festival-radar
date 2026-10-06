@@ -3,13 +3,13 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { auditReviewedLogos, applyReviewedLogos, verifyReviewedLogos } from "../lib/catalog/logo-import.ts";
-import { databaseLogoPath } from "../data/logo-serving.ts";
-import { requireLocalDisposableLogoDatabase } from "./logo-import-db-guard.ts";
+import { saveFestivalLogo } from "../lib/catalog/logo-assets.ts";
+import { logoFixture } from "./support/logo-fixtures.ts";
+import { requireLocalDisposableDatabase } from "./support/disposable-db.ts";
 
-requireLocalDisposableLogoDatabase(process.env.DATABASE_URL);
+requireLocalDisposableDatabase(process.env.DATABASE_URL);
 const db = new PrismaClient();
-const rows = await auditReviewedLogos();
+const rows = [await logoFixture(), { ...await logoFixture("image/jpeg"), slug: "synthetic-jpeg", file: "synthetic-jpeg.png" }];
 const origin = "http://127.0.0.1:3267";
 let app: ReturnType<typeof spawn> | undefined;
 let spawnFailed = false;
@@ -20,9 +20,10 @@ function request(url: string, options: RequestInit = {}) {
 
 test.before(async () => {
   // Requires the migrated, backfilled disposable catalogue. Never target production.
-  await applyReviewedLogos(db, rows);
-  await verifyReviewedLogos(db, rows);
-  assert.equal(await db.festivalLogo.count(), 47);
+  for (const row of rows) {
+    await db.festival.create({ data: { slug: row.slug, name: "Synthetic logo test", country: "Testland", countryCode: "DE", officialUrl: "https://logo.example.test/", genres: [] } });
+    await saveFestivalLogo(db, row.slug, row.bytes, row.mimeType);
+  }
   app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--hostname", "127.0.0.1", "--port", "3267"], {
     env: { ...process.env, NEXT_PUBLIC_BASE_PATH: "" }, stdio: "ignore",
   });
@@ -46,12 +47,19 @@ test.after(async () => {
       const killTimer = setTimeout(() => app?.kill("SIGKILL"), 5000);
       try { await stopped; } finally { clearTimeout(killTimer); }
     }
-  } finally { await db.$disconnect(); }
+  } finally {
+    await db.festival.deleteMany({ where: { slug: { in: rows.map(row => row.slug) } } });
+    await db.assetBlob.deleteMany({ where: { sha256: { in: rows.map(row => row.sha256) } } });
+    await db.$disconnect();
+  }
 });
 
-test("47 imported logos serve through actual Next HTTP routing with exact bytes/MIME and conditional cache", { timeout: 90_000 }, async () => {
+test("synthetic DB logos serve through actual Next HTTP routing with exact bytes/MIME and conditional cache", { timeout: 90_000 }, async () => {
   for (const row of rows) {
-    const url = origin + databaseLogoPath(`/logos/${row.file}`) + "/";
+    const url = `${origin}/api/logos/${row.file}/`;
+    const alias = await request(`${origin}/logos/${row.file}/`);
+    assert.equal(alias.status, 200);
+    assert.deepEqual(Buffer.from(await alias.arrayBuffer()), row.bytes);
     const response = await request(url);
     assert.equal(response.status, 200, row.file);
     assert.equal(response.headers.get("content-type"), row.mimeType);
@@ -80,7 +88,6 @@ test("47 imported logos serve through actual Next HTTP routing with exact bytes/
     assert.equal(missing.status, 404);
     assert.equal(missing.headers.get("cache-control"), "no-store");
     const fallback = await request(`${origin}/logos/${first.file}`);
-    assert.equal(fallback.status, 200);
-    assert.deepEqual(Buffer.from(await fallback.arrayBuffer()), first.bytes);
+    assert.equal(fallback.status, 404);
   } finally { await db.festivalLogo.create({ data: binding }); }
 });

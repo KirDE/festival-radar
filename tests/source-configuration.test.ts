@@ -1,16 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { festivalSources } from "../data/festival-sources.ts";
-import { sourceParserKey, validateSource } from "../lib/sources/repository.ts";
+import { parserSource } from "./support/parser-source.ts";
+import { validateSource } from "../lib/sources/repository.ts";
 
-const source = festivalSources.find((item) => item.festivalSlug === "2000trees")!;
-test("inventory parser keys are registered and source options survive", () => {
-  for (const item of festivalSources) assert.ok(validateSource(item));
-  assert.equal(sourceParserKey(source), "official_markup:2000trees");
-  assert.equal(festivalSources.find((item) => item.festivalSlug === "rock-for-people")!.fetchUrl, "https://rockforpeople.cz/lineup/");
-  for (const slug of ["tons-of-rock", "midgardsblot"]) assert.ok(festivalSources.find((item) => item.festivalSlug === slug)!.followLinkPattern);
-  assert.equal(festivalSources.find((item) => item.festivalSlug === "metaldays")!.enabled, false);
-  assert.ok(festivalSources.some((item) => item.strategies.includes("manual_review")));
+const source = parserSource("2000trees");
+test("source options validate without a repository inventory", () => {
+  assert.equal(validateSource(source), "official_markup:2000trees");
+  assert.equal(validateSource(parserSource("synthetic", { strategies: ["json_ld_event", "html_fallback"], fetchUrl: "https://feed.example.test/", headers: { "x-test": "fixture" }, followLinkPattern: "^/news/[a-z]+/$" })), "json_ld_event+html_fallback");
 });
 test("configuration rejects unknown parser, invalid URL, regex and edition", () => {
   assert.throws(() => validateSource({ ...source, parserKey: "unknown" }), /parser key/);
