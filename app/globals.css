@@ -514,6 +514,7 @@ footer {
   display: grid;
   place-items: center;
   background: white;
+  color: var(--ink);
   border: 1px solid var(--line);
   padding: 8px;
   overflow: hidden;

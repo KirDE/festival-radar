@@ -1,5 +1,18 @@
 import { expect, test } from "@playwright/test";
 
+test("missing festival logo initials contrast against the white tile in a dark hero", async ({ page }) => {
+  await page.route("**/api/logos/synthetic-fest.png", (route) => route.fulfill({ status: 404 }));
+  await page.goto("/en/festivals/synthetic-fest/");
+  const fallback = page.locator(".detailHero .festivalLogo span[role=img]");
+  await expect(fallback).toBeVisible();
+  await expect(fallback).toHaveText("SF");
+  const styles = await fallback.evaluate((node) => ({
+    foreground: getComputedStyle(node).color,
+    background: getComputedStyle(node.parentElement).backgroundColor,
+  }));
+  expect(styles).toEqual({ foreground: "rgb(23, 23, 18)", background: "rgb(255, 255, 255)" });
+});
+
 for (const width of [320, 375, 390]) {
   test(`similar festivals stays inside the mobile page at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
