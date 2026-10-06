@@ -18,9 +18,9 @@ db_due_restore_assets() {
     local path
     if [[ "$asset" == unit ]]; then path="$unit"; else path="$wrapper"; fi
     if [[ -e "$backup/$asset" || -L "$backup/$asset" ]]; then
-      cp -a -- "$backup/$asset" "$path"
+      cp -a -- "$backup/$asset" "$path" || return
     else
-      rm -f -- "$path"
+      rm -f -- "$path" || return
     fi
   done
 }
