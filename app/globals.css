@@ -373,6 +373,10 @@ footer {
   padding: 0 16px;
   gap: 10px;
 }
+.search input { min-width: 0; flex: 1; }
+.search button { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.search button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.search button span { font-size: 19px; }
 .search span {
   font-size: 25px;
 }
@@ -512,8 +516,11 @@ footer {
   width: 68px;
   height: 54px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   place-items: center;
   background: white;
+  color: var(--ink);
   border: 1px solid var(--line);
   padding: 8px;
   overflow: hidden;

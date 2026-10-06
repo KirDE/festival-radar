@@ -84,14 +84,14 @@ test("operation feedback follows the selected German and Russian language", asyn
 
   await page.goto("/en/notifications/");
   await page.locator(".languagePicker select").selectOption("de");
-  await page.waitForURL("**/de/notifications/");
+  await expect(page).toHaveURL(/\/en\/notifications\/$/);
   await expect(page.getByRole("heading", { name: "Benachrichtigungen", exact: true }).first()).toBeVisible();
   await page.locator(".notificationForm select").nth(1).selectOption("ARTIST_ADDED");
   await page.locator(".notificationForm .primaryButton").click();
   await expect(page.getByRole("status")).toHaveText("Gespeichert.");
 
   await page.locator(".languagePicker select").selectOption("ru");
-  await page.waitForURL("**/ru/notifications/");
+  await expect(page).toHaveURL(/\/en\/notifications\/$/);
   await expect(page.getByRole("heading", { name: "Настройки уведомлений", exact: true }).first()).toBeVisible();
   await page.locator(".notificationForm select").nth(1).selectOption("ARTIST_ADDED");
   await page.locator(".notificationForm .primaryButton").click();

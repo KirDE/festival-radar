@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-export type Language = "en" | "de" | "ru";
+import { isLanguage, preferredLanguage, LANGUAGE_PREFERENCE_KEY, LANGUAGE_COOKIE_MAX_AGE, type Language } from "@/lib/language-preference";
+export type { Language } from "@/lib/language-preference";
 type TranslationKey = keyof typeof translations.en;
 type TranslationValues = Record<string, string | number>;
 export type AdminTranslationKey = keyof typeof adminTranslations.en;
@@ -39,10 +40,10 @@ const translations = {
     datesTba: "Dates TBA", tba: "TBA", confirmed: "confirmed", partial: "partial", lineupNotAnnounced: "Lineup not announced", announcedActs: "announced acts", followUpdates: "Follow for updates", explore: "Explore",
     allFestivals: "All festivals", datesLineupTba: "Dates / lineup TBA", confirmedLineup: "confirmed lineup", partialLineup: "partial lineup", official: "Official", festivalWebsite: "Festival website ↗", passes: "Passes", officialTickets: "Official tickets ↗", ticketsInfo: "Tickets & info ↗", ticketsUnavailable: "Tickets not available", ticketsUnknown: "Availability not verified", listen: "Listen", artists: "artists", tracks: "tracks", spotifyPlaylist: "Spotify playlist ↗", youtubeMusicPlaylist: "YouTube Music playlist ↗", playlistSoon: "Playlist coming soon", liveHistory: "Live history",
     discoverBill: "DISCOVER THE BILL", lineup2027: "2027 lineup", announced: "announced", headliners: "Headliners & highlights", viewArtist: "View artist →", noArtists: "No artists announced yet.", noArtistsText: "We will update this page when the official festival publishes its first names.", alsoAnnounced: "Also announced", transparency: "Data transparency", sourceText: "Seed data reviewed on 28 August 2026. Announcements can change; official festival information always takes priority.", primarySource: "Check primary source ↗",
-    festivalDirectory: "Festival directory", artist: "ARTIST", europeanFestival: "European festival", europeanFestivals: "European festivals", announcedFor: "announced for 2027", appearances: "2027 APPEARANCES", myPlan: "My plan", skip: "Skip to content", privacy: "Privacy-first: no cookies or cross-site tracking.", submitFestival: "Submit a festival", submitEyebrow: "COMMUNITY SOURCES", submitIntro: "Every suggestion is reviewed before publication. Please link only to the festival organizer or an official ticketing partner.", festivalName: "Festival name", officialSource: "Official source URL", editionYear: "Edition year", notes: "Notes", sendReview: "Send for editorial review", submitting: "Submitting…", received: "Received for review", failed: "Submission failed.",
+    festivalDirectory: "Festival directory", artist: "ARTIST", europeanFestival: "European festival", europeanFestivals: "European festivals", announcedFor: "announced for 2027", appearances: "2027 APPEARANCES", myPlan: "My plan", skip: "Skip to content", privacy: "Privacy-first: a first-party language preference cookie; no cross-site tracking.", submitFestival: "Submit a festival", submitEyebrow: "COMMUNITY SOURCES", submitIntro: "Every suggestion is reviewed before publication. Please link only to the festival organizer or an official ticketing partner.", festivalName: "Festival name", officialSource: "Official source URL", editionYear: "Edition year", notes: "Notes", sendReview: "Send for editorial review", submitting: "Submitting…", received: "Received for review", failed: "Submission failed.",
     alsoKnownAs: "Also known as", profile: "Profile", origin: "Origin", genres: "Genres", topTracks: "Top tracks", sourcesAndIdentities: "Sources and canonical identities", checked: "checked",
     recentSetlists: "Recent setlists", viewSetlist: "View setlist", freshnessProfile: "Profile refreshed every", freshnessMusic: "music every", freshnessSetlists: "setlists every", freshnessDays: "days",
-    filterSearch: "Search festivals, artists or cities", filterMonth: "Filter by month", allMonths: "All months", filterGenre: "Filter by genre", allGenres: "All genres", filterOrigin: "Distance origin", fromOrigin: "From {origin}", filterDistance: "Maximum distance", anyDistance: "Any distance", withinDistance: "Within {distance} km", officialTicketsOnly: "Official tickets only",
+    filterSearch: "Search festivals, artists or cities", clearSearch: "Clear search", filterMonth: "Filter by month", allMonths: "All months", filterGenre: "Filter by genre", allGenres: "All genres", filterOrigin: "Distance origin", fromOrigin: "From {origin}", filterDistance: "Maximum distance", anyDistance: "Any distance", withinDistance: "Within {distance} km", officialTicketsOnly: "Official tickets only",
     compare: "Compare", compareFestival: "Compare {festival}", removeFestivalComparison: "Remove {festival} from comparison", comparisonSelected: "{festival} selected for comparison ({count} of 3)", comparisonRemoved: "{festival} removed from comparison ({count} of 3)", comparisonLimit: "Comparison limit reached. Remove a festival before selecting {festival}.", comparisonInstructions: "Select one or two more festivals to compare planning details.", planningDetail: "Planning detail", dates: "Dates", locationDistance: "Location / distance from {origin}", distanceUnavailable: "distance unavailable", tickets: "Tickets", unavailable: "Unavailable", availabilityNotConfirmed: "Availability not confirmed", lineupOverlap: "Lineup overlap", sharedActs: "{count} shared acts", noLineupOverlap: "No announced lineup overlap yet", noDiscoveryMatches: "Try a wider distance, another origin, or remove a genre filter. Your comparison selections are preserved.",
   },
   de: {
@@ -52,10 +53,10 @@ const translations = {
     datesTba: "Termine offen", tba: "OFFEN", confirmed: "bestätigt", partial: "teilweise", lineupNotAnnounced: "Line-up noch nicht angekündigt", announcedActs: "angekündigte Acts", followUpdates: "Updates folgen", explore: "Entdecken",
     allFestivals: "Alle Festivals", datesLineupTba: "Termine / Line-up offen", confirmedLineup: "bestätigtes Line-up", partialLineup: "teilweises Line-up", official: "Offiziell", festivalWebsite: "Festival-Webseite ↗", passes: "Tickets", officialTickets: "Offizielle Tickets ↗", ticketsInfo: "Tickets & Infos ↗", ticketsUnavailable: "Tickets nicht verfügbar", ticketsUnknown: "Verfügbarkeit nicht bestätigt", listen: "Anhören", artists: "Künstler", tracks: "Titel", spotifyPlaylist: "Spotify-Playlist ↗", youtubeMusicPlaylist: "YouTube-Music-Playlist ↗", playlistSoon: "Playlist folgt", liveHistory: "Live-Historie",
     discoverBill: "DAS LINE-UP ENTDECKEN", lineup2027: "Line-up 2027", announced: "angekündigt", headliners: "Headliner & Highlights", viewArtist: "Künstler ansehen →", noArtists: "Noch keine Künstler angekündigt.", noArtistsText: "Wir aktualisieren diese Seite, sobald das Festival die ersten Namen veröffentlicht.", alsoAnnounced: "Außerdem angekündigt", transparency: "Datentransparenz", sourceText: "Ausgangsdaten geprüft am 28. August 2026. Ankündigungen können sich ändern; die offizielle Festival-Information hat immer Vorrang.", primarySource: "Primärquelle prüfen ↗",
-    festivalDirectory: "Festival-Verzeichnis", artist: "KÜNSTLER", europeanFestival: "europäisches Festival", europeanFestivals: "europäische Festivals", announcedFor: "für 2027 angekündigt", appearances: "AUFTRITTE 2027", myPlan: "Mein Plan", skip: "Zum Inhalt springen", privacy: "Datenschutzfreundlich: keine Cookies oder websiteübergreifende Verfolgung.", submitFestival: "Festival vorschlagen", submitEyebrow: "QUELLEN AUS DER COMMUNITY", submitIntro: "Jeder Vorschlag wird vor der Veröffentlichung geprüft. Bitte verlinke nur den Veranstalter oder einen offiziellen Ticketanbieter.", festivalName: "Festivalname", officialSource: "Offizielle Quell-URL", editionYear: "Ausgabejahr", notes: "Anmerkungen", sendReview: "Zur redaktionellen Prüfung senden", submitting: "Wird gesendet…", received: "Zur Prüfung eingegangen", failed: "Senden fehlgeschlagen.",
+    festivalDirectory: "Festival-Verzeichnis", artist: "KÜNSTLER", europeanFestival: "europäisches Festival", europeanFestivals: "europäische Festivals", announcedFor: "für 2027 angekündigt", appearances: "AUFTRITTE 2027", myPlan: "Mein Plan", skip: "Zum Inhalt springen", privacy: "Datenschutzfreundlich: ein eigenes Cookie für die Sprache; keine websiteübergreifende Verfolgung.", submitFestival: "Festival vorschlagen", submitEyebrow: "QUELLEN AUS DER COMMUNITY", submitIntro: "Jeder Vorschlag wird vor der Veröffentlichung geprüft. Bitte verlinke nur den Veranstalter oder einen offiziellen Ticketanbieter.", festivalName: "Festivalname", officialSource: "Offizielle Quell-URL", editionYear: "Ausgabejahr", notes: "Anmerkungen", sendReview: "Zur redaktionellen Prüfung senden", submitting: "Wird gesendet…", received: "Zur Prüfung eingegangen", failed: "Senden fehlgeschlagen.",
     alsoKnownAs: "Auch bekannt als", profile: "Profil", origin: "Herkunft", genres: "Genres", topTracks: "Top-Titel", sourcesAndIdentities: "Quellen und kanonische Identitäten", checked: "geprüft",
     recentSetlists: "Aktuelle Setlists", viewSetlist: "Setlist ansehen", freshnessProfile: "Profil aktualisiert alle", freshnessMusic: "Musik alle", freshnessSetlists: "Setlists alle", freshnessDays: "Tage",
-    filterSearch: "Festivals, Künstler oder Städte durchsuchen", filterMonth: "Nach Monat filtern", allMonths: "Alle Monate", filterGenre: "Nach Genre filtern", allGenres: "Alle Genres", filterOrigin: "Ausgangspunkt für die Entfernung", fromOrigin: "Ab {origin}", filterDistance: "Maximale Entfernung", anyDistance: "Beliebige Entfernung", withinDistance: "Innerhalb von {distance} km", officialTicketsOnly: "Nur offizielle Tickets",
+    filterSearch: "Festivals, Künstler oder Städte durchsuchen", clearSearch: "Suche löschen", filterMonth: "Nach Monat filtern", allMonths: "Alle Monate", filterGenre: "Nach Genre filtern", allGenres: "Alle Genres", filterOrigin: "Ausgangspunkt für die Entfernung", fromOrigin: "Ab {origin}", filterDistance: "Maximale Entfernung", anyDistance: "Beliebige Entfernung", withinDistance: "Innerhalb von {distance} km", officialTicketsOnly: "Nur offizielle Tickets",
     compare: "Vergleichen", compareFestival: "{festival} vergleichen", removeFestivalComparison: "{festival} aus dem Vergleich entfernen", comparisonSelected: "{festival} zum Vergleich ausgewählt ({count} von 3)", comparisonRemoved: "{festival} aus dem Vergleich entfernt ({count} von 3)", comparisonLimit: "Vergleichslimit erreicht. Entferne ein Festival, bevor du {festival} auswählst.", comparisonInstructions: "Wähle ein oder zwei weitere Festivals aus, um Planungsdetails zu vergleichen.", planningDetail: "Planungsdetail", dates: "Termine", locationDistance: "Ort / Entfernung ab {origin}", distanceUnavailable: "Entfernung nicht verfügbar", tickets: "Tickets", unavailable: "Nicht verfügbar", availabilityNotConfirmed: "Verfügbarkeit nicht bestätigt", lineupOverlap: "Überschneidung im Line-up", sharedActs: "{count} gemeinsame Acts", noLineupOverlap: "Noch keine Überschneidung der angekündigten Line-ups", noDiscoveryMatches: "Wähle eine größere Entfernung oder einen anderen Ausgangspunkt oder entferne den Genre-Filter. Deine Vergleichsauswahl bleibt erhalten.",
   },
   ru: {
@@ -65,10 +66,10 @@ const translations = {
     datesTba: "Даты уточняются", tba: "УТОЧНЯЕТСЯ", confirmed: "подтверждено", partial: "частично", lineupNotAnnounced: "Лайнап ещё не объявлен", announcedActs: "объявлено участников", followUpdates: "Следить за обновлениями", explore: "Подробнее",
     allFestivals: "Все фестивали", datesLineupTba: "Даты / лайнап уточняются", confirmedLineup: "подтверждённый лайнап", partialLineup: "частичный лайнап", official: "Официально", festivalWebsite: "Сайт фестиваля ↗", passes: "Билеты", officialTickets: "Официальные билеты ↗", ticketsInfo: "Билеты и информация ↗", ticketsUnavailable: "Билеты недоступны", ticketsUnknown: "Доступность не подтверждена", listen: "Слушать", artists: "артистов", tracks: "треков", spotifyPlaylist: "Плейлист Spotify ↗", youtubeMusicPlaylist: "Плейлист YouTube Music ↗", playlistSoon: "Плейлист скоро появится", liveHistory: "История концертов",
     discoverBill: "ИЗУЧИТЬ ЛАЙНАП", lineup2027: "Лайнап 2027", announced: "объявлено", headliners: "Хедлайнеры и главные имена", viewArtist: "Об артисте →", noArtists: "Участники пока не объявлены.", noArtistsText: "Мы обновим страницу, когда фестиваль опубликует первые имена.", alsoAnnounced: "Также объявлены", transparency: "Прозрачность данных", sourceText: "Исходные данные проверены 28 августа 2026 года. Анонсы могут меняться; официальный сайт фестиваля всегда является приоритетным источником.", primarySource: "Проверить первоисточник ↗",
-    festivalDirectory: "Каталог фестивалей", artist: "АРТИСТ", europeanFestival: "европейский фестиваль", europeanFestivals: "европейских фестивалей", announcedFor: "объявлено на 2027 год", appearances: "ВЫСТУПЛЕНИЯ В 2027", myPlan: "Мой план", skip: "Перейти к содержимому", privacy: "Без ущерба для приватности: без cookies и межсайтового отслеживания.", submitFestival: "Предложить фестиваль", submitEyebrow: "ИСТОЧНИКИ СООБЩЕСТВА", submitIntro: "Каждое предложение проверяется перед публикацией. Добавляйте только сайт организатора или официального билетного партнёра.", festivalName: "Название фестиваля", officialSource: "Официальный URL источника", editionYear: "Год проведения", notes: "Примечания", sendReview: "Отправить редакции", submitting: "Отправка…", received: "Получено на проверку", failed: "Не удалось отправить.",
+    festivalDirectory: "Каталог фестивалей", artist: "АРТИСТ", europeanFestival: "европейский фестиваль", europeanFestivals: "европейских фестивалей", announcedFor: "объявлено на 2027 год", appearances: "ВЫСТУПЛЕНИЯ В 2027", myPlan: "Мой план", skip: "Перейти к содержимому", privacy: "Приватность: собственный cookie для выбора языка; без межсайтового отслеживания.", submitFestival: "Предложить фестиваль", submitEyebrow: "ИСТОЧНИКИ СООБЩЕСТВА", submitIntro: "Каждое предложение проверяется перед публикацией. Добавляйте только сайт организатора или официального билетного партнёра.", festivalName: "Название фестиваля", officialSource: "Официальный URL источника", editionYear: "Год проведения", notes: "Примечания", sendReview: "Отправить редакции", submitting: "Отправка…", received: "Получено на проверку", failed: "Не удалось отправить.",
     alsoKnownAs: "Также известен как", profile: "Профиль", origin: "Страна происхождения", genres: "Жанры", topTracks: "Популярные треки", sourcesAndIdentities: "Источники и канонические идентификаторы", checked: "проверено",
     recentSetlists: "Недавние сетлисты", viewSetlist: "Открыть сетлист", freshnessProfile: "Профиль обновляется каждые", freshnessMusic: "музыка — каждые", freshnessSetlists: "сетлисты — каждые", freshnessDays: "дней",
-    filterSearch: "Поиск по фестивалям, артистам и городам", filterMonth: "Фильтр по месяцу", allMonths: "Все месяцы", filterGenre: "Фильтр по жанру", allGenres: "Все жанры", filterOrigin: "Точка отсчёта расстояния", fromOrigin: "От {origin}", filterDistance: "Максимальное расстояние", anyDistance: "Любое расстояние", withinDistance: "В пределах {distance} км", officialTicketsOnly: "Только официальные билеты",
+    filterSearch: "Поиск по фестивалям, артистам и городам", clearSearch: "Очистить поиск", filterMonth: "Фильтр по месяцу", allMonths: "Все месяцы", filterGenre: "Фильтр по жанру", allGenres: "Все жанры", filterOrigin: "Точка отсчёта расстояния", fromOrigin: "От {origin}", filterDistance: "Максимальное расстояние", anyDistance: "Любое расстояние", withinDistance: "В пределах {distance} км", officialTicketsOnly: "Только официальные билеты",
     compare: "Сравнить", compareFestival: "Сравнить {festival}", removeFestivalComparison: "Убрать {festival} из сравнения", comparisonSelected: "{festival} выбран для сравнения ({count} из 3)", comparisonRemoved: "{festival} убран из сравнения ({count} из 3)", comparisonLimit: "Достигнут лимит сравнения. Уберите фестиваль, прежде чем выбрать {festival}.", comparisonInstructions: "Выберите ещё один или два фестиваля, чтобы сравнить детали поездки.", planningDetail: "Деталь поездки", dates: "Даты", locationDistance: "Место / расстояние от {origin}", distanceUnavailable: "расстояние недоступно", tickets: "Билеты", unavailable: "Недоступны", availabilityNotConfirmed: "Наличие не подтверждено", lineupOverlap: "Совпадения в лайнапах", sharedActs: "Общих артистов: {count}", noLineupOverlap: "В объявленных лайнапах пока нет совпадений", noDiscoveryMatches: "Увеличьте расстояние, выберите другую точку отсчёта или уберите фильтр по жанру. Выбранные для сравнения фестивали сохранятся.",
   },
 } as const;
@@ -97,32 +98,40 @@ function browserLanguage(): Language {
   return "en";
 }
 
-export function languageDestination(pathname: string, selected: Language) {
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) return null;
-  if (/^\/(?:(?:en|de|ru)\/)?notifications\/?$/.test(pathname)) return `/${selected}/notifications/`;
-  return languagePath(pathname, selected);
+export function languageDestination(_pathname: string, _selected: Language) {
+  return null;
+}
+
+function savedLanguage() {
+  let stored: string | null = null;
+  let cookie: string | undefined;
+  try { stored = localStorage.getItem(LANGUAGE_PREFERENCE_KEY); } catch { /* Storage may be blocked. */ }
+  try {
+    cookie = document.cookie.split(";").map((part) => part.trim())
+      .find((part) => part.startsWith(`${LANGUAGE_PREFERENCE_KEY}=`))?.slice(LANGUAGE_PREFERENCE_KEY.length + 1);
+  } catch { /* Cookie access may also be blocked. */ }
+  return { stored, cookie };
+}
+
+function persistLanguage(language: Language) {
+  try { localStorage.setItem(LANGUAGE_PREFERENCE_KEY, language); } catch { /* Cookie fallback remains available. */ }
+  try {
+    document.cookie = `${LANGUAGE_PREFERENCE_KEY}=${language}; Path=/; Max-Age=${LANGUAGE_COOKIE_MAX_AGE}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
+  } catch { /* localStorage remains available when cookies are blocked. */ }
 }
 
 export function LanguageProvider({ children, initialLanguage }: { children: React.ReactNode; initialLanguage?: Language }) {
   const [language, updateLanguage] = useState<Language>(initialLanguage ?? "en");
   useEffect(() => {
-    if (initialLanguage) {
-      localStorage.setItem("festival-radar-language", initialLanguage);
-      document.documentElement.lang = initialLanguage;
-      return;
-    }
-    const stored = localStorage.getItem("festival-radar-language");
-    const selected = stored === "de" || stored === "ru" || stored === "en" ? stored : browserLanguage();
+    const { stored, cookie } = savedLanguage();
+    const selected = preferredLanguage(stored, cookie, initialLanguage, browserLanguage());
     updateLanguage(selected);
     document.documentElement.lang = selected;
+    persistLanguage(selected);
   }, [initialLanguage]);
   const setLanguage = (selected: Language) => {
-    localStorage.setItem("festival-radar-language", selected);
-    const destination = languageDestination(window.location.pathname, selected);
-    if (destination) {
-      window.location.assign(destination);
-      return;
-    }
+    if (!isLanguage(selected)) return;
+    persistLanguage(selected);
     updateLanguage(selected);
     document.documentElement.lang = selected;
   };

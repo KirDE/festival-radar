@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { SubmissionForm } from "@/components/SubmissionForm";
+import { SubmissionIntro } from "@/components/SubmissionIntro";
 import { supportedLanguages } from "@/lib/catalog/public";
 import type { Language } from "@/components/LanguageProvider";
 
@@ -18,6 +18,5 @@ export async function generateMetadata({ params }: { params: Promise<{ lang: str
 export default async function LocalizedSubmitPage({ params }: { params: Promise<{ lang: string }> }) {
   const lang = (await params).lang as Language;
   if (!supportedLanguages.includes(lang)) notFound();
-  const text = copy[lang];
-  return <div className="directoryPage"><p className="eyebrow">{text.eyebrow}</p><h1>{text.heading}</h1><p>{text.intro}</p><SubmissionForm /></div>;
+  return <SubmissionIntro />;
 }
