@@ -35,13 +35,13 @@ test("admin edits, reviews, diagnostics and audit survive reload", async ({ page
   await page.getByRole("button", { name: /Festival submissions/ }).click();
   await expect(page.locator("article.reviewCard").filter({ hasText: "Browser Metal Festival" })).toContainText("APPROVED");
   await page.getByRole("button", { name: "Festivals & artists" }).click();
-  await page.getByLabel("City").fill("Wacken E2E City");
+  await page.getByLabel("City").fill("Sample E2E City");
   await page.getByRole("button", { name: "Save festival draft" }).click();
   await expect(page.getByRole("status")).toContainText("persisted and queued");
 
-  await page.getByPlaceholder("Find an artist").fill("Electric Callboy");
+  await page.getByPlaceholder("Find an artist").fill("Sample Artist");
   await page.getByRole("button", { name: "Edit" }).first().click();
-  await page.getByLabel("Canonical name").fill("Electric Callboy E2E");
+  await page.getByLabel("Canonical name").fill("Sample Artist E2E");
   await page.getByRole("button", { name: "Save artist draft" }).click();
   await expect(page.getByRole("status")).toContainText("persisted and queued");
 
@@ -64,7 +64,7 @@ test("admin edits, reviews, diagnostics and audit survive reload", async ({ page
 
   await page.reload();
   await page.getByRole("button", { name: "Review queue" }).click();
-  const cityChange = page.locator("article.reviewCard").filter({ hasText: "Wacken E2E City" });
+  const cityChange = page.locator("article.reviewCard").filter({ hasText: "Sample E2E City" });
   await expect(cityChange).toBeVisible();
   await cityChange.getByRole("button", { name: "Approve change" }).click();
   await expect(cityChange).toContainText("approved");
@@ -74,16 +74,16 @@ test("admin edits, reviews, diagnostics and audit survive reload", async ({ page
   await expect(page.getByText("CHANGE_APPROVED")).toBeVisible();
   await expect(page.getByText("DRAFT_SAVED").first()).toBeVisible();
 
-  await db.adminParserRun.create({ data: { festivalSlug: "wacken-open-air", sourceId: "e2e-source", adapter: "e2e-adapter", status: "FAILED", finishedAt: new Date(), durationMs: 17, message: "E2E adapter failure", log: [{ message: "fixture" }] } });
+  await db.adminParserRun.create({ data: { festivalSlug: "synthetic-fest", sourceId: "e2e-source", adapter: "e2e-adapter", status: "FAILED", finishedAt: new Date(), durationMs: 17, message: "E2E adapter failure", log: [{ message: "fixture" }] } });
   await page.reload();
   await page.getByRole("button", { name: "Parser diagnostics" }).click();
   await expect(page.getByText("E2E adapter failure")).toBeVisible();
   await page.getByRole("button", { name: "View parser log" }).click();
-  await expect(page.getByLabel("wacken-open-air parser log")).toContainText("fixture");
+  await expect(page.getByLabel("synthetic-fest parser log")).toContainText("fixture");
 
   const snapshot = await (await page.request.get("/api/admin")).json();
   expect(snapshot.drafts).toHaveLength(5);
-  expect(snapshot.resources.find((item) => item.resourceKind === "FESTIVAL")?.values.city).toBe("Wacken E2E City");
+  expect(snapshot.resources.find((item) => item.resourceKind === "FESTIVAL")?.values.city).toBe("Sample E2E City");
   expect(new Set(snapshot.drafts.map((item) => item.resourceKind))).toEqual(new Set(["FESTIVAL", "ARTIST", "LINK", "ASSET", "PLAYLIST"]));
 
   const sections = ["Review queue", "Festival submissions", "Festivals & artists", "Links & assets", "Parser diagnostics", "Audit history"];
@@ -110,7 +110,7 @@ test("editor identity is rendered truthfully", async ({ page }) => {
   await expect(page.locator(".adminRole")).toContainText("Editor · Review required");
   await expect(page.locator(".adminRole")).toContainText("browser-editor@example.test");
   await expect(page.getByRole("heading", { name: "Manual refresh" })).toHaveCount(0);
-  expect((await page.request.post("/api/admin/refresh/wacken-open-air")).status()).toBe(403);
+  expect((await page.request.post("/api/admin/refresh/synthetic-fest")).status()).toBe(403);
 });
 
 test("allowlisted USER cannot enter or mutate the admin console", async ({ page }) => {

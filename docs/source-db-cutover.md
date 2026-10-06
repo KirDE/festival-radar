@@ -1,5 +1,11 @@
 # Festival source configuration foundation (#210, phase 2a)
 
+> Historical migration record. Git catalogue inputs and the one-off import/backfill
+> commands described below were retired in the final #210 Git retirement.
+> These are not current operational instructions. Database readers, source administration,
+> asset storage, and workers remain the operational paths.
+
+
 This release adds nullable configuration/state columns and an optional edition relation to the existing FestivalSource table. The migration never reads repository data or replaces source rows; it can be deployed before any source cutover. The existing ingestion runner, admin reads, and deploy behaviour still read their previous sources. No scheduler or DB-backed runtime path is activated by this PR. New rows retain legacy strategies, refreshPolicy, editionYear and enabled for compatibility.
 
 ## One-time operator action (not part of deploy)

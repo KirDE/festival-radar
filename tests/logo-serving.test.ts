@@ -1,34 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import inventory from "../data/reviewed-logo-inventory.json";
-import { databaseLogoPath, reviewedLogoFile } from "../data/logo-serving.ts";
-import { festivalLogoPath, festivalLogoFallbacks } from "../data/festival-logos.ts";
 import { serveFestivalLogo } from "../lib/catalog/logo-serving.ts";
-
-const png = inventory.find((row) => row.mimeType === "image/png")!;
-const jpeg = inventory.find((row) => row.mimeType === "image/jpeg")!;
-async function fixture(row = png) {
-  return { ...row, bytes: await readFile(new URL(`../public/logos/${row.file}`, import.meta.url)), etag: `"${row.sha256}"` };
-}
+import { logoFixture } from "./support/logo-fixtures.ts";
+const png = await logoFixture();
+const jpeg = await logoFixture("image/jpeg");
+async function fixture(row = png) { return row; }
 function request(tag?: string, method = "GET") {
   return new Request("http://localhost/api/logos/test.png", { method, headers: tag ? { "If-None-Match": tag } : {} });
 }
-
-test("exact public references map to reviewed filenames; static references and initials stay intact", () => {
-  for (const row of inventory) {
-    const reference = festivalLogoPath(row.slug)!;
-    assert.equal(reference, `/logos/${row.file}`);
-    assert.equal(databaseLogoPath(reference), `/api/logos/${row.file}`);
-  }
-  for (const slug of festivalLogoFallbacks) {
-    assert.equal(festivalLogoPath(slug), null);
-    assert.equal(databaseLogoPath(`/logos/${slug}.png`), null);
-  }
-  for (const reference of ["https://example.org/logos/2000trees.png", "/private/2000trees.png", "/logos/../2000trees.png", "/logos/%32%30%30%30trees.png", "/logos/2000trees.png?x=1"]) {
-    assert.equal(databaseLogoPath(reference), null);
-  }
-});
 
 test("PNG/JPEG use actual stored MIME, exact bytes, ETag and revalidation cache policy", async () => {
   for (const row of [png, jpeg]) {
@@ -68,7 +48,6 @@ test("If-None-Match handles strong, weak, lists and wildcard with bodyless 304",
 
 test("invalid filenames never query DB; missing bindings return uncached 404 even for wildcard", async () => {
   for (const filename of ["../2000trees.png", "2000trees.png/extra", "%2e%2e", "2000trees.jpg", png.sha256, "2000trees.png?x", "2000trees.png\u0000", "2000trees.PNG"]) {
-    assert.equal(reviewedLogoFile(filename), null);
     const response = await serveFestivalLogo(request("*"), filename, async () => { throw new Error("must not query"); });
     assert.equal(response.status, 404);
     assert.equal(response.headers.get("cache-control"), "no-store");

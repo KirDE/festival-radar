@@ -8,30 +8,30 @@ const locales = {
 
 for (const [language, labels] of Object.entries(locales)) {
   test(`${language} artist routes survive navigation and direct reload`, async ({ page }) => {
-    await page.goto(`/${language}/festivals/wacken-open-air/`);
+    await page.goto(`/${language}/festivals/synthetic-fest/`);
     await expect(page.locator("html")).toHaveAttribute("lang", language);
-    await page.locator(`a[href="/${language}/artists/electric-callboy/"]`).first().click();
-    await expect(page).toHaveURL(new RegExp(`/${language}/artists/electric-callboy/$`));
+    await page.locator(`a[href="/${language}/artists/sample-artist/"]`).first().click();
+    await expect(page).toHaveURL(new RegExp(`/${language}/artists/sample-artist/$`));
     await expect(page.getByText(labels.recentSetlists, { exact: true })).toBeVisible();
 
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("lang", language);
     await expect(page.getByText(labels.profile, { exact: true })).toBeVisible();
 
-    await page.goto(`/${language}/artists/abbie-falls/`);
+    await page.goto(`/${language}/artists/second-artist/`);
     await expect(page.locator("html")).toHaveAttribute("lang", language);
     await expect(page.getByText(labels.profile, { exact: true })).toBeVisible();
   });
 }
 
 test("language switching preserves the current artist", async ({ page }) => {
-  await page.goto("/en/artists/electric-callboy/");
+  await page.goto("/en/artists/sample-artist/");
 
   for (const language of ["de", "ru", "en"]) {
     const picker = page.locator(".languagePicker select");
     await expect.poll(() => picker.evaluate((element) => Object.keys(element).some((key) => key.startsWith("__reactProps")))).toBe(true);
     await picker.selectOption(language);
-    await expect(page).toHaveURL(new RegExp(`/${language}/artists/electric-callboy/$`));
+    await expect(page).toHaveURL(new RegExp(`/${language}/artists/sample-artist/$`));
     await expect(page.locator("html")).toHaveAttribute("lang", language);
     await expect(page.getByText(locales[language].recentSetlists, { exact: true })).toBeVisible();
   }

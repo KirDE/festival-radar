@@ -7,9 +7,11 @@ import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { backfillCatalog } from "../lib/catalog/backfill.ts";
+import { requireLocalDisposableDatabase } from "./support/disposable-db.ts";
+requireLocalDisposableDatabase(process.env.DATABASE_URL);
+import { seedCatalog } from "./support/seed-catalog.ts";
 import { publishIngestionResult } from "../lib/catalog/publication.ts";
-import { catalogSeed } from "../lib/catalog/seed.ts";
+import { catalogSeed } from "./support/catalog.ts";
 import { createIngestionRun, persistAttempt } from "../lib/ingestion/repository.ts";
 import type { IngestionResult } from "../lib/ingestion/types.ts";
 
@@ -24,18 +26,18 @@ function result(artist: string, overrides: Partial<IngestionResult> = {}): Inges
   const fetchedAt = new Date().toISOString();
   return {
     schemaVersion: 1,
-    festivalSlug: "rockharz",
-    sourceUrl: "https://www.rockharz-festival.com/",
+    festivalSlug: "synthetic-fest",
+    sourceUrl: "https://festival.example.test/",
     fetchedAt,
     changes: [{ kind: "artist_added", field: "lineup", after: artist, reviewRequired: false }],
     candidate: {
       schemaVersion: 1,
-      festivalSlug: "rockharz",
-      sourceUrl: "https://www.rockharz-festival.com/",
+      festivalSlug: "synthetic-fest",
+      sourceUrl: "https://festival.example.test/",
       fetchedAt,
-      startDate: "2027-07-07",
+      startDate: "2027-06-10",
       lineup: [artist],
-      evidence: [{ field: "lineup", sourceUrl: "https://www.rockharz-festival.com/", observedAt: fetchedAt, excerpt: artist }],
+      evidence: [{ field: "lineup", sourceUrl: "https://festival.example.test/", observedAt: fetchedAt, excerpt: artist }],
       warnings: [],
       observedEditionYears: [2027],
     },
@@ -60,14 +62,14 @@ async function persist(value: IngestionResult) {
   });
 }
 
-test.before(async () => { await backfillCatalog(db, catalogSeed); });
+test.before(async () => { await seedCatalog(db, catalogSeed); });
 test.after(async () => {
-  await db.catalogPlaylistRefresh.deleteMany({ where: { publication: { sourceId: { startsWith: `ingestion:` } }, festivalSlug: "rockharz" } });
+  await db.catalogPlaylistRefresh.deleteMany({ where: { publication: { sourceId: { startsWith: `ingestion:` } }, festivalSlug: "synthetic-fest" } });
   if (createdArtists.length) {
     await db.lineupEntry.deleteMany({ where: { artist: { slug: { in: createdArtists } } } });
     await db.artist.deleteMany({ where: { slug: { in: createdArtists } } });
   }
-  await backfillCatalog(db, catalogSeed);
+  await seedCatalog(db, catalogSeed);
   await db.$disconnect();
 });
 
@@ -83,7 +85,7 @@ test("commits catalog rows, candidate state, audit snapshot and playlist request
   const stored = await db.ingestionCandidate.findUniqueOrThrow({ where: { attemptId: attempt.id } });
   assert.equal(stored.reviewState, "PUBLISHED");
   assert.equal(stored.catalogueVersion, publication.id);
-  const lineup = await db.lineupEntry.findFirst({ where: { edition: { festival: { slug: "rockharz" }, recordState: "CURRENT" }, artist: { name: artist } } });
+  const lineup = await db.lineupEntry.findFirst({ where: { edition: { festival: { slug: "synthetic-fest" }, recordState: "CURRENT" }, artist: { name: artist } } });
   assert.ok(lineup);
   const queued = await db.catalogPlaylistRefresh.findUniqueOrThrow({ where: { publicationId: publication.id } });
   assert.equal(queued.status, "PENDING");
@@ -105,7 +107,7 @@ test("fails closed and rolls back every catalog row when artist identity is ambi
   await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix }), /Artist slug collision/);
   assert.equal(await db.catalogPublication.count({ where: { sourceId: { startsWith: "ingestion:" }, evidence: { path: ["candidateId"], equals: (await db.ingestionCandidate.findUniqueOrThrow({ where: { attemptId: attempt.id } })).id } } }), 0);
   assert.equal((await db.ingestionCandidate.findUniqueOrThrow({ where: { attemptId: attempt.id } })).reviewState, "PENDING");
-  assert.equal(await db.lineupEntry.count({ where: { edition: { festival: { slug: "rockharz" } }, artist: { name: requestedName } } }), 0);
+  assert.equal(await db.lineupEntry.count({ where: { edition: { festival: { slug: "synthetic-fest" } }, artist: { name: requestedName } } }), 0);
 });
 
 test("reuses the canonical artist when the observed name differs only by case", async () => {
@@ -122,7 +124,7 @@ test("reuses the canonical artist when the observed name differs only by case", 
   assert.ok(publication);
   assert.equal(await db.artist.count({ where: { slug } }), 1);
   const edition = await db.festivalEdition.findFirstOrThrow({
-    where: { festival: { slug: "rockharz" }, recordState: "CURRENT" },
+    where: { festival: { slug: "synthetic-fest" }, recordState: "CURRENT" },
     select: { id: true },
   });
   const lineup = await db.lineupEntry.findUniqueOrThrow({ where: { editionId_artistId: { editionId: edition.id, artistId: canonical.id } } });
@@ -184,10 +186,10 @@ test("production Node exports playlist input from the committed database catalog
   const output = path.join(directory, "catalog.json");
   try {
     const execution = await execute(process.execPath, ["scripts/export-playlist-catalog.mjs", output], { env: process.env });
-    assert.match(execution.stdout, /Exported 52 festivals for 2027/);
+    assert.match(execution.stdout, /Exported 1 festivals for 2027/);
     const exported = JSON.parse(await readFile(output, "utf8"));
     assert.equal(exported.season, 2027);
-    assert.equal(exported.festivals.length, 52);
+    assert.equal(exported.festivals.length, catalogSeed.festivals.length);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

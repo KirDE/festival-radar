@@ -16,15 +16,24 @@ export function validateCutoverAudit(audit, commit, descendant = false) {
   }
 }
 
+// Also remove retired helpers from any stale standalone output copied to staging.
+const retiredReleasePaths = [
+  'data', 'public/logos', 'public/offline',
+  'lib/catalog/seed.ts', 'lib/catalog/backfill.ts', 'lib/catalog/logo-import.ts', 'lib/ingestion/publication.ts',
+  'scripts/backfill-catalog.ts', 'scripts/backfill-sources.ts', 'scripts/import-reviewed-logos.ts',
+  'scripts/fetch-festival-logos.mjs', 'scripts/import-operational-state.ts', 'scripts/audit-file-db-preservation.mjs',
+  'scripts/deploy/run-source-backfill.ts', 'scripts/deploy/run-reviewed-logo-import.ts',
+];
+
 export async function stripDynamicRelease(root) {
   // Strip legacy migration inputs after separately reviewed preservation/restore proof.
-  for (const relative of ['data', 'public/logos', 'public/offline', 'lib/catalog/seed.ts', 'lib/catalog/logo-import.ts', 'scripts/deploy/run-source-backfill.ts', 'scripts/deploy/run-reviewed-logo-import.ts']) {
+  for (const relative of retiredReleasePaths) {
     await rm(path.join(root, relative), { recursive: true, force: true });
   }
   await assertDynamicReleaseAbsent(root);
 }
 export async function assertDynamicReleaseAbsent(root) {
-  for (const relative of ['data', 'public/logos', 'public/offline', 'lib/catalog/seed.ts', 'lib/catalog/logo-import.ts']) {
+  for (const relative of retiredReleasePaths) {
     try { await lstat(path.join(root, relative)); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
     throw new Error('Dynamic catalogue remains in release: ' + relative);
   }

@@ -22,7 +22,7 @@ main_sha="$(curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
   | head -n 1)"
 [[ "$main_sha" == "$commit" ]] || { echo "commit is not the current main head" >&2; exit 4; }
 
-for asset in activate-release install-release.sh upgrade-deployment-assets start-logo-import; do
+for asset in activate-release install-release.sh upgrade-deployment-assets; do
   curl --fail --silent --show-error --proto '=https' --tlsv1.2 --max-time 20 \
     "https://raw.githubusercontent.com/$repository/$commit/scripts/deploy/$asset" \
     --output "$temporary/$asset"
@@ -31,7 +31,7 @@ for asset in activate-release install-release.sh upgrade-deployment-assets start
 done
 
 install -d -o root -g root -m 0755 "$destination"
-for asset in activate-release install-release.sh upgrade-deployment-assets start-logo-import; do
+for asset in activate-release install-release.sh upgrade-deployment-assets; do
   install -o root -g root -m 0755 "$temporary/$asset" "$destination/$asset"
 done
 printf '%s\n' "$commit" > "$destination/DEPLOYMENT_ASSETS_COMMIT"

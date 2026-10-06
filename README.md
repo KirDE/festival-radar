@@ -111,22 +111,16 @@ Store the resulting connection string as the protected `DATABASE_URL` secret.
 The bootstrap is idempotent; subsequent schema updates are applied by the
 checked-in Prisma migrations.
 
-The production catalogue lives in PostgreSQL. Repository files under `data/`
-are deterministic seed, parity, and test fixtures only. Production collection
-jobs resolve their catalogue input from the database.
+The catalogue, source configuration, logo bytes, and operational progress live in
+PostgreSQL. Live catalogue files and one-off Git import/backfill commands have
+been retired. Collection jobs require database-backed input; database failures
+fail closed. Generic parsers and small synthetic fixtures remain in the test suite.
 
-The staged PostgreSQL catalogue migration is tracked in
-[issue #195](https://github.com/KirDE/festival-radar/issues/195). Its additive
-foundation can be populated and checked without changing the current read path:
-
-```bash
-npm run catalog:backfill
-npm run catalog:verify
-```
-
-Both commands print a machine-readable parity report. See
-[`docs/catalog-database-migration.md`](docs/catalog-database-migration.md) for
-the cutover and rollback contract.
+For a migrated **local disposable test/integration database**, `npm run test:seed`
+resets the test catalogue to synthetic browser-test content. This helper is not packaged in releases
+and must never be used for production. `DB_ONLY_RELEASE=true` retains the existing
+preservation/restore receipt gate and archive checks. See
+[`docs/final-db-only-cutover-210.md`](docs/final-db-only-cutover-210.md).
 
 Festival ingestion runs daily and selects sources according to their adaptive
 daily, three-day, weekly, or archived cadence. Run one fixture-backed source

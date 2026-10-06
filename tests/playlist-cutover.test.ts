@@ -49,12 +49,12 @@ test('release preserves old cadence and supported consumers share the same proce
 });
 test('review commands are real, packaged, and CI DB tests generate/apply schema first', async () => {
   const pkg = JSON.parse(await readFile('package.json', 'utf8'));
-  for (const name of ['test:final-cutover', 'test:final-cutover-db', 'catalog:audit-final', 'operational:import', 'playlists:cutover']) assert.equal(typeof pkg.scripts[name], 'string');
+  for (const name of ['test:final-cutover', 'test:final-cutover-db', 'catalog:audit-final', 'playlists:cutover']) assert.equal(typeof pkg.scripts[name], 'string');
   assert.equal(pkg.scripts['pretest:final-cutover-db'], 'node scripts/prepare-cutover-test-db.mjs');
   const setup = await readFile('scripts/prepare-cutover-test-db.mjs', 'utf8');
   assert.match(setup, /\['generate'\]/); assert.match(setup, /\['migrate', 'deploy'\]/);
   const packager = await readFile('scripts/deploy/package-release.sh', 'utf8');
-  for (const file of ['import-operational-state.ts', 'audit-final-cutover.ts', 'playlist-cutover.ts', 'playlist-dispatch.ts']) assert.ok(packager.includes("grep -Fxq 'app/scripts/" + file + "'"));
+  for (const file of ['audit-final-cutover.ts', 'playlist-cutover.ts', 'playlist-dispatch.ts']) assert.ok(packager.includes("grep -Fxq 'app/scripts/" + file + "'"));
   for (const file of ['read-playlist-install-mode.ts', 'playlist-timer-install.sh']) assert.ok(packager.includes("grep -Fxq 'app/scripts/deploy/" + file + "'"));
   const deploy = await readFile('.github/workflows/deploy.yml', 'utf8');
   assert.match(deploy, /vars.DB_ONLY_RELEASE/); assert.match(deploy, /secrets.DB_ONLY_CUTOVER_ATTESTATION/);

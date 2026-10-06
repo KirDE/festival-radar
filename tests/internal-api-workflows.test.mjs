@@ -179,6 +179,7 @@ test("playlist route preserves locked legacy refresh until validated DB activati
 
 test("standalone release contains the production-local ingestion runner", async () => {
   const packager = await readFile("scripts/deploy/package-release.sh", "utf8");
-  assert.match(packager, /cp -a data lib/);
+  assert.match(packager, /cp -a lib/);
+  assert.doesNotMatch(packager, /cp -a data/);
   assert.match(packager, /scripts\/ingest-festivals\.mjs/);
 });

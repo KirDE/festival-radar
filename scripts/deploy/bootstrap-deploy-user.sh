@@ -14,7 +14,6 @@ install -o "$deploy_user" -g "$deploy_user" -m 0600 "$public_key" "$home/.ssh/au
 install -d -o root -g root -m 0755 /usr/local/libexec/festival-radar
 install -o root -g root -m 0755 scripts/deploy/install-release.sh /usr/local/libexec/festival-radar/install-release.sh
 install -o root -g root -m 0755 scripts/deploy/activate-release /usr/local/libexec/festival-radar/activate-release
-install -o root -g root -m 0755 scripts/deploy/start-logo-import /usr/local/libexec/festival-radar/start-logo-import
 install -o root -g root -m 0755 scripts/deploy/upgrade-deployment-assets /usr/local/libexec/festival-radar/upgrade-deployment-assets
 printf '%s\n' \
   'festival-radar-deploy ALL=(root) NOPASSWD: /usr/local/libexec/festival-radar/activate-release [0-9a-f]*' \

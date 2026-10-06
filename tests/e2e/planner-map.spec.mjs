@@ -28,7 +28,7 @@ for (const width of [320, 375, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/planner/");
     const markers = page.locator(".mapMarker summary");
-    await expect(markers).toHaveCount(17);
+    await expect(markers).toHaveCount(4);
     await expectNoDocumentOverflow(page);
 
     for (const index of await edgeMarkerIndexes(markers)) {
@@ -76,7 +76,7 @@ test("desktop map positioning and links remain operable", async ({ page }) => {
   await marker.click();
   const panel = marker.locator("xpath=../div");
   await expect(panel).toBeVisible();
-  await expect(panel.getByRole("link", { name: /Nova Rock/ })).toHaveAttribute("href", "/festivals/nova-rock/");
+  await expect(panel.getByRole("link", { name: /Synthetic Alpine/ })).toHaveAttribute("href", "/festivals/synthetic-alpine/");
   expect(await marker.locator("xpath=..").evaluate((element) => getComputedStyle(element).transform)).not.toBe("none");
   await expectNoDocumentOverflow(page);
 });

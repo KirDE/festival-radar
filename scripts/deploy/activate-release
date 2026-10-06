@@ -1,28 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-commit="${1:?usage: activate-release COMMIT [source-preview|source-apply|source-verify|source-diagnose|due-health|due-ingest-pilot|due-scheduler-health|due-switch-db|due-switch-legacy|logo-preview|logo-verify|logo-apply CONFIRMATION EXISTING EVIDENCE]}"
+commit="${1:?usage: activate-release COMMIT [due-health|due-ingest-pilot|due-scheduler-health|due-switch-db|due-switch-legacy]}"
 deploy_user="festival-radar-deploy"
 incoming="/var/lib/festival-radar-deploy/incoming"
 installer="/usr/local/libexec/festival-radar/install-release.sh"
 
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid commit" >&2; exit 2; }
 [[ "${SUDO_USER:-}" == "$deploy_user" ]] || { echo "unauthorized deploy caller" >&2; exit 3; }
-[[ $# == 1 || $# == 2 || ( $# == 5 && "$2" == logo-apply ) ]] || { echo "invalid activation arguments" >&2; exit 2; }
+[[ $# == 1 || $# == 2 ]] || { echo "invalid activation arguments" >&2; exit 2; }
 
 # Existing sudoers grant matches commit-prefixed arguments. Validate every token.
 exec 9>/run/festival-radar-activation.lock
 flock -n 9 || { echo "activation or source operation already running" >&2; exit 5; }
-if [[ $# == 5 ]]; then
-  [[ "$3" == "APPLY-47-$commit-$5" && "$4" =~ ^(0|47)$ && "$5" =~ ^[0-9a-f]{64}$ ]] || { echo 'logo apply authorization rejected' >&2; exit 2; }
-  flock -u 9
-  exec /usr/local/libexec/festival-radar/start-logo-import "$commit" apply "$3" "$4" "$5"
-fi
 if [[ $# == 2 ]]; then
-  if [[ "$2" == logo-preview || "$2" == logo-verify ]]; then
-    flock -u 9
-    exec /usr/local/libexec/festival-radar/start-logo-import "$commit" "${2#logo-}"
-  fi
   if [[ "$2" == due-switch-db || "$2" == due-switch-legacy || "$2" == due-scheduler-health || "$2" == due-legacy-artifact-diagnose || "$2" == due-reset-legacy-failed || "$2" == due-pause-legacy-timer ]]; then
     # The switch retakes the deployment lock and also holds the shared source
     # lock across mode change and timer/service verification. A deployment
@@ -46,137 +37,7 @@ if [[ $# == 2 ]]; then
     fi
     exec /usr/local/libexec/festival-radar/start-db-due "$commit" ingest-pilot
   fi
-  case "$2" in
-    source-preview|source-apply|source-verify|source-diagnose) mode="${2#source-}" ;;
-    *) echo "invalid source operation" >&2; exit 2 ;;
-  esac
-  root=/opt/festival-radar
-  release="$root/releases/$commit"
-  [[ "$(readlink -f "$root/current" 2>/dev/null || true)" == "$release" ]] || { echo "deployed commit mismatch" >&2; exit 4; }
-  [[ -f "$release/DEPLOYED_COMMIT" && "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" ]] || { echo "release marker mismatch" >&2; exit 4; }
-  [[ -f "$release/scripts/deploy/run-source-backfill.ts" ]] || { echo "source operation not packaged" >&2; exit 4; }
-  [[ -f /etc/systemd/system/festival-radar-source-backfill@.service ]] || { echo "source unit not installed" >&2; exit 4; }
-  if [[ "$mode" == diagnose ]]; then
-    # Inspect only the preview unit, never invoke it or access its environment.
-    # The three exact-field selectors followed by -u expose which journald
-    # metadata is actually present. Each is a bounded sample, not a full count.
-    unit=festival-radar-source-backfill@preview.service
-    [[ -x "$release/.runtime/node" ]] || { echo "source diagnostic runtime unavailable" >&2; exit 6; }
-    for selector in exact stdout unit unit-expanded; do
-      case "$selector" in
-        exact) fields=("_SYSTEMD_UNIT=$unit" _TRANSPORT=stdout _COMM=node) ;;
-        stdout) fields=("_SYSTEMD_UNIT=$unit" _TRANSPORT=stdout) ;;
-        unit) fields=("_SYSTEMD_UNIT=$unit") ;;
-        unit-expanded) fields=(-u "$unit") ;;
-      esac
-      # Neither journalctl stderr nor any journal content can reach the caller.
-      # The parser emits only fixed labels and numeric counts for allowlisted
-      # transport/comm classes, including unexpected and absent values.
-      if ! summary="$(journalctl -q --no-pager -o json --output-fields=_TRANSPORT,_COMM --since '-2 hours' -n 200 "${fields[@]}" 2>/dev/null | "$release/.runtime/node" -e '
-        let input = "", count = 0;
-        const transports = { stdout: 0, journal: 0, syslog: 0, other: 0, missing: 0 };
-        const comms = { node: 0, systemd: 0, other: 0, missing: 0 };
-        process.stdin.setEncoding("utf8");
-        process.stdin.on("data", chunk => { input += chunk; if (input.length > 4000000) process.exit(1); });
-        process.stdin.on("end", () => {
-          try {
-            for (const line of input.split("\n")) {
-              if (!line) continue;
-              const record = JSON.parse(line);
-              count++;
-              const transport = typeof record._TRANSPORT === "string" ? record._TRANSPORT : "missing";
-              const comm = typeof record._COMM === "string" ? record._COMM : "missing";
-              transports[Object.hasOwn(transports, transport) ? transport : "other"]++;
-              comms[Object.hasOwn(comms, comm) ? comm : "other"]++;
-            }
-            console.log("sample=" + count + " transport_stdout=" + transports.stdout + " transport_journal=" + transports.journal + " transport_syslog=" + transports.syslog + " transport_other=" + transports.other + " transport_missing=" + transports.missing + " comm_node=" + comms.node + " comm_systemd=" + comms.systemd + " comm_other=" + comms.other + " comm_missing=" + comms.missing);
-          } catch { process.exitCode = 1; }
-        });
-      ' 2>/dev/null)"; then
-        echo "source diagnostic journal unavailable" >&2
-        exit 6
-      fi
-      printf 'SOURCE_DIAG %s %s\n' "$selector" "$summary"
-    done
-    exit 0
-  fi
-  unit="festival-radar-source-backfill@$mode.service"
-  # A oneshot unit may not retain an InvocationID after start. Share a fresh
-  # nonce with PID 1 using a root-owned file, never on a command line.
-  nonce_dir=/run/festival-radar-source-backfill
-  if [[ ! -e "$nonce_dir" && ! -L "$nonce_dir" ]]; then
-    mkdir -m 0700 -- "$nonce_dir" || { echo "source environment directory unavailable" >&2; exit 6; }
-  fi
-  [[ -d "$nonce_dir" && ! -L "$nonce_dir" && "$(stat -c %u:%a -- "$nonce_dir")" == 0:700 ]] || { echo "source environment directory unsafe" >&2; exit 6; }
-  nonce="$(od -An -N32 -tx1 /dev/urandom | tr -d '[:space:]')" || { echo "source nonce unavailable" >&2; exit 6; }
-  [[ "$nonce" =~ ^[0-9a-f]{64}$ ]] || { echo "source nonce invalid" >&2; exit 6; }
-  env_file="$nonce_dir/$mode.env"
-  audit_file="$nonce_dir/$mode.audit"
-  temp_file="$(mktemp "$nonce_dir/.$mode.XXXXXXXX")" || { echo "source environment unavailable" >&2; exit 6; }
-  trap 'rm -f -- "$temp_file" "$env_file" "$audit_file"' EXIT
-  printf 'SOURCE_BACKFILL_NONCE=%s\n' "$nonce" > "$temp_file"
-  [[ "$(stat -c %u:%a -- "$temp_file")" == 0:600 ]] || { echo "source environment unsafe" >&2; exit 6; }
-  mv -fT -- "$temp_file" "$env_file"
-  # PID 1 opens StandardOutput=append before dropping the service credentials.
-  # Atomically replace the previous audit with a fresh root-owned 0600 file.
-  temp_file="$(mktemp "$nonce_dir/.$mode.XXXXXXXX")" || { echo "source audit unavailable" >&2; exit 6; }
-  [[ "$(stat -c %u:%a -- "$temp_file")" == 0:600 ]] || { echo "source audit unsafe" >&2; exit 6; }
-  mv -fT -- "$temp_file" "$audit_file"
-  # systemctl may relay unit errors containing protected configuration.
-  result=0
-  if ! systemctl start "$unit" >/dev/null 2>&1; then
-    echo "source operation systemctl start failed" >&2
-    result=6
-  fi
-  # The private file is the only audit transport. Reject unsafe or oversized
-  # output without printing raw unit output, logs, or database errors.
-  [[ -f "$audit_file" && ! -L "$audit_file" && "$(stat -c %u:%a -- "$audit_file" 2>/dev/null)" == 0:600 ]] || { echo "source audit unsafe" >&2; exit 6; }
-  audit_size="$(stat -c %s -- "$audit_file" 2>/dev/null)" || { echo "source audit unreadable" >&2; exit 6; }
-  [[ "$audit_size" =~ ^[0-9]+$ ]] && (( audit_size > 0 && audit_size <= 65536 )) || { echo "source audit empty or oversized" >&2; exit 6; }
-  # Bash command substitution silently discards NUL; reject it before parsing.
-  if ! (tr -d '\000' < "$audit_file" | cmp -s -- "$audit_file" -) 2>/dev/null; then
-    echo "source audit unreadable or binary" >&2; exit 6
-  fi
-  entries="$(head -c 65537 -- "$audit_file" 2>/dev/null)" || { echo "source audit unreadable" >&2; exit 6; }
-  [[ ${#entries} -le 65536 ]] || { echo "source audit oversized" >&2; exit 6; }
-  [[ "$(stat -c %s -- "$audit_file" 2>/dev/null)" == "$audit_size" ]] || { echo "source audit changed" >&2; exit 6; }
-  # Only the complete legacy conflict scan may expose a fixed numeric summary.
-  # Other failures have neither counts nor a measured drift.
-  audit_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(ok|review-required)","counts":\{"insert":[0-9]+,"fill":[0-9]+,"preserve":[0-9]+\},"drift":[0-9]+\}$|^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"(migration-missing|migration-check-error|database-or-unknown-error|guard-or-data-error|disconnect-error|seed-validation|duplicate-source|missing-enabled-festival|missing-edition|binding-conflict|unresolved-drift)","drift":null\}$'
-  # At most twenty fixed-width numeric tuples; no dynamic JSON keys/strings.
-  tuple='\[(0|[1-9][0-9]{0,3}),-?(0|[1-9][0-9]{0,9}),[0-4],(0|[1-9]|[12][0-9]|3[01])\]'
-  conflict_pattern='^SOURCE_BACKFILL_AUDIT \{"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'","status":"legacy-config-conflict","conflictSummary":\{"affectedRows":([1-9]|1[0-9]|20),"editionYear":([0-9]|1[0-9]|20),"refreshPolicy":([0-9]|1[0-9]|20),"strategies":([0-9]|1[0-9]|20),"digest":\[('"$tuple"'(,'"$tuple"'){0,19})\]\},"drift":null\}$'
-  audit=""
-  line_count=0
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    (( ++line_count <= 200 && ${#line} <= 1024 )) || { echo "source audit bounds exceeded" >&2; exit 6; }
-    if [[ "$line" =~ $conflict_pattern ]]; then
-      affected="${BASH_REMATCH[1]}"
-      digest="${BASH_REMATCH[5]}"
-      remaining="$digest"
-      seen=0 previous=-1
-      # The regular expression above has already constrained all characters.
-      while [[ -n "$remaining" ]]; do
-        [[ "$remaining" =~ ^$tuple(,|$) ]] || { echo "source audit digest invalid" >&2; exit 6; }
-        index=$((10#${BASH_REMATCH[1]}))
-        (( index > previous )) || { echo "source audit digest order invalid" >&2; exit 6; }
-        previous=$index
-        (( ++seen <= 20 )) || { echo "source audit digest bound exceeded" >&2; exit 6; }
-        remaining="${remaining#"${BASH_REMATCH[0]}"}"
-      done
-      (( seen == affected )) || { echo "source audit digest count invalid" >&2; exit 6; }
-    fi
-    if [[ "$line" =~ $audit_pattern || "$line" =~ $conflict_pattern ]]; then
-      [[ -z "$audit" ]] || { echo "source audit ambiguous" >&2; exit 6; }
-      audit="$line"
-    fi
-  done <<< "$entries"
-  [[ -n "$audit" ]] || { echo "source audit no marker" >&2; exit 6; }
-  # Strip the exact nonce field only after matching the entire runner record.
-  audit_prefix='SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'","nonce":"'"$nonce"'",'
-  printf '%s\n' 'SOURCE_BACKFILL_AUDIT {"operation":"festival-source-backfill","mode":"'"$mode"'",'"${audit#"$audit_prefix"}"
-  if [[ "$audit" == *'"status":"ok"'* && "$result" == 0 ]]; then exit 0; fi
-  exit 6
+  echo "invalid operation" >&2; exit 2
 fi
 
 archive="$incoming/$commit.tar.gz"

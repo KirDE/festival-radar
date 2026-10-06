@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getFestivalSource } from "../data/festival-sources.ts";
+import { parserSource as getFestivalSource } from "./support/parser-source.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 
 const card = (slug, name, country, tier = "white") => `
@@ -31,9 +31,6 @@ const markup = `
 
 test("Rock for People extracts the edition-matched lineup and official billing tiers", () => {
   const source = getFestivalSource("rock-for-people");
-  assert.deepEqual(source?.strategies, ["official_markup"]);
-  assert.equal(source?.refreshPolicy, "daily");
-  assert.equal(source?.fetchUrl, "https://rockforpeople.cz/lineup/");
   const candidate = extractFestivalCandidate(markup, source, "2026-09-30T08:40:00Z");
   assert.deepEqual(candidate.observedEditionYears, [2027]);
   assert.deepEqual(candidate.headliners, ["blink-182", "Faith No More"]);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getFestivalSource } from "../data/festival-sources.ts";
+import { parserSource as getFestivalSource } from "./support/parser-source.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 
 const markup = `
@@ -22,7 +22,6 @@ const markup = `
 for (const slug of ["rock-am-ring", "rock-im-park"]) {
   test(`${slug} uses trusted schedule-aware lineup markup`, () => {
     const source = getFestivalSource(slug);
-    assert.deepEqual(source?.strategies, ["official_markup"]);
     const candidate = extractFestivalCandidate(markup, source, "2026-09-15T13:20:00Z");
     assert.equal(candidate.startDate, "2027-06-04");
     assert.equal(candidate.endDate, "2027-06-06");

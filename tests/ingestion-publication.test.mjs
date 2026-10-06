@@ -1,84 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { test } from "node:test";
-
-async function setup(html) {
-  const dir = await mkdtemp(path.join(tmpdir(), "ingestion-"));
-  await writeFile(path.join(dir, "fixture.html"), html);
-  await writeFile(path.join(dir, "publications.json"), '{"schemaVersion":1,"festivals":{}}\n');
-  return dir;
-}
-function run(dir, slug, publish = false) {
-  const args = ["scripts/ingest-festivals.mjs", `--slug=${slug}`, `--fixture=${path.join(dir, "fixture.html")}`, `--publications=${path.join(dir, "publications.json")}`, `--history=${path.join(dir, "history.jsonl")}`, `--output=${path.join(dir, `out-${Date.now()}`)}`];
-  if (publish) args.push("--publish");
-  const result = spawnSync(process.execPath, args, {
-    encoding: "utf8",
-    env: { ...process.env, DATABASE_URL: "" },
-  });
-  assert.equal(result.status, 0, result.stderr);
-  return JSON.parse(result.stdout);
-}
-const safe = '<meta name="festival:city" content="Ballenstedt"><script type="application/ld+json">{"@type":"MusicEvent","startDate":"2027-07-07","endDate":"2027-07-10","performer":[{"name":"New Safe Band"}]}</script>';
-
-test("dry-run is observable and leaves overlay unchanged", async () => {
-  const dir = await setup(safe); const summary = run(dir, "rockharz");
-  assert.equal(summary.dryRun, true); assert.equal(summary.published, 0);
-  assert.deepEqual(JSON.parse(await readFile(path.join(dir, "publications.json"), "utf8")).festivals, {});
-});
-test("safe publication is durable, auditable and idempotent", async () => {
-  const dir = await setup(safe); assert.equal(run(dir, "rockharz", true).published, 1);
-  assert.ok(JSON.parse(await readFile(path.join(dir, "publications.json"), "utf8")).festivals.rockharz.lineup.includes("New Safe Band"));
-  const record = JSON.parse((await readFile(path.join(dir, "history.jsonl"), "utf8")).trim());
-  assert.equal(record.sourceUrl, "https://www.rockharz-festival.com/"); assert.equal(record.outcome, "published");
-  assert.equal(run(dir, "rockharz", true).published, 0);
-});
-test("review-required removal is never published", async () => {
-  const dir = await setup('<script type="application/ld+json">{"@type":"MusicEvent","startDate":"2027-07-28","endDate":"2027-07-31","performer":[{"name":"Electric Callboy"}]}</script>');
-  assert.equal(run(dir, "wacken-open-air", true).published, 0);
-  assert.deepEqual(JSON.parse(await readFile(path.join(dir, "publications.json"), "utf8")).festivals, {});
-});
-
-test("policy-accepted source failure is reported as PARTIAL without failing downstream workflow", async () => {
-  const dir = await setup(safe);
-  const output = path.join(dir, "partial-output");
-  const result = spawnSync(process.execPath, [
-    "scripts/ingest-festivals.mjs",
-    "--slug=rockharz",
-    `--fixture=${path.join(dir, "missing-fixture.html")}`,
-    `--publications=${path.join(dir, "publications.json")}`,
-    `--history=${path.join(dir, "history.jsonl")}`,
-    `--output=${output}`,
-    "--max-fetch-errors=1",
-  ], { encoding: "utf8", env: { ...process.env, DATABASE_URL: "" } });
-  assert.equal(result.status, 0, result.stderr);
-  const summary = JSON.parse(result.stdout);
-  assert.equal(summary.status, "PARTIAL");
-  assert.equal(summary.totalSources, 1);
-  assert.equal(summary.attempted, 1);
-  assert.equal(summary.processed, 0);
-  assert.equal(summary.fetchErrors, 1);
-  assert.equal(JSON.parse(await readFile(path.join(output, "summary.json"), "utf8")).status, "PARTIAL");
-});
-
-test("source failures above the explicit policy threshold remain fatal", async () => {
-  const dir = await setup(safe);
-  const result = spawnSync(process.execPath, [
-    "scripts/ingest-festivals.mjs",
-    "--slug=rockharz",
-    `--fixture=${path.join(dir, "missing-fixture.html")}`,
-    `--publications=${path.join(dir, "publications.json")}`,
-    `--history=${path.join(dir, "history.jsonl")}`,
-    `--output=${path.join(dir, "failed-output")}`,
-    "--max-fetch-errors=0",
-  ], { encoding: "utf8", env: { ...process.env, DATABASE_URL: "" } });
-  assert.equal(result.status, 2, result.stderr);
-  const summary = JSON.parse(result.stdout);
-  assert.equal(summary.status, "FAILED");
-  assert.equal(summary.fetchErrors, 1);
-});
+const execute = promisify(execFile);
 
 test("workflow keeps auditable publication and artifact handling after accepted partial runs", async () => {
   const workflow = await readFile(".github/workflows/ingestion.yml", "utf8");
@@ -88,13 +15,18 @@ test("workflow keeps auditable publication and artifact handling after accepted 
   assert.match(workflow, /name: Retain review and diagnostic artifacts[\s\S]*if: always\(\)/);
 });
 
-test("ingestion without database does not use file sources outside fixtures", async () => {
+
+test("ingestion requires DB-backed sources even with explicit local HTML", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "ingestion-no-db-"));
   const output = path.join(dir, "output");
-  const result = spawnSync(process.execPath, ["scripts/ingest-festivals.mjs", "--slug=rockharz", "--output=" + output], {
-    encoding: "utf8", env: { ...process.env, DATABASE_URL: "" },
-  });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Database-backed sources are required/);
-  await assert.rejects(readFile(path.join(output, "summary.json"), "utf8"), { code: "ENOENT" });
+  const fixture = path.join(dir, "fixture.html");
+  try {
+    await writeFile(fixture, "<h1>Synthetic festival</h1>");
+    for (const fixtureArgs of [[], [`--fixture=${fixture}`]]) {
+      await assert.rejects(execute(process.execPath, ["scripts/ingest-festivals.mjs", `--output=${output}`, ...fixtureArgs], {
+        env: { ...process.env, DATABASE_URL: "" },
+      }), error => /Database-backed sources require DATABASE_URL/.test(error.stderr));
+      await assert.rejects(readFile(path.join(output, "summary.json"), "utf8"), { code: "ENOENT" });
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });

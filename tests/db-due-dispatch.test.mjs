@@ -43,7 +43,7 @@ test('manual unit is fixed-mode, read-only except private temporary output, and 
   const cleanup = installer.slice(installer.indexOf('cleanup_install()'), installer.indexOf('trap cleanup_install EXIT'));
   assert.match(cleanup, /if \[\[ "\$status" -ne 0 \]\]; then/);
   assert.match(cleanup, /if \[\[ "\$db_due_assets_armed" == true \]\]; then\s+db_due_restore_assets "\$db_due_unit" "\$db_due_wrapper" "\$db_due_backup"/);
-  assert.match(cleanup, /if \[\[ "\$logo_import_unit_armed" == true \|\| "\$db_due_assets_armed" == true \|\| "\$scheduler_assets_armed" == true \]\]; then\s+systemctl daemon-reload/);
+  assert.match(cleanup, /if \[\[ "\$db_due_assets_armed" == true \|\| "\$scheduler_assets_armed" == true \]\]; then\s+systemctl daemon-reload/);
   assert.ok(installer.includes('ExecStart=$release/scripts/deploy/run-db-due-operation.sh %i $commit'));
   assert.doesNotMatch(installer, /systemctl enable[^\n]*db-due/);
   assert.ok(installer.includes('User=www-data') && installer.includes('ProtectSystem=strict'));
@@ -69,7 +69,7 @@ test('failed cleanup restores DB due only when armed; success never restores', a
     ]) {
       const script = 'set -euo pipefail; ' + cleanup + '\n' +
         'db_due_restore_assets() { printf "restore\n"; }; systemctl() { printf "%s\n" "$*"; }; ' +
-        'scheduler_assets_armed=false; scheduler_backup=""; logo_import_unit_armed=false; logo_import_backup=""; ' +
+        'scheduler_assets_armed=false; scheduler_backup=""; ' +
         'db_due_assets_armed="$ARMED"; db_due_unit=unit; db_due_wrapper=wrapper; db_due_backup=""; ' +
         'archive="$TEMP/archive"; env_source="$TEMP/env"; ' +
         (failed ? 'false || cleanup_install' : 'cleanup_install');

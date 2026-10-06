@@ -1,5 +1,11 @@
 # Reviewed festival logo import (#210 phase 5)
 
+> Historical migration record. Git catalogue inputs and the one-off import/backfill
+> commands described below were retired in the final #210 Git retirement.
+> These are not current operational instructions. Database readers, source administration,
+> asset storage, and workers remain the operational paths.
+
+
 The original importer remains **local staging only** with its disposable-database guard. A separate manual production operation supports fixed `preview`, `apply`, and `verify` modes through the root-owned dispatcher and deployed release unit. This PR implements that operation; it does not execute it. The UI still reads static `/logos/<slug>.png` and the five fallback festivals still render initials. No arbitrary URL fetching, asset deletion, route changes, or automatic logo timer is included. DB serving requires a separately reviewed cutover plan.
 
 ## Reviewed source

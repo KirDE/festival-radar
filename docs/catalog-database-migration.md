@@ -1,5 +1,11 @@
 # Catalogue database migration
 
+> Historical migration record. Git catalogue inputs and the one-off import/backfill
+> commands described below were retired in the final #210 Git retirement.
+> These are not current operational instructions. Database readers, source administration,
+> asset storage, and workers remain the operational paths.
+
+
 Issue [#195](https://github.com/KirDE/festival-radar/issues/195) tracks the staged move from repository data files to PostgreSQL.
 
 ## Phase 1: foundation

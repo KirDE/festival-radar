@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 for (const width of [320, 375, 390]) {
   test(`similar festivals stays inside the mobile page at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
-    await page.goto("/en/festivals/rock-am-ring/");
+    await page.goto("/en/festivals/synthetic-fest/");
 
     const recommendations = page.locator(".recommendations");
     await expect(recommendations.getByRole("heading", { name: "Similar festivals" })).toBeVisible();
@@ -30,6 +30,6 @@ for (const width of [320, 375, 390]) {
     expect(geometry.left, JSON.stringify(geometry)).toBeGreaterThanOrEqual(0);
     expect(geometry.right, JSON.stringify(geometry)).toBeLessThanOrEqual(width);
     expect(geometry.columns.split(" ")).toHaveLength(1);
-    await expect(page.getByRole("heading", { level: 1, name: "Rock am Ring" })).toBeInViewport();
+    await expect(page.getByRole("heading", { level: 1, name: "Synthetic Fest" })).toBeInViewport();
   });
 }

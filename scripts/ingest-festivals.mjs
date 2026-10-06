@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { listConfiguredSources } from "../lib/sources/repository.ts";
@@ -13,14 +13,11 @@ import { readCatalog } from "../lib/catalog/repository.ts";
 import { claimDueSources, completeSourceLease, releaseOwnedSourceLease, startSourceLeaseRenewal } from "../lib/ingestion/lease.ts";
 import { randomUUID } from "node:crypto";
 import { createIngestionRun, finishIngestionRun, ingestionQueries, persistAttempt } from "../lib/ingestion/repository.ts";
-import { applyPublication, historyRecord } from "../lib/ingestion/publication.ts";
 
 const args = new Set(process.argv.slice(2));
 const slugArg = process.argv.find((value) => value.startsWith("--slug="))?.slice(7);
 const outputArg = process.argv.find((value) => value.startsWith("--output="))?.slice(9);
 const outputDirectory = path.resolve(outputArg || "outputs/ingestion");
-const publicationsPath = path.resolve(process.argv.find((value) => value.startsWith("--publications="))?.slice(15) || "data/ingestion-publications.json");
-const historyPath = path.resolve(process.argv.find((value) => value.startsWith("--history="))?.slice(10) || "data/ingestion-history.jsonl");
 const fixturePath = process.argv.find((value) => value.startsWith("--fixture="))?.slice(10);
 const publish = args.has("--publish");
 const force = args.has("--force");
@@ -32,11 +29,10 @@ const failureThresholdArg = process.argv.find((value) => value.startsWith("--fai
 const failureThreshold = Number(failureThresholdArg);
 if (!Number.isInteger(failureThreshold) || failureThreshold < 1) throw new Error(`Invalid consecutive failure threshold: ${failureThresholdArg}`);
 const persistenceEnabled = Boolean(process.env.DATABASE_URL);
-// The file catalogue is available only to explicit local fixtures. A live DB
-// failure must never select stale repository sources or publish from them.
-if (!persistenceEnabled && !fixturePath) throw new Error("Database-backed sources are required outside explicit local fixtures");
-const runtimeFestivals = persistenceEnabled ? (await readCatalog({ database: db })).festivals : (await import("../data/festivals.ts")).festivals;
-const configuredSources = dbDue ? [] : persistenceEnabled ? await listConfiguredSources(db) : (await import("../data/festival-sources.ts")).festivalSources;
+// Sources and catalogue always come from the database, including --fixture HTML runs.
+if (!persistenceEnabled) throw new Error("Database-backed sources require DATABASE_URL");
+const runtimeFestivals = (await readCatalog({ database: db })).festivals;
+const configuredSources = dbDue ? [] : await listConfiguredSources(db);
 if (persistenceEnabled && !dbDue && configuredSources.length === 0) throw new Error("No configured database sources");
 const dueOnly = args.has("--due") && !force;
 const persistedStates = dueOnly && persistenceEnabled ? await ingestionQueries.sourceStates(db) : [];
@@ -105,8 +101,6 @@ if (!dbDue) await mkdir(outputDirectory, { recursive: true });
 const trigger = process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL";
 if (!dbDue && persistenceEnabled) run = await createIngestionRun(db, { trigger, sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length });
 const summary = { schemaVersion: 1, ingestionRunId: run?.id ?? null, generatedAt: new Date().toISOString(), dryRun: !publish, totalSources: selected.length, attempted: 0, processed: 0, changed: 0, publishable: 0, published: 0, playlistRefreshRequested: 0, reviewRequired: 0, fetchErrors: 0, escalatedFailures: 0, notificationEvents: 0, maxFetchErrors, failureThreshold, status: "RUNNING", results: [] };
-let publicationStore = persistenceEnabled ? null : JSON.parse(await readFile(publicationsPath, "utf8"));
-const history = [];
 
 for (const source of selected) {
   let leaseCompleted = false;
@@ -181,13 +175,7 @@ for (const source of selected) {
     catalogPublication = attempt
       ? await publishIngestionResult(db, { attemptId: attempt.id, result, sourceCommit: process.env.GITHUB_SHA || "local", ...(sourceLease ? { sourceLease, notificationEvents: stagedNotificationEvents } : {}) })
       : null;
-    let fileChanged = false;
-    if (!persistenceEnabled) {
-      const nextStore = applyPublication(publicationStore, current, result);
-      fileChanged = JSON.stringify(nextStore) !== JSON.stringify(publicationStore);
-      if (fileChanged) publicationStore = nextStore;
-    }
-    if (catalogPublication || (!persistenceEnabled && fileChanged)) {
+    if (catalogPublication) {
       publicationCommitted = Boolean(catalogPublication);
       if (dbDue) summary.notificationEvents += uniqueNotificationEvents(stagedNotificationEvents).length;
       summary.published += 1;
@@ -213,7 +201,6 @@ for (const source of selected) {
     else outcome = "unchanged";
   }
   failureStage = "result_recording";
-  history.push(historyRecord(result, outcome));
   const lastExtraction = persistenceEnabled ? await ingestionQueries.lastSuccessfulExtraction(db, source.festivalSlug) : null;
   summary.results.push({ festivalSlug: source.festivalSlug, status, outcome, catalogPublicationId: catalogPublication?.id ?? null, playlistRefreshRequested: catalogPublication?.playlistRefreshRequested ?? false, catalogFields: catalogPublication?.fields ?? [], extractionPath: source.strategies, manualReviewReason: source.manualReviewReason ?? null, evidenceFields: candidate.evidence.map(({ field }) => field), lastSuccessfulExtraction: lastExtraction?.observedAt.toISOString() ?? (candidate.evidence.length ? fetchedAt : null), changes: result.changes.length, reviewReasons: result.reviewReasons });
   if (sourceLease && !leaseCompleted) {
@@ -245,8 +232,6 @@ if (run) {
   }
 }
 summary.status = summary.fetchErrors === 0 ? "COMPLETED" : summary.fetchErrors <= maxFetchErrors && summary.escalatedFailures === 0 ? "PARTIAL" : "FAILED";
-if (publish && !persistenceEnabled) await writeFile(publicationsPath, `${JSON.stringify(publicationStore, null, 2)}\n`);
-if (!persistenceEnabled && history.length) await appendFile(historyPath, `${history.map((record) => JSON.stringify(record)).join("\n")}\n`);
 await writeFile(path.join(outputDirectory, "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
 console.log(JSON.stringify(summary));
 if (summary.status === "FAILED") process.exitCode = 2;
