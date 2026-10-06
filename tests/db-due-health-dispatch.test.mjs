@@ -28,7 +28,8 @@ test('dispatch has no inputs, runs on main in protected production and calls onl
   assert.match(upgrade, /for asset in activate-release install-release\.sh upgrade-deployment-assets/);
   assert.match(installer, /install -o root -g root -m 0755 "\$release\/scripts\/deploy\/start-db-due" "\$db_due_wrapper"/);
   assert.match(installer, /StandardOutput=append:\/run\/festival-radar-db-due\/%i\.audit/);
-  assert.doesNotMatch(installer, /systemctl enable[^\n]*db-due/);
+  assert.match(installer, /if \[\[ "\$db_due_timer_was_armed" == true \]\]/);
+  assert.match(installer, /DB-due exact-SHA closure probe failed/);
 });
 
 test('deploy-user sudo entrypoint permits only fixed health and passes SHA unchanged', async () => {

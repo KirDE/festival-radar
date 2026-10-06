@@ -15,3 +15,6 @@ new decisions supersede prior candidate versions.
 Operational queries are exported by `lib/ingestion/repository.ts`: latest result, run history,
 candidate history and diff history per festival. `IngestionSourceState.lastSuccessfulCheck` is
 updated in the same transaction as every successful attempt, so scheduling survives deployments.
+
+For bounded, read-only agent triage exports and the independent verification workflow,
+see [Agent-owned ingestion review queue](ingestion-agent-review.md).

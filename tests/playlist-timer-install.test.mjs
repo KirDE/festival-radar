@@ -51,6 +51,7 @@ async function fixture(t, { rows = [{ payload: receipt }], states = {}, proofErr
   await writeFile(dir + '/scheduler/last-tick', 'old heartbeat');
   await writeFile(dir + '/app/shared/ingestion/source-fetch.lock', '', { mode: 0o640 });
   await writeFile(dir + '/units/' + due, 'old due unit');
+  await writeFile(dir + '/units/festival-radar-collection-ingestion.timer', 'old legacy ingestion timer');
   const sha = 'c'.repeat(40); // The activation SHA intentionally differs.
   const oldRelease = dir + '/app/releases/' + 'e'.repeat(40);
   if (previous) {
@@ -70,7 +71,7 @@ exit 0
     'db-due-scheduler-assets.sh'];
   for (const script of scripts) await writeFile(stage + '/scripts/deploy/' + script,
     mapped(await readFile('scripts/deploy/' + script, 'utf8')));
-  for (const script of ['start-db-due', 'db-due-scheduler', 'reconfigure-webserver.sh'])
+  for (const script of ['start-db-due', 'db-due-scheduler', 'check-db-due-tick-ready', 'reconfigure-webserver.sh'])
     await writeFile(stage + '/scripts/deploy/' + script, '#!/bin/bash\nexit 0\n', { mode: 0o755 });
   await writeFile(stage + '/node_modules/@prisma/client/package.json', '{"type":"module","exports":"./index.js"}');
   await writeFile(stage + '/node_modules/@prisma/client/index.js', `
@@ -119,7 +120,8 @@ case "$1" in
     ;;
 esac
 `, { mode: 0o755 });
-  const initial = { [legacy]: 'enabled active', [database]: 'enabled active', [due]: 'enabled active', ...states };
+  const initial = { [legacy]: 'enabled active', [database]: 'enabled active',
+    [due]: 'disabled inactive', 'festival-radar-collection-ingestion.timer': 'disabled inactive', ...states };
   for (const [unit, state] of Object.entries(initial)) {
     if (state !== null) await writeFile(dir + '/state-' + unit, state);
   }

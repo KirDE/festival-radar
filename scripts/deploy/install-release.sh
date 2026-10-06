@@ -61,8 +61,11 @@ if [[ ! -e "$scheduler_state" && ! -L "$scheduler_state" ]]; then
 fi
 [[ -d "$scheduler_state" && ! -L "$scheduler_state" && "$(stat -c %u:%a "$scheduler_state")" == 0:755 ]] || exit 4
 scheduler_mode=off
-if [[ -f "$scheduler_state/mode" && ! -L "$scheduler_state/mode" && "$(stat -c %u:%a "$scheduler_state/mode")" == 0:644 ]]; then
+if [[ -e "$scheduler_state/mode" || -L "$scheduler_state/mode" ]]; then
+  [[ -f "$scheduler_state/mode" && ! -L "$scheduler_state/mode" &&
+     "$(stat -c %u:%a "$scheduler_state/mode")" == 0:644 ]] || { echo "scheduler mode unsafe; deployment refused" >&2; exit 6; }
   scheduler_mode="$(cat "$scheduler_state/mode")"
+  [[ "$scheduler_mode" == legacy || "$scheduler_mode" == db-due ]] || { echo "scheduler mode ambiguous; deployment refused" >&2; exit 6; }
 fi
 # Preserve an explicitly paused legacy timer across subsequent deployments.
 # A Persistent calendar timer can catch up on activation; do not automatically
@@ -80,9 +83,30 @@ if [[ -f /etc/systemd/system/festival-radar-collection-ingestion.timer ]]; then
     exit 6
   fi
 fi
-# Installation never activates a new due timer, including on later deployments.
-# Existing DB-due mode requires an explicit exact-SHA re-arm after health gates.
-if [[ -f /etc/systemd/system/festival-radar-db-due.timer ]]; then
+# Snapshot the prior opt-in under the activation and source-fetch locks. Only
+# a previously armed DB-mode timer may be restored after exact-SHA health. A
+# disabled timer is an operator pause, not a request to re-enable it.
+db_due_timer_was_armed=false
+db_due_timer=/etc/systemd/system/festival-radar-db-due.timer
+if [[ -e "$db_due_timer" || -L "$db_due_timer" ]]; then
+  [[ -f "$db_due_timer" && ! -L "$db_due_timer" ]] || { echo "DB-due timer unit unsafe; deployment refused" >&2; exit 6; }
+  due_enabled="$(systemctl is-enabled festival-radar-db-due.timer 2>/dev/null || true)"
+  due_active="$(systemctl is-active festival-radar-db-due.timer 2>/dev/null || true)"
+  if [[ "$due_enabled" == enabled && "$due_active" == active && "$scheduler_mode" == db-due ]]; then
+    db_due_timer_was_armed=true
+  elif [[ "$due_enabled" != disabled || "$due_active" != inactive ]]; then
+    echo "DB-due timer state ambiguous; deployment refused" >&2
+    exit 6
+  fi
+elif [[ "$scheduler_mode" == db-due ]]; then
+  echo "DB-due mode without installed timer; deployment refused" >&2
+  exit 6
+fi
+if [[ "$scheduler_mode" == db-due ]]; then
+  [[ "$legacy_timer_was_armed" == false ]] || { echo "legacy timer still armed in DB mode; deployment refused" >&2; exit 6; }
+  [[ "$(systemctl is-active festival-radar-collection@ingestion.service 2>/dev/null || true)" == inactive ]] || { echo "legacy ingestion not inactive; deployment refused" >&2; exit 6; }
+fi
+if [[ -f "$db_due_timer" ]]; then
   systemctl disable --now festival-radar-db-due.timer
   systemctl stop festival-radar-db-due-scheduler.service festival-radar-db-due@tick.service
 fi
@@ -176,6 +200,7 @@ UNIT
 install -o root -g root -m 0755 "$release/scripts/deploy/start-db-due" "$db_due_wrapper"
 
 install -o root -g root -m 0755 "$release/scripts/deploy/db-due-scheduler" /usr/local/libexec/festival-radar/db-due-scheduler
+install -o root -g root -m 0755 "$release/scripts/deploy/check-db-due-tick-ready" /usr/local/libexec/festival-radar/check-db-due-tick-ready
 cat > "/etc/systemd/system/$service-db-due-scheduler.service" <<UNIT
 [Unit]
 Description=Serialized bounded Festival Radar DB due tick
@@ -183,6 +208,10 @@ After=postgresql.service
 [Service]
 Type=oneshot
 User=root
+# OnBootSec may already have elapsed when the timer is re-enabled under the
+# activation lock. A classified lock deferral skips just this tick without
+# marking the unit failed; the next OnUnitInactiveSec tick still runs normally.
+ExecCondition=/usr/local/libexec/festival-radar/check-db-due-tick-ready
 ExecStart=/usr/local/libexec/festival-radar/db-due-scheduler $commit tick
 TimeoutStartSec=1300
 StandardError=null
@@ -421,9 +450,40 @@ if [[ "$healthy" != true ]]; then
   exit 1
 fi
 
-# Rearm only the playlist path selected by durable proof, after release health.
-# This does not rearm the separately gated DB-due ingestion scheduler.
+# Rearm only after successful release health; a rollback or a paused DB-due
+# timer never gets here with an armed snapshot. Keep both shared locks held.
 playlist_install_apply_mode
+if [[ "$db_due_timer_was_armed" == true ]]; then
+  # Recheck durable mode, exact release and HTTP closure immediately before
+  # rearming. Refuse uncertain systemd states rather than risking two fetchers.
+  [[ -f "$scheduler_state/mode" && ! -L "$scheduler_state/mode" &&
+     "$(stat -c %u:%a "$scheduler_state/mode")" == 0:644 &&
+     "$(cat "$scheduler_state/mode")" == db-due &&
+     "$(readlink -f "$app_root/current")" == "$release" &&
+     "$(cat "$release/DEPLOYED_COMMIT")" == "$commit" &&
+     "$(systemctl is-enabled "$service-collection-ingestion.timer" 2>/dev/null || true)" == disabled &&
+     "$(systemctl is-active "$service-collection-ingestion.timer" 2>/dev/null || true)" == inactive &&
+     "$(systemctl is-active "$service-collection@ingestion.service" 2>/dev/null || true)" == inactive &&
+     "$(systemctl is-enabled "$service-db-due.timer" 2>/dev/null || true)" == disabled &&
+     "$(systemctl is-active "$service-db-due.timer" 2>/dev/null || true)" == inactive &&
+     "$(systemctl is-active "$service-db-due-scheduler.service" 2>/dev/null || true)" == inactive &&
+     "$(systemctl is-active "$service-db-due@tick.service" 2>/dev/null || true)" == inactive ]] || { echo "DB-due rearm state ambiguous; deployment refused" >&2; exit 6; }
+  due_health="$(curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:$port/api/health/deployment/")" || { echo "DB-due deployment health unavailable; deployment refused" >&2; exit 6; }
+  if [[ ${#due_health} -gt 2048 ]] || ! "$release/.runtime/node" -e 'const h=JSON.parse(process.argv[1]); if (h.status!=="ok" || h.database!=="ok" || h.catalog!=="database" || h.commit!==process.argv[2]) process.exit(1)' "$due_health" "$commit" >/dev/null 2>&1; then
+    echo "DB-due exact-SHA health failed; deployment refused" >&2
+    exit 6
+  fi
+  due_probe="$(curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:$port/api/ingestion/run/")" || { echo "DB-due closure probe unavailable; deployment refused" >&2; exit 6; }
+  [[ "$due_probe" == "{\"legacyRouteInactive\":true,\"commit\":\"$commit\"}" ]] || { echo "DB-due exact-SHA closure probe failed; deployment refused" >&2; exit 6; }
+  # If systemctl partially arms the timer, inhibit it before returning failure.
+  if ! systemctl enable --now "$service-db-due.timer" ||
+     [[ "$(systemctl is-enabled "$service-db-due.timer" 2>/dev/null || true)" != enabled ]] ||
+     [[ "$(systemctl is-active "$service-db-due.timer" 2>/dev/null || true)" != active ]]; then
+    systemctl disable --now "$service-db-due.timer" || true
+    echo "DB-due timer rearm failed; deployment refused" >&2
+    exit 6
+  fi
+fi
 
 db_due_assets_armed=false
 scheduler_assets_armed=false

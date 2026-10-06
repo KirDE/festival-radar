@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# systemd ExecCondition: 1 means a classified deployment-lock deferral (not
+# a failed worker); 255 means the lock cannot be inspected safely.
+set -euo pipefail
+[[ $# == 0 && "$(id -u)" == 0 ]] || exit 255
+lock=/run/festival-radar-activation.lock
+[[ -f "$lock" && ! -L "$lock" && "$(stat -c %u "$lock")" == 0 ]] || exit 255
+exec 9<"$lock" || exit 255
+status=0
+flock -n -E 1 9 || status=$?
+if (( status == 1 )); then
+  printf 'DB_DUE_TICK_DEFERRED reason=activation-lock\n'
+  exit 1
+fi
+(( status == 0 )) || exit 255

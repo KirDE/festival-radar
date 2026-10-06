@@ -14,6 +14,9 @@ test("release packaging includes the helper required by the installer", async ()
   assert.match(packager, /cp scripts\/deploy\/reconfigure-webserver\.sh/);
   assert.match(packager, /app\/scripts\/deploy\/reconfigure-webserver\.sh/);
   assert.match(installer, /scripts\/deploy\/reconfigure-webserver\.sh/);
+  assert.match(packager, /cp scripts\/deploy\/diagnose-legacy-ingestion\.mjs[^\n]*scripts\/deploy\/check-db-due-tick-ready/);
+  assert.match(packager, /app\/scripts\/deploy\/check-db-due-tick-ready/);
+  assert.match(installer, /install -o root -g root -m 0755 "\$release\/scripts\/deploy\/check-db-due-tick-ready"/);
 });
 
 test("completed catalogue cutover no longer ships or reruns repository backfill", async () => {
