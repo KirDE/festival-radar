@@ -11,6 +11,8 @@
     "prebuild": "npm run prisma:generate",
     "typecheck": "tsc --noEmit",
     "check:sources": "node scripts/check-festival-sources.mjs",
+    "ingestion:review-queue": "node scripts/export-ingestion-review-queue.mjs",
+    "test:ingestion-review-queue": "node --test tests/ingestion-review-queue.test.mjs",
     "ingest": "node scripts/ingest-festivals.mjs",
     "timetables:import": "node scripts/import-timetable.mjs",
     "enrich:artists": "node scripts/enrich-artists.mjs",
