@@ -1,7 +1,8 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
+import { copenhell } from "./copenhell.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; excerpt: string };
+type AdapterResult = { editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; excerpt: string; warning?: string };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
@@ -360,6 +361,7 @@ function leyendas(html: string): AdapterResult | undefined {
 
 const adapters: Record<string, (html: string, source: FestivalSource) => AdapterResult | undefined> = {
   "2000trees": trees,
+  copenhell,
   "greenfield": greenfield,
   "jera-on-air": jeraOnAir,
   "hurricane": fkpLineup,
@@ -387,6 +389,7 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     candidate.warnings.push(`Official markup adapter found no trustworthy fields for ${source.festivalSlug}`);
     return candidate;
   }
+  if (result.warning) candidate.warnings.push(result.warning);
   if (result.editionYear) candidate.observedEditionYears.push(result.editionYear);
   if (result.startDate) candidate.observedEditionYears.push(Number(result.startDate.slice(0, 4)));
   for (const field of ["startDate", "endDate", "city", "headliners", "lineup", "status"] as const) {
@@ -395,6 +398,6 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     Object.assign(candidate, { [field]: value });
     candidate.evidence.push({ field: field as FieldEvidence["field"], sourceUrl: source.url, observedAt: fetchedAt, excerpt: result.excerpt.slice(0, 500) });
   }
-  if (!candidate.evidence.length) candidate.warnings.push("Official title confirms the current edition but exposes no supported structured field");
+  if (!candidate.evidence.length && !candidate.warnings.length) candidate.warnings.push("Official title confirms the current edition but exposes no supported structured field");
   return candidate;
 }
