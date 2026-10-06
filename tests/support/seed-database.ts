@@ -17,7 +17,7 @@ try {
   await db.artist.deleteMany();
   await seedCatalog(db, {
     ...catalogSeed, festivals: fixtures,
-    artists: [artist, { ...artist, name: "Second Artist", slug: "second-artist" }],
-    editions: fixtures.map(row => ({ ...row, editionYear: 2027, recordState: "current", completeness: "complete", provenance: [] })),
+    artists: [artist, { ...artist, name: "Second Artist", slug: "second-artist", recentSetlists: [] }],
+    editions: fixtures.map(row => ({ ...row, lineup: row.slug === festival.slug ? ["Second Artist"] : [], editionYear: 2027, recordState: "current", completeness: "complete", provenance: [] })),
   });
 } finally { await db.$disconnect(); }
