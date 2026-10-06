@@ -32,6 +32,8 @@ test("both official sources register under one explicit adapter and extract disj
   assert.deepEqual(artists.observedEditionYears, [2027]);
   assert.deepEqual(artists.evidence.map(({ field }) => field), ["lineup"]);
   assert.deepEqual(evaluateCandidate(current, artists).changes, []);
+  const catalogueCase = names.map((name) => ({ "Fit For A King": "Fit for a King", "From Ashes to New": "From Ashes To New", SPEED: "Speed" })[name] ?? name);
+  assert.deepEqual(evaluateCandidate({ ...current, lineup: catalogueCase }, artists).changes, []);
   assert.deepEqual(evaluateCandidate(current, dates).changes, []);
   const wrongEdition = evaluateCandidate({ ...current, editionYear: 2028 }, artists);
   assert.equal(wrongEdition.publishable, false);
