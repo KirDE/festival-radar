@@ -34,7 +34,7 @@ async function fixture(t, options = {}) {
     await mkdir(p, { recursive: true });
   await chmod(dir + '/scheduler', 0o755);
   if (!options.fresh) {
-    await writeFile(oldRelease + '/DEPLOYED_COMMIT', oldSha);
+    await writeFile(oldRelease + '/DEPLOYED_COMMIT', options.oldStamp || oldSha);
     await symlink(oldRelease, root + '/current');
   }
   await writeFile(root + '/shared/production.env', 'PRIOR_ENV=true\n');
@@ -162,12 +162,21 @@ test('activation and rollback transition failures decide restoration from actual
   await assertOff(before);
   for (const options of [{ activation: 'after' }, { activation: 'missing' }, { activation: 'stamp' },
     { activation: 'before-stamp' },
-    { failChown: true }, { unhealthy: true, rollbackFail: true }, { unhealthy: true, fresh: true }, { partialEnable: true }]) {
+    { failChown: true }, { unhealthy: true, rollbackFail: true }, { unhealthy: true, fresh: true },
+    { unhealthy: true, oldStamp: 'c'.repeat(40) }, { partialEnable: true }]) {
     const h = await fixture(t, options);
     assert.notEqual(h.result.status, 0, h.result.stderr);
+    assert.match(h.result.stderr, /active release uncertain; old assets not restored; recovery snapshots retained/);
+    const retained = h.result.stderr.match(/snapshots retained: (\S+) (\S+)/);
+    assert.ok(retained);
+    assert.equal(await readFile(retained[1] + '/1', 'utf8'), h.prior.get('system/' + scheduler));
+    assert.equal(await readFile(retained[2] + '/unit', 'utf8'), h.prior.get(assets[0]));
+    assert.match(h.log, /daemon-reload/);
     if (options.activation !== 'missing') assert.equal(await readlink(h.root + '/current'),
       options.activation === 'before-stamp' ? h.oldRelease : h.release);
     await assertNew(h); await assertOff(h);
+    await rm(retained[1], { recursive: true, force: true });
+    await rm(retained[2], { recursive: true, force: true });
   }
 });
 
