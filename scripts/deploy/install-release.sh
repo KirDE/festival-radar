@@ -461,6 +461,7 @@ done
 
 if [[ "$healthy" != true ]]; then
   if [[ -n "$previous" && -d "$previous" && "$previous_commit" =~ ^[0-9a-f]{40}$ &&
+        "$previous" == "$app_root/releases/$previous_commit" &&
         "$(cat "$previous/DEPLOYED_COMMIT" 2>/dev/null)" == "$previous_commit" ]]; then
     ln -sfn "$previous" "$app_root/current"
   fi
