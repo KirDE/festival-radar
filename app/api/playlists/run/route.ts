@@ -5,6 +5,8 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { error } from "@/lib/api";
 import { db } from "@/lib/db";
+import { readPlaylistMode } from "@/lib/catalog/playlist-cutover";
+import { acquirePlaylistProcessLock } from "@/lib/catalog/playlist-process-lock";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +23,15 @@ export async function POST(request: Request) {
   if (!parsed.success) return error("Invalid playlist refresh request.");
 
   const festivals = [...new Set(parsed.data.festivals ?? [])].sort();
+  let release: () => Promise<void>;
+  try { release = await acquirePlaylistProcessLock(); }
+  catch { return error("Playlist operation already running.", 409); }
+  try {
+    if (await readPlaylistMode(db) === "database") {
+      const jobs = await db.catalogPlaylistRefresh.findMany({ where: { status: { in: ["PENDING", "RUNNING", "FAILED"] }, ...(festivals.length ? { festivalSlug: { in: festivals } } : {}) }, select: { id: true, status: true, festivalSlug: true }, take: 100 });
+      return Response.json({ status: "QUEUED", jobs }, { status: 202 });
+    }
+
   const staleBefore = new Date(Date.now() - 3 * 60 * 60 * 1_000);
   const claimable: Prisma.CatalogPlaylistRefreshWhereInput = { OR: [{ status: { in: ["PENDING", "FAILED"] } }, { status: "RUNNING", startedAt: { lt: staleBefore } }] };
   const queued = await db.catalogPlaylistRefresh.findMany({
@@ -38,7 +49,7 @@ export async function POST(request: Request) {
   try {
     await execute("bash", ["scripts/deploy/run-collection-job.sh", "playlists", festivals.join(",")], {
       cwd: process.cwd(),
-      env: process.env,
+      env: { ...process.env, PLAYLIST_LOCK_HELD: "true" },
       timeout: 2_650_000,
       maxBuffer: 10 * 1024 * 1024,
     });
@@ -75,4 +86,5 @@ export async function POST(request: Request) {
     console.error("Production playlist refresh failed", message);
     return error("Production playlist refresh failed.", 500);
   }
+  } finally { await release(); }
 }

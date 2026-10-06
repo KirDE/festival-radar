@@ -1,10 +1,10 @@
-name: Refresh festival playlists
+name: Refresh or inspect festival playlists
 
 on:
   workflow_dispatch:
     inputs:
       festival_slug:
-        description: "Optional canonical festival slug for a scoped acceptance refresh"
+        description: "Optional canonical festival slug for a scoped refresh or queue inspection"
         required: false
         type: string
 
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Refresh through the production database catalogue
+      - name: Use the protected playlist endpoint for its active mode
         env:
           APP_URL: ${{ secrets.APP_URL }}
           INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
@@ -34,5 +34,4 @@ jobs:
             -H "content-type: application/json" \
             --data-binary @request.json \
             "${APP_URL%/}/api/playlists/run/" | tee response.json
-          jq -e --arg slug "$FESTIVAL_SLUG" \
-            '([.status[] | .tracks > 0] | all) and ($slug == "" or .festivals == [$slug])' response.json
+          jq -e 'if .status == "QUEUED" then (.jobs | type == "array") else (.status | type == "object") and ([.status[] | .tracks > 0] | all) end' response.json

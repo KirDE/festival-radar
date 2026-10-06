@@ -2,7 +2,6 @@ import { readFile, writeFile, rename } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
-import { allArtists } from "../data/festivals.ts";
 import { readCatalog } from "../lib/catalog/repository.ts";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -10,7 +9,7 @@ const normalize = (value) => value.normalize("NFKD").replace(/[’']/g, "").repl
 const execFileAsync = promisify(execFile);
 const retryableStatus = (status) => status === 429 || status >= 500;
 
-export function freshState(names = allArtists) {
+export function freshState(names = []) {
   return { schemaVersion: 1, updatedAt: null, artists: Object.fromEntries(names.map((name) => [name, { name, status: "unresolved", base: { status: "pending", attempts: 0 }, enrichment: { status: "pending", attempts: 0 } }])) };
 }
 
@@ -80,9 +79,12 @@ async function enrich(candidate) {
   return { ...candidate, aliases: (detail.aliases || []).map((alias) => alias.name), spotifyUrls: (detail.relations || []).map((relation) => relation.url?.resource).filter((url) => /^https:\/\/open\.spotify\.com\/artist\/[A-Za-z0-9]{22}\/?$/.test(url || "")) };
 }
 
-export async function run({ statePath, credentialsPath, names = allArtists, limit = 20, now = Date.now() }) {
+export async function run({ statePath, store, credentialsPath, names = [], limit = 20, now = Date.now() }) {
   let state;
-  try { state = JSON.parse(await readFile(statePath, "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; state = freshState(names); }
+  if (store) state = store.payload?.schemaVersion === 1 ? store.payload : freshState(names);
+  else { try { state = JSON.parse(await readFile(statePath, "utf8")); } catch (error) { if (error.code !== "ENOENT") throw error; state = freshState(names); } }
+  for (const name of names) state.artists[name] ??= freshState([name]).artists[name];
+  const save = value => store ? store.save(value) : atomicWrite(statePath, value);
   const token = await spotifyToken(credentialsPath);
   for (const artist of dueArtists(state, now, limit)) {
     artist.base.attempts += 1;
@@ -99,7 +101,7 @@ export async function run({ statePath, credentialsPath, names = allArtists, limi
       artist.base.nextAttemptAt = new Date(now + Math.min(24, 2 ** artist.base.attempts) * 60 * 60 * 1000).toISOString();
     }
     state.updatedAt = new Date().toISOString();
-    await atomicWrite(statePath, state);
+    await save(state);
   }
   for (const artist of dueEnrichment(state, now, limit)) {
     artist.enrichment.attempts += 1;
@@ -116,15 +118,20 @@ export async function run({ statePath, credentialsPath, names = allArtists, limi
       artist.enrichment.nextAttemptAt = new Date(now + Math.min(24, 2 ** artist.enrichment.attempts) * 60 * 60 * 1000).toISOString();
     }
     state.updatedAt = new Date().toISOString();
-    await atomicWrite(statePath, state);
+    await save(state);
   }
   return state;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const statePath = process.env.IDENTITY_STATE_PATH || process.argv[2] || "outputs/artist-identities/state.json";
-  const credentialsPath = process.env.SPOTIFY_CREDENTIALS_PATH;
-  const names = process.env.DATABASE_URL ? (await readCatalog()).artists.map(({ name }) => name) : allArtists;
-  const state = await run({ statePath, credentialsPath, names, limit: Number(process.env.IDENTITY_BATCH_SIZE || 20) });
-  console.log(JSON.stringify({ statePath, updatedAt: state.updatedAt, counts: Object.values(state.artists).reduce((counts, artist) => ({ ...counts, [artist.status]: (counts[artist.status] || 0) + 1 }), {}) }));
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
+  const { db } = await import("../lib/db.ts");
+  const { claimOperationalState } = await import("../lib/catalog/operational-state.ts");
+  let store;
+  try {
+    const names = (await readCatalog()).artists.map(({ name }) => name);
+    store = await claimOperationalState(db, "artist-identities");
+    const state = await run({ store, credentialsPath: process.env.SPOTIFY_CREDENTIALS_PATH, names, limit: Number(process.env.IDENTITY_BATCH_SIZE || 20) });
+    console.log(JSON.stringify({ updatedAt: state.updatedAt, counts: Object.values(state.artists).reduce((counts, artist) => ({ ...counts, [artist.status]: (counts[artist.status] || 0) + 1 }), {}) }));
+  } finally { await store?.release(); await db.$disconnect(); }
 }

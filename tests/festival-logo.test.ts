@@ -65,18 +65,13 @@ test("slug or name changes remount fresh state; size changes keep the existing a
   assert.notEqual(festivalLogoKey("a:b", "c"), festivalLogoKey("a", "b:c"));
 });
 
-test("the five initials-only festivals never request either image route", () => {
-  assert.deepEqual([...festivalLogoFallbacks].sort(), ["bloodstock", "brutal-assault", "pistoia-blues", "polandrock", "tolminator"]);
+test("new DB bindings can be discovered for previously logo-less festivals", () => {
   for (const slug of festivalLogoFallbacks) {
-    assert.deepEqual(createFestivalLogoState(slug, "/festival-radar"), { src: null, staticSrc: null });
-    const html = renderToStaticMarkup(createElement(FestivalLogo, { slug, name: "Test Festival" }));
-    assert.match(html, /role="img" aria-label="Test Festival logo fallback">TF<\/span>/);
-    assert.doesNotMatch(html, /<img\b/);
+    const state = createFestivalLogoState(slug);
+    assert.equal(state.src, `/api/logos/${slug}.png`);
+    const fallback = failFestivalLogo(state, state.src!);
+    assert.equal(failFestivalLogo(fallback, fallback.src!).src, null);
   }
-  assert.notEqual(FestivalLogo({ slug: "bloodstock", name: "Old Name" }).key, FestivalLogo({ slug: "bloodstock", name: "New Name" }).key);
-  const renamed = renderToStaticMarkup(createElement(FestivalLogo, { slug: "bloodstock", name: "New Name" }));
-  assert.match(renamed, /aria-label="New Name logo fallback">NN<\/span>/);
-  assert.notEqual(FestivalLogo({ slug: "bloodstock", name: "Test Festival" }).key, FestivalLogo({ slug: reviewed.slug, name: "Test Festival" }).key);
 });
 
 test("basePath is preserved on the preferred route and its one static retry", () => {
@@ -87,8 +82,7 @@ test("basePath is preserved on the preferred route and its one static retry", ()
   assert.equal(failFestivalLogo(fallback, fallback.src!).src, null);
 });
 
-test("unreviewed slugs do not use the DB route or retry their static reference", () => {
-  const initial = createFestivalLogoState("not-reviewed");
-  assert.equal(initial.src, "/logos/not-reviewed.png");
-  assert.equal(failFestivalLogo(initial, initial.src!).src, null);
+test("new valid slugs use DB while invalid path syntax never makes an image request", () => {
+  assert.equal(createFestivalLogoState("new-festival").src, "/api/logos/new-festival.png");
+  for (const slug of ["../private", "a/b", "%2f", "a?x=1"]) assert.equal(createFestivalLogoState(slug).src, null);
 });

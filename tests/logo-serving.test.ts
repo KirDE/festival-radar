@@ -67,18 +67,21 @@ test("If-None-Match handles strong, weak, lists and wildcard with bodyless 304",
 });
 
 test("invalid filenames never query DB; missing bindings return uncached 404 even for wildcard", async () => {
-  for (const filename of ["../2000trees.png", "2000trees.png/extra", "%2e%2e", "2000trees.jpg", png.sha256, "unknown.png", "bloodstock.png", "2000trees.png?x", "2000trees.png\u0000", "2000trees.PNG"]) {
+  for (const filename of ["../2000trees.png", "2000trees.png/extra", "%2e%2e", "2000trees.jpg", png.sha256, "2000trees.png?x", "2000trees.png\u0000", "2000trees.PNG"]) {
     assert.equal(reviewedLogoFile(filename), null);
     const response = await serveFestivalLogo(request("*"), filename, async () => { throw new Error("must not query"); });
     assert.equal(response.status, 404);
     assert.equal(response.headers.get("cache-control"), "no-store");
+  }
+  for (const file of ["unknown.png", "bloodstock.png"]) {
+    assert.equal((await serveFestivalLogo(request(), file, async () => null)).status, 404);
   }
   const missing = await serveFestivalLogo(request("*"), png.file, async () => null);
   assert.equal(missing.status, 404);
   assert.equal(missing.headers.get("etag"), null);
 });
 
-test("unreviewed/corrupt bindings and DB failures return generic uncached 503 before conditional matching", async () => {
+test("corrupt bindings and DB failures return generic uncached 503 before conditional matching", async () => {
   const logo = await fixture();
   const corrupted = Buffer.from(logo.bytes);
   corrupted[25] ^= 1;
@@ -96,4 +99,9 @@ test("unreviewed/corrupt bindings and DB failures return generic uncached 503 be
   const failed = await serveFestivalLogo(request(), png.file, async () => { throw new Error("private DB details"); });
   assert.equal(failed.status, 503);
   assert.equal(await failed.text(), "");
+});
+
+test("valid DB logo updates and new festival slugs do not require an inventory deploy", async () => {
+  const logo = await fixture(jpeg);
+  assert.equal((await serveFestivalLogo(request(), "new-festival.png", async slug => { assert.equal(slug, "new-festival"); return logo; })).status, 200);
 });

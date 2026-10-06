@@ -163,15 +163,13 @@ class TrackFilterTest(unittest.TestCase):
         with patch.object(playlists, 'sl_get', return_value=response):
             self.assertEqual(playlists.search_artist_mbid('Force'), 'force-mbid')
 
-    def test_rock_im_park_uses_2026_snapshot_when_live_page_has_no_lineup(self):
+    def test_rock_im_park_rejects_missing_lineup_without_historical_fallback(self):
         class Response:
             text = '<html><title>Rock im Park 2027</title></html>'
 
         with patch.object(playlists.requests, 'get', return_value=Response()):
-            artists, headliners = playlists.fetch_rock_im_park()
-
-        self.assertIn('Electric Callboy', artists)
-        self.assertEqual(headliners, playlists.ROCK_IM_PARK_2026_HEADLINERS)
+            with self.assertRaisesRegex(RuntimeError, 'no historical catalogue fallback'):
+                playlists.fetch_rock_im_park()
 
     def test_refuses_to_overwrite_existing_playlist_with_empty_lineup(self):
         festival = playlists.Festival(
