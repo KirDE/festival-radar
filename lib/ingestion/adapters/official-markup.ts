@@ -434,6 +434,12 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     Object.assign(candidate, { [field]: value });
     candidate.evidence.push({ field: field as FieldEvidence["field"], sourceUrl: source.url, observedAt: fetchedAt, excerpt: result.excerpt.slice(0, 500) });
   }
+  // These edition-bound announcements are valuable review evidence, but their
+  // lineup changes would enqueue automatic provider playlist creation. Keep
+  // them in the assistant-owned review queue until that separate action is authorized.
+  if ((source.festivalSlug === "copenhell" && result.headliners?.length) ||
+      (source.festivalSlug === "dynamo-metal-fest" && result.lineup?.length))
+    candidate.warnings.push("Agent review required before lineup-triggered provider activity");
   if (!candidate.evidence.length && !candidate.warnings.length) candidate.warnings.push("Official title confirms the current edition but exposes no supported structured field");
   return candidate;
 }

@@ -29,7 +29,8 @@ test("exact announcement extracts 2027 dates, Eindhoven, and nine artist identit
   assert.equal(candidate.headliners, undefined);
   assert.deepEqual(candidate.observedEditionYears, [2027]);
   assert.deepEqual(candidate.evidence.map(({ field, sourceUrl }) => [field, sourceUrl]), ["startDate", "endDate", "city", "lineup"].map((field) => [field, url]));
-  assert.deepEqual(candidate.warnings, []);
+  assert.match(candidate.warnings.join('; '), /Agent review required before lineup-triggered provider activity/);
+  assert.equal(evaluateCandidate(current, candidate).publishable, false);
   assert.ok(candidate.evidence[0].excerpt.includes("CAVALERA – CHAOS A.D."));
   assert.deepEqual(evaluateCandidate(current, candidate).changes.filter(({ kind }) => kind === "artist_added").map(({ after }) => after), artists);
 });

@@ -24,8 +24,8 @@ test("only the dated Danish official article yields exact 2027 dates and two exp
   assert.deepEqual(candidate.evidence.map(({ field }) => field), ["startDate", "endDate", "headliners"]);
   assert.ok(candidate.evidence.every(({ sourceUrl }) => sourceUrl === url));
   assert.match(candidate.evidence[0].excerpt, /06.10.2026.*23.-26. juni 2027/);
-  assert.deepEqual(candidate.warnings, []);
-  assert.equal(evaluateCandidate(current, candidate).publishable, false); // dates require review
+  assert.match(candidate.warnings.join('; '), /Agent review required before lineup-triggered provider activity/);
+  assert.equal(evaluateCandidate(current, candidate).publishable, false); // no automatic playlist create
 });
 
 test("undated homepage and programme never extract a full lineup, even with a synthetic year heading and 29 cards", async () => {
