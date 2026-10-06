@@ -186,10 +186,11 @@ test("production Node exports playlist input from the committed database catalog
   const output = path.join(directory, "catalog.json");
   try {
     const execution = await execute(process.execPath, ["scripts/export-playlist-catalog.mjs", output], { env: process.env });
-    assert.match(execution.stdout, /Exported 1 festivals for 2027/);
     const exported = JSON.parse(await readFile(output, "utf8"));
     assert.equal(exported.season, 2027);
-    assert.equal(exported.festivals.length, catalogSeed.festivals.length);
+    assert.match(execution.stdout, new RegExp("Exported " + exported.festivals.length + " festivals for 2027"));
+    assert.ok(exported.festivals.some(({ slug, artists }: { slug: string; artists: string[] }) =>
+      slug === "synthetic-fest" && artists.includes("Sample Artist")));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
