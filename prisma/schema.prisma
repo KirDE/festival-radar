@@ -848,6 +848,9 @@ model CatalogPublication {
 model CatalogPlaylistRefresh {
   desiredPlan   Json?
   spotifyCreation Json?
+  youtubePlan     Json?
+  youtubeState    Json?
+  youtubeProgress Json?
   id            String                       @id @default(cuid())
   publicationId String                       @unique
   festivalSlug  String

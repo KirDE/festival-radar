@@ -260,6 +260,18 @@ export async function stagePlaylistPlan(db: PrismaClient, claim: PlaylistLease, 
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }
 
+// DB-only provider checkpoints: unlike commitPlaylistRefresh, this does not
+// complete the job. Every checkpoint rolls back if the lease expires during it.
+export async function withPlaylistRefreshLease<T>(db: PrismaClient, claim: PlaylistLease, write: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  validateLease(claim);
+  return db.$transaction(async tx => {
+    await lockPlaylistLease(tx, claim);
+    const result = await write(tx);
+    await requirePlaylistLease(tx, claim);
+    return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+}
+
 export type SpotifyCreation = { marker: string; sent: boolean; playlistId: string | null };
 
 // A reservation is committed BEFORE the non-idempotent create call. Absence on
