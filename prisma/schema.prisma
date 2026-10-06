@@ -847,6 +847,7 @@ model CatalogPublication {
 
 model CatalogPlaylistRefresh {
   desiredPlan   Json?
+  spotifyCreation Json?
   id            String                       @id @default(cuid())
   publicationId String                       @unique
   festivalSlug  String

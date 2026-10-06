@@ -19,11 +19,12 @@ try {
     const publication = await db.catalogPublication.findUniqueOrThrow({ where: { id: claim.publicationId } });
     const snapshot = await readCatalog({ database: db });
     const festival = snapshot.festivals.find(item => item.slug === claim.festivalSlug && item.editionYear === publication.editionYear);
-    const playlistUrl = snapshot.playlists[claim.festivalSlug]?.spotifyUrl;
-    if (!festival || !/^https:\/\/open\.spotify\.com\/playlist\/[A-Za-z0-9]{22}$/.test(playlistUrl ?? '')) throw new Error('Current edition and existing DB playlist required');
+    const playlistUrl = snapshot.playlists[claim.festivalSlug]?.spotifyUrl ?? '';
+    const creating = playlistUrl === '' || playlistUrl === 'NEW';
+    if (!festival || (!creating && !/^https:\/\/open\.spotify\.com\/playlist\/[A-Za-z0-9]{22}$/.test(playlistUrl))) throw new Error('Current edition and valid DB playlist binding required');
     const directory = await mkdtemp(path.join(process.env.PLAYLIST_WORK_DIRECTORY ?? '/tmp', 'festival-playlist-'));
     try {
-      await writeFile(path.join(directory, 'catalog.json'), JSON.stringify({ season: festival.editionYear, festivals: [{ ...festival, artists: [...festival.headliners, ...festival.lineup], playlistUrl }] }), { mode: 0o600 });
+      await writeFile(path.join(directory, 'catalog.json'), JSON.stringify({ season: festival.editionYear, festivals: [{ ...festival, artists: [...festival.headliners, ...festival.lineup], playlistUrl: creating ? '' : playlistUrl }] }), { mode: 0o600 });
       const env = { ...process.env, FESTIVAL_CATALOG: path.join(directory, 'catalog.json'), FESTIVAL_REPORT_ONLY: '1', FESTIVALS: festival.slug };
       const reportPath = path.join(directory, 'outputs/festival_playlists', festival.slug + '.json');
       const [queued] = await db.$queryRaw<{ desiredPlan: import('@prisma/client').Prisma.JsonValue | null }[]>`SELECT "desiredPlan" FROM "CatalogPlaylistRefresh" WHERE id = ${claim.id}`;
@@ -33,7 +34,7 @@ try {
         plan = await stagePlaylistPlan(db, claim, JSON.parse(await readFile(reportPath, 'utf8')));
       }
       const candidate = plan as { playlist_url?: string; edition_year?: number };
-      if (candidate.playlist_url !== playlistUrl || candidate.edition_year !== publication.editionYear) throw new Error('Durable plan binding mismatch');
+      if (candidate.playlist_url !== (creating ? '' : playlistUrl) || candidate.edition_year !== publication.editionYear) throw new Error('Durable plan binding mismatch');
       await guard();
       // apply accepts an explicit plan path; it does not need the report directory.
       const planPath = path.join(directory, 'plan.json');
@@ -43,7 +44,7 @@ try {
         signal, timeout: 600_000, maxBuffer: 1024 * 1024,
       });
       const report = JSON.parse(await readFile(planPath, 'utf8'));
-      return { url: report.playlist_url, artists: report.artists_count, tracks: report.track_count };
+      return { url: report.playlist_url, artists: report.artists_count, tracks: report.track_count, expectedUrl: playlistUrl };
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
   console.log(JSON.stringify(result));
