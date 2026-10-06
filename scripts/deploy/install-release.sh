@@ -297,6 +297,8 @@ UNIT
 install_collection_timer artist-identities '*-*-* *:17:00 UTC'
 install_collection_timer ingestion '*-*-* 03:23:00 UTC'
 install_collection_timer playlists 'Tue,Fri *-*-* 04:17:00 UTC'
+# Installed dormant; enable only after explicit locked queue reconciliation/activation.
+install_collection_timer playlists-db '*-*-* *:00/10:00 UTC'
 install_collection_timer source-monitor '*-*-01,04,07,10,13,16,19,22,25,28 04:17:00 UTC'
 
 cat > "/etc/systemd/system/$service-notifications.service" <<UNIT

@@ -66,29 +66,6 @@ BLOCKED_PRIMARY_ARTIST_MATCHES = {
 RECENT_SETLIST_DAYS = 365
 FEATURE_CLAUSE_RE = re.compile(r'(?:[-(\[]\s*)?\b(feat|featuring|ft)\b.*$', re.I)
 GRASPOP_DAYS = ('thursday', 'friday', 'saturday', 'sunday')
-ROCK_IM_PARK_2026_HEADLINERS = [
-    'Bad Omens', 'Volbeat', 'Electric Callboy', 'Ice Nine Kills',
-    'Landmvrks', 'Marteria', 'Three Days Grace', 'Tom Morello',
-]
-ROCK_IM_PARK_2026_ARTISTS = [
-    'Bad Omens', 'Volbeat', 'Electric Callboy', 'Ice Nine Kills', 'Landmvrks',
-    'Marteria', 'Three Days Grace', 'Tom Morello', 'Linkin Park', 'Iron Maiden',
-    'Limp Bizkit', 'The Offspring', 'Papa Roach', 'Breaking Benjamin', 'Babymetal',
-    'Hollywood Undead', 'Sabaton', 'Bush', 'A Perfect Circle', 'Black Veil Brides',
-    'Trivium', 'The Pretty Reckless', 'Within Temptation', 'Architects', 'Alter Bridge',
-    'Set It Off', 'Mastodon', 'We Came As Romans', 'The Hives', 'Palaye Royale',
-    'Social Distortion', 'The Plot In You', 'Finch', 'Loathe', 'The Story So Far',
-    'Basement', 'TX2', 'Magnolia Park', 'Kublai Khan TX', 'Bloodywood', 'TesseracT',
-    'Bury Tomorrow', 'Paleface Swiss', 'Catch Your Breath', 'Bilmuri', 'Don Broco',
-    'Thornhill', 'President', 'The Subways', 'Danko Jones', 'Blood Incantation',
-    'Ecca Vandal', 'Wargasm', 'DRAIN', 'Malevolence', 'Dying Wish',
-    'The Funeral Portrait', 'Boundaries', 'Gatecreeper', 'Letlive.', 'Mehnersmoos',
-    'Bad Nerves', 'Ankor', 'Sondaschule', 'H-Blockx', 'Return to Dust', 'High Vis',
-    'The Butcher Sisters', 'Ego Kill Talent', 'Anna Grey', 'Slay Squad', 'Max Grimm',
-    'Mouth Culture',
-]
-
-
 @dataclass
 class Festival:
     key: str
@@ -323,7 +300,7 @@ def fetch_rock_im_park():
             if cls == 'first-in-line':
                 headliners.append(name)
     if not artists:
-        return ROCK_IM_PARK_2026_ARTISTS, ROCK_IM_PARK_2026_HEADLINERS
+        raise RuntimeError('Live lineup unavailable; no historical catalogue fallback')
     return artists, headliners[:8]
 
 
@@ -835,11 +812,7 @@ def build_playlist(festival: Festival, user_id: str):
         playlist_replace_all(playlist_id, playlist_uris)
         playlist_url = f'https://open.spotify.com/playlist/{playlist_id}'
     else:
-        playlist = create_playlist(user_id, festival.playlist_name, festival.description)
-        playlist_id = playlist['id']
-        playlist_url = playlist['external_urls']['spotify']
-        update_playlist_details(playlist_id, festival.playlist_name, festival.description)
-        playlist_replace_all(playlist_id, playlist_uris)
+        raise RuntimeError('A persisted DB playlist ID is required; automatic creation is disabled')
 
     output = {
         'slug': festival.key,
@@ -849,6 +822,7 @@ def build_playlist(festival: Festival, user_id: str):
         'playlist_id': playlist_id,
         'playlist_url': playlist_url,
         'track_count': len(playlist_uris),
+        'track_uris': playlist_uris,
         'artists_count': len(ordered_artists),
         'headliners': headliners,
         'report': report,
@@ -935,108 +909,7 @@ def write_catalog_summary(season: int, festivals: list[Festival], skipped: list[
 def main():
     if not CACHE_ONLY_SETLIST:
         require_setlist_api_key()
-    legacy_festivals = [
-        Festival(
-            key='graspop_2026',
-            display_name='Graspop Metal Meeting 2026',
-            playlist_name='Graspop 2026: Festival Crash Course',
-            description='Listen to all bands from Graspop 2026.',
-            lineup_fn=fetch_graspop,
-            existing_playlist_id='3jyENqyk94CZYS71X2S7GY',
-            aliases={'Cavalera "Chaos A.D."': 'Cavalera', 'Death To All': 'Death to All'},
-            extra_excludes={'Bulls on Parade'},
-        ),
-        Festival(
-            key='rock_im_park_2026',
-            display_name='Rock im Park 2026',
-            playlist_name='Rock im Park 2026: Festival Crash Course',
-            description='Listen to all bands from Rock im Park 2026.',
-            lineup_fn=fetch_rock_im_park,
-            existing_playlist_id='5FlpRlZJqzOndB3E2s2eB8',
-            aliases={'Babymetal': 'BABYMETAL', 'Return to Dust': 'Return To Dust', 'Letlive.': 'letlive.'},
-            spotify_artist_ids={'Finch': '1ZyqnbV7Brg5LgyS4EZCUD'},
-            mbids={'Finch': '92653164-7cbd-468f-afa3-b0baa3e05986'},
-        ),
-        Festival(
-            key='wacken_2026',
-            display_name='Wacken Open Air 2026',
-            playlist_name='Wacken 2026: Festival Crash Course',
-            description='Listen to all bands from Wacken Open Air 2026.',
-            lineup_fn=fetch_wacken,
-            existing_playlist_id='5TWytVVqnSFQw6eVdhBIK6',
-            aliases={
-                'Born Broken': 'BornBroken',
-                'Force': 'FORCE',
-                'Jäst': 'JÄST',
-                'Lamb of God': 'Lamb Of God',
-                'Heaven Shall Burn': 'Heaven Shall Burn',
-                'Mac Cabe & Kanaka': 'MacCabe & Kanaka',
-                'Of Mice and Men': 'Of Mice & Men',
-                'Phantom': 'Phantom G.D.L',
-                'Dieter "Maschine" Birr': 'Dieter "Maschine" Birr',
-                'Novelization': 'Novelization',
-            },
-            spotify_artist_ids={
-                'Born Broken': '1eK0MDcJMrahfqgCjlPEzl',
-                'Force': '527C8v9EOKmi9W2tApAIag',
-                'Gidora': '4cJUKhSNedofM9UgiAMl3L',
-                'Haine': '4SH9v6X1z8BEOL1E2JLgYd',
-                'Jäst': '3pejAqOcOsnG28IwNshhFk',
-                'Mac Cabe & Kanaka': '6Ds9FJPSEtOzl9s2vRWX2A',
-                'Novelization': '3poazkVxpS4USWiABaOBAZ',
-                'Phantom': '6f9WeAPRDSevpjBAyGfVmV',
-                'SÓT': '6Nc1Qeqwnbi0odTnFc0Lua',
-            },
-            extra_excludes={
-                'Maschine\'s Late Night Show', 'Wacken Firefighters', 'Cowgirls From Hell',
-                'Blood Fire Death', 'Electric Bassboy', 'Kay Ray', 'Metal Karate', 'Bastian Zach',
-                'Blaas of Glory', 'Jazz Sabbath', 'The Ukeboys', 'Vika Goes Wild',
-                'Adrian Pauls Rockin\' Roncalli Show', 'Corrupted Blood - Pit Session',
-                'Dragons & Pois Show',
-                'Acoustic Guerillas feat Ellerbek Pussyboys', 'Acoustic Steel',
-                'Lesung: Maxim Matthew "Frøstfǽdrin- Der Ruf des weißen Greifen"', 'Metal Battle tba.',
-                'System of a Down by Anett & Livi Acoustic + Radó Éden', 'Tribute2Wacken', 'Wildcover',
-                'Alien Rockin Explosion', 'Kalle 4 World Leader', 'Sir Henry Hot', 'Telekom Wacken Cup',
-            },
-        ),
-        Festival(
-            key='impericon_leipzig_2026',
-            display_name='Impericon 2026',
-            playlist_name='Impericon 2026: Festival Crash Course',
-            description='Listen to all bands from Impericon 2026.',
-            lineup_fn=fetch_impericon,
-            existing_playlist_id='2jMqmVKjXfoOjflwyZ5E5D',
-            spotify_artist_ids={'Montreal': '1WBgY3ppwWenEynLyKUNRk'},
-            mbids={'Montreal': '87cf6aa6-a005-445b-8920-1c5b3fdfbfaa'},
-        ),
-        Festival(
-            key='summer_breeze_2026',
-            display_name='Summer Breeze 2026',
-            playlist_name='Summer Breeze 2026: Festival Crash Course',
-            description='Listen to all bands from Summer Breeze 2026.',
-            lineup_fn=fetch_summer_breeze,
-            existing_playlist_id='6rWAXV1sR2E6ZDbHcWBVfD',
-            aliases={'Lamb Of God': 'Lamb Of God', 'Paleface Swiss': 'Paleface Swiss'},
-            extra_excludes={
-                'Randale *Familienkonzert*', 'RODSCHA AUS KAMBODSCHA UND TOM PALME',
-                'Blasmusik Illenschwang', 'Harsh Vocals mit Britta Görtz',
-                'Metalza – Metal Workout', 'Metal Yoga', 'Into The Voidcast',
-            },
-        ),
-    ]
     season, festivals, skipped = load_canonical_festivals()
-    legacy_by_slug = {
-        'graspop': legacy_festivals[0], 'rock-im-park': legacy_festivals[1],
-        'wacken-open-air': legacy_festivals[2], 'summer-breeze': legacy_festivals[4],
-    }
-    for festival in festivals:
-        legacy = legacy_by_slug.get(festival.key)
-        if legacy:
-            festival.existing_playlist_id = legacy.existing_playlist_id
-            festival.aliases = legacy.aliases
-            festival.spotify_artist_ids = legacy.spotify_artist_ids
-            festival.mbids = legacy.mbids
-            festival.extra_excludes = legacy.extra_excludes
     selected = os.environ.get('FESTIVALS')
     if selected:
         allowed = {item.strip() for item in selected.split(',') if item.strip()}

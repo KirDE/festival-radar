@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createFestivalLogoState, failFestivalLogo, festivalLogoInitials, festivalLogoKey } from "../data/festival-logo-state";
+import { createFestivalLogoState, failFestivalLogo, festivalLogoInitials, festivalLogoKey } from "../lib/festival-logo-state";
 
 type FestivalLogoProps = { slug: string; name: string; large?: boolean };
 

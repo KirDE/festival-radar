@@ -17,13 +17,13 @@ cp -a prisma "$stage/app/prisma"
 cp -a data lib "$stage/app/"
 cp scripts/ingest-festivals.mjs scripts/drain-ingestion-notifications.mjs "$stage/app/scripts/"
 cp scripts/db-due-tick.mjs scripts/report-db-due-health.mjs scripts/report-db-due-pilot.mjs "$stage/app/scripts/"
-cp scripts/resolve-artist-identities.mjs scripts/check-festival-sources.mjs scripts/export-playlist-catalog.mjs scripts/build-playlist-status.mjs "$stage/app/scripts/"
+cp scripts/import-operational-state.ts scripts/audit-final-cutover.ts scripts/import-timetable.mjs scripts/enrich-artists.mjs scripts/playlist-dispatch.ts scripts/playlist-cutover.ts scripts/playlist-worker.ts scripts/playlist-lease-guard.ts scripts/resolve-artist-identities.mjs scripts/check-festival-sources.mjs scripts/export-playlist-catalog.mjs scripts/build-playlist-status.mjs "$stage/app/scripts/"
 cp -a scripts/spotify_gmm_2026/. "$stage/app/scripts/spotify_gmm_2026/"
 cp requirements.txt "$stage/app/"
 python3 -m pip install --disable-pip-version-check --no-input --target "$stage/app/.python" -r requirements.txt
 cp scripts/deploy/reconfigure-webserver.sh "$stage/app/scripts/deploy/"
 cp scripts/analytics/prune-production.sh "$stage/app/scripts/analytics/"
-cp scripts/deploy/run-collection-job.sh "$stage/app/scripts/deploy/"
+cp scripts/deploy/run-legacy-playlists.sh scripts/deploy/run-collection-job.sh "$stage/app/scripts/deploy/"
 cp scripts/deploy/run-source-backfill.ts scripts/deploy/run-reviewed-logo-import.ts scripts/deploy/logo-import-assets.sh "$stage/app/scripts/deploy/"
 cp scripts/deploy/diagnose-legacy-ingestion.mjs scripts/deploy/db-due-scheduler-assets.sh scripts/deploy/db-due-scheduler scripts/deploy/run-legacy-ingestion.sh scripts/deploy/run-db-due-operation.sh scripts/deploy/start-db-due scripts/deploy/db-due-assets.sh "$stage/app/scripts/deploy/"
 cp scripts/notifications/dispatch-production.sh "$stage/app/scripts/notifications/"
@@ -32,6 +32,9 @@ chmod 0755 "$stage/app/scripts/analytics/prune-production.sh"
 chmod 0755 "$stage/app/scripts/deploy/run-collection-job.sh"
 chmod 0755 "$stage/app/scripts/deploy/run-db-due-operation.sh" "$stage/app/scripts/deploy/start-db-due"
 chmod 0755 "$stage/app/scripts/notifications/dispatch-production.sh"
+if [[ "${DB_ONLY_RELEASE:-false}" == true ]]; then
+  node scripts/deploy/prepare-db-only-release.mjs "$stage/app" "$commit" "${DB_ONLY_CUTOVER_AUDIT:?reviewed parity and restore audit required}"
+fi
 printf '%s\n' "$commit" > "$stage/app/DEPLOYED_COMMIT"
 tar -C "$stage" -czf "$output" app
 archive_contents="$stage/archive-contents.txt"
@@ -42,10 +45,22 @@ grep -Fxq 'app/.runtime/NPM_VERSION' "$archive_contents"
 grep -Fxq 'app/scripts/analytics/prune-production.sh' "$archive_contents"
 grep -Fxq 'app/scripts/deploy/run-collection-job.sh' "$archive_contents"
 grep -Fxq 'app/scripts/deploy/diagnose-legacy-ingestion.mjs' "$archive_contents"
-grep -Fxq 'app/scripts/deploy/run-source-backfill.ts' "$archive_contents"
-grep -Fxq 'app/scripts/deploy/run-reviewed-logo-import.ts' "$archive_contents"
+if [[ "${DB_ONLY_RELEASE:-false}" != true ]]; then
+  grep -Fxq 'app/scripts/deploy/run-source-backfill.ts' "$archive_contents"
+  grep -Fxq 'app/scripts/deploy/run-reviewed-logo-import.ts' "$archive_contents"
+else
+  if grep -Eq '^app/(data/|public/(logos|offline)/|lib/catalog/(seed|logo-import)\.ts)' "$archive_contents"; then
+    echo 'dynamic catalogue leaked into DB-only archive' >&2; exit 1
+  fi
+fi
 grep -Fxq 'app/scripts/deploy/logo-import-assets.sh' "$archive_contents"
 grep -Fxq 'app/scripts/drain-ingestion-notifications.mjs' "$archive_contents"
 grep -Fxq 'app/scripts/spotify_gmm_2026/spotify_auth.py' "$archive_contents"
 grep -Eq '^app/\.python/(requests|ytmusicapi)/' "$archive_contents"
 grep -Fxq 'app/scripts/notifications/dispatch-production.sh' "$archive_contents"
+
+grep -Fxq 'app/scripts/import-operational-state.ts' "$archive_contents"
+grep -Fxq 'app/scripts/audit-final-cutover.ts' "$archive_contents"
+grep -Fxq 'app/scripts/playlist-cutover.ts' "$archive_contents"
+grep -Fxq 'app/scripts/playlist-dispatch.ts' "$archive_contents"
+grep -Fxq 'app/scripts/deploy/run-legacy-playlists.sh' "$archive_contents"

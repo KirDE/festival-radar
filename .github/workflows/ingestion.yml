@@ -60,7 +60,7 @@ jobs:
             --data-binary @outputs/playlist-request.json \
             "${APP_URL%/}/api/playlists/run/" | tee outputs/playlist-response.json
           jq -e --arg festivals "$festival_slugs" \
-            '($festivals | split(",") | sort) == (.festivals | sort) and ([.status[] | .tracks > 0] | all)' \
+            'if .status == "QUEUED" then (($festivals | split(",") | sort) == ([.jobs[].festivalSlug] | unique | sort)) else (($festivals | split(",") | sort) == (.festivals | sort) and ([.status[] | .tracks > 0] | all)) end' \
             outputs/playlist-response.json
       - name: Retain review and diagnostic artifacts
         if: always()

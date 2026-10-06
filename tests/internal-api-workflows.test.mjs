@@ -23,6 +23,8 @@ test("published ingestion lineups trigger a scoped production playlist refresh",
   assert.match(workflow, /select-published-festivals\.mjs outputs\/ingestion-response\.json/);
   assert.match(workflow, /\/api\/playlists\/run\//);
   assert.match(workflow, /No published lineup changes; playlist refresh skipped/);
+  assert.match(workflow, /if \.status == "QUEUED" then/);
+  assert.match(workflow, /\.jobs\[\]\.festivalSlug/);
 });
 
 test("deploy no longer derives playlist work from repository catalogue diffs", async () => {
@@ -162,12 +164,17 @@ test("production ingestion route fails closed and invokes the persistent runner"
   assert.match(route, /lastSuccessfulCheck/);
 });
 
-test("production playlist refresh route is protected and invokes the collection runner", async () => {
+test("playlist route preserves locked legacy refresh until validated DB activation", async () => {
   const route = await readFile("app/api/playlists/run/route.ts", "utf8");
-  assert.match(route, /!process\.env\.INTERNAL_API_SECRET/);
-  assert.match(route, /request\.headers\.get\("authorization"\) !== `Bearer \$\{process\.env\.INTERNAL_API_SECRET\}`/);
-  assert.match(route, /run-collection-job\.sh", "playlists"/);
-  assert.match(route, /Playlist status read-back is incomplete/);
+  assert.match(route, /request.headers.get\("authorization"\) !== `Bearer \$\{process.env.INTERNAL_API_SECRET\}`/);
+  assert.match(route, /acquirePlaylistProcessLock/);
+  assert.match(route, /finally \{ await release\(\); \}/);
+  const branch = route.slice(route.indexOf('if (await readPlaylistMode'), route.indexOf('const staleBefore'));
+  assert.match(branch, /status: 202/);
+  assert.match(branch, /take: 100/);
+  assert.doesNotMatch(branch, /execFile|updateMany|run-collection-job/);
+  assert.match(route, /PLAYLIST_LOCK_HELD: "true"/);
+  assert.match(route, /run-collection-job.sh/);
 });
 
 test("standalone release contains the production-local ingestion runner", async () => {

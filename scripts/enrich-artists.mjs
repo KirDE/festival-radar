@@ -1,19 +1,11 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
-import { allArtists, artistSlug } from "../data/festivals.ts";
-
-const outputPath = resolve(process.env.ARTIST_ENRICHMENT_OUTPUT || "data/artist-enrichment.json");
-const cachePath = resolve(process.env.ARTIST_ENRICHMENT_CACHE || "tmp/artist-enrichment-cache.json");
+import { db } from "../lib/db.ts";
+import { readCatalog } from "../lib/catalog/repository.ts";
+import { claimOperationalState } from "../lib/catalog/operational-state.ts";
+if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
+let store;
 const checkedAt = new Date().toISOString().slice(0, 10);
 const userAgent = process.env.MUSICBRAINZ_USER_AGENT || "FestivalRadar/1.0 (https://github.com/KirDE/festival-radar)";
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
-
-async function readJson(path, fallback) {
-  try { return JSON.parse(await readFile(path, "utf8")); } catch (error) {
-    if (error.code === "ENOENT") return fallback;
-    throw error;
-  }
-}
 
 function normalized(value) {
   return value.normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ").trim().toLocaleLowerCase("en");
@@ -44,12 +36,14 @@ function relationLinks(relations = []) {
 }
 
 async function main() {
-  const cache = await readJson(cachePath, {});
+  store = await claimOperationalState(db, "artist-enrichment");
+  if (store.payload?.nextRunAt && Date.parse(store.payload.nextRunAt) > Date.now()) return;
+  const cache = store.payload?.cache ?? {};
+  const artists = (await readCatalog()).artists;
   const profiles = {};
   const manualReview = [];
   let lastRequestAt = 0;
-  for (const name of allArtists) {
-    const key = artistSlug(name);
+  for (const { name, slug: key } of artists) {
     let search = cache[key];
     if (!search) {
       const wait = Math.max(0, 1100 - (Date.now() - lastRequestAt));
@@ -62,8 +56,7 @@ async function main() {
       }
       lastRequestAt = Date.now();
       cache[key] = search;
-      await mkdir(dirname(cachePath), { recursive: true });
-      await writeFile(cachePath, `${JSON.stringify(cache, null, 2)}\n`);
+      await store.save({ cache, profiles, manualReview });
     }
     const selected = chooseExact(name, search.artists || []);
     if (!selected.match) {
@@ -85,11 +78,8 @@ async function main() {
     };
   }
   const result = { schemaVersion: 1, generatedAt: new Date().toISOString(), source: "musicbrainz", profiles, manualReview };
-  await mkdir(dirname(outputPath), { recursive: true });
-  const temporary = `${outputPath}.tmp`;
-  await writeFile(temporary, `${JSON.stringify(result, null, 2)}\n`);
-  await rename(temporary, outputPath);
-  process.stdout.write(`${JSON.stringify({ artists: allArtists.length, enriched: Object.keys(profiles).length, manualReview: manualReview.length })}\n`);
+  await store.save({ cache, result, nextRunAt: new Date(Date.now() + 86_400_000).toISOString() });
+  process.stdout.write(`${JSON.stringify({ artists: artists.length, enriched: Object.keys(profiles).length, manualReview: manualReview.length })}\n`);
 }
 
-await main();
+try { await main(); } finally { await store?.release(); await db.$disconnect(); }

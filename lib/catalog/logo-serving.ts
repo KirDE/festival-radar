@@ -1,5 +1,4 @@
 import type { PrismaClient } from "@prisma/client";
-import { reviewedLogoFile } from "../../data/logo-serving.ts";
 import { readFestivalLogo, validateLogo, type LogoMimeType } from "./logo-assets.ts";
 
 type LogoReader = (slug: string) => ReturnType<typeof readFestivalLogo>;
@@ -14,17 +13,14 @@ export async function serveFestivalLogo(
   filename: string,
   readLogo: LogoReader,
 ) {
-  const reviewed = reviewedLogoFile(filename);
-  if (!reviewed) return unavailable(404);
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*\.png$/.test(filename)) return unavailable(404);
+  const slug = filename.slice(0, -4);
   try {
-    const logo = await readLogo(reviewed.slug);
+    const logo = await readLogo(slug);
     if (!logo) return unavailable(404);
-    // A changed/manual binding must be separately reviewed before public activation.
-    if (logo.sha256 !== reviewed.sha256 || logo.mimeType !== reviewed.mimeType
-      || logo.bytes.byteLength !== reviewed.sizeBytes
-      || validateLogo(logo.bytes, logo.mimeType as LogoMimeType).sha256 !== reviewed.sha256) {
-      return unavailable(503);
-    }
+    // DB binding is authoritative; a valid imported replacement needs no deploy.
+    if (validateLogo(logo.bytes, logo.mimeType as LogoMimeType).sha256 !== logo.sha256
+      || logo.etag !== '"' + logo.sha256 + '"') return unavailable(503);
     const headers = new Headers({
       "Content-Type": logo.mimeType,
       "X-Content-Type-Options": "nosniff",

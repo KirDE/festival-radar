@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   ArtistIdentityState,
   EditionCompleteness,
@@ -289,11 +290,12 @@ export async function backfillCatalog(client: PrismaClient, seed: CatalogSeed) {
       }
 
       const status = item.recordState === "current" ? seed.playlists[item.slug as keyof typeof seed.playlists] : undefined;
-      if (status?.spotifyUrl) {
+      for (const [provider, url] of [["spotify", status?.spotifyUrl], ["youtube_music", status?.youtubeMusicUrl]] as const) {
+        if (!url || !status) continue;
         await db.festivalPlaylist.upsert({
-          where: { editionId_provider: { editionId: edition.id, provider: "spotify" } },
-          create: { editionId: edition.id, provider: "spotify", url: status.spotifyUrl, artistCount: status.artists, trackCount: status.tracks, syncedAt: new Date(status.updatedAt) },
-          update: { url: status.spotifyUrl, artistCount: status.artists, trackCount: status.tracks, syncedAt: new Date(status.updatedAt) },
+          where: { editionId_provider: { editionId: edition.id, provider } },
+          create: { editionId: edition.id, provider, url, artistCount: status.artists, trackCount: status.tracks, syncedAt: new Date(status.updatedAt) },
+          update: { url, artistCount: status.artists, trackCount: status.tracks, syncedAt: new Date(status.updatedAt) },
         });
       }
     }
@@ -310,13 +312,17 @@ export type CatalogParity = {
   expected: Record<string, number>;
   actual: Record<string, number>;
   mismatches: string[];
+  hashes: { expected: string; actual: string };
 };
 
-function comparable(value: unknown) {
-  return JSON.stringify(value);
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)]));
+  return value;
 }
+function comparable(value: unknown) { return JSON.stringify(canonical(value)); }
 
-function compareRecord(mismatches: string[], key: string, expected: unknown, actual: unknown) {
+function compareValue(mismatches: string[], key: string, expected: unknown, actual: unknown) {
   if (comparable(expected) !== comparable(actual)) mismatches.push(`${key}: field mismatch`);
 }
 
@@ -324,8 +330,18 @@ function dateString(value: Date | null) {
   return value?.toISOString().slice(0, 10) ?? null;
 }
 
-export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): Promise<CatalogParity> {
+export async function verifyCatalogParity(db: Database, seed: CatalogSeed): Promise<CatalogParity> {
+  if ("$transaction" in db) return db.$transaction(async tx => {
+    await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
+    return verifyCatalogParity(tx, seed);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead, timeout: 60_000 });
   validateCatalogSeed(seed);
+  const expectedRecords: Record<string, unknown> = {};
+  const actualRecords: Record<string, unknown> = {};
+  const compareRecord = (mismatches: string[], key: string, expected: unknown, actual: unknown) => {
+    expectedRecords[key] = expected; actualRecords[key] = actual;
+    compareValue(mismatches, key, expected, actual);
+  };
   const [festivals, editions, artists, lineupEntries, playlists] = await Promise.all([
     db.festival.count(),
     db.festivalEdition.count(),
@@ -338,7 +354,7 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
     editions: seed.editions.length,
     artists: seed.artists.length,
     lineupEntries: seed.editions.reduce((count, item) => count + item.headliners.length + item.lineup.length, 0),
-    playlists: Object.values(seed.playlists).filter((item) => item.spotifyUrl).length,
+    playlists: Object.values(seed.playlists).reduce((count, item) => count + Number(Boolean(item.spotifyUrl)) + Number(Boolean(item.youtubeMusicUrl)), 0),
   };
   const actual = { festivals, editions, artists, lineupEntries, playlists };
   const mismatches = Object.entries(expected)
@@ -350,10 +366,12 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
     db.festivalEdition.findMany({
     include: {
       festival: { select: { slug: true } },
+      timetable: true,
+      provenance: { orderBy: [{ field: "asc" }, { checkedAt: "asc" }] },
       lineup: { include: { artist: { select: { name: true } } }, orderBy: [{ billing: "asc" }, { position: "asc" }] },
     },
     }),
-    db.artist.findMany({ include: { identities: { orderBy: { provider: "asc" } } } }),
+    db.artist.findMany({ include: { identities: { orderBy: { provider: "asc" } }, links: { orderBy: { position: "asc" } }, provenance: { orderBy: { position: "asc" } } } }),
     db.festivalPlaylist.findMany({ include: { edition: { include: { festival: { select: { slug: true } } } } } }),
   ]);
 
@@ -389,8 +407,15 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
     const key = `${item.slug}:${item.editionYear}`;
     const row = editionByKey.get(key);
     if (!row) { mismatches.push(`${key}: missing edition`); continue; }
+    const ordered = (values: unknown[]) => values.sort((a, b) => comparable(a).localeCompare(comparable(b)));
+    compareRecord(mismatches, `timetable ${key}`, ordered((item.timetable ?? []).map(entry => {
+      const details = entry as typeof entry & { timeZone?: string; status?: string; sourceUrl?: string; observedAt?: string };
+      return [entry.date, entry.stage, entry.start, entry.artist, details.timeZone ?? null, details.status === "cancelled" ? "CANCELLED" : "ANNOUNCED", details.sourceUrl ?? null, instant(details.observedAt)?.toISOString() ?? null];
+    })), ordered(row.timetable.map(entry => [dateString(entry.date), entry.stage, entry.start, entry.artistName, entry.timeZone, entry.status, entry.sourceUrl, entry.observedAt?.toISOString() ?? null])));
+    compareRecord(mismatches, `provenance ${key}`, ordered(item.provenance.map(entry => ({ ...entry, checkedAt: new Date(entry.checkedAt).toISOString() }))), ordered(row.provenance.map(({ field, url, checkedAt, note }) => ({ field, url, checkedAt: checkedAt.toISOString(), note }))));
     const headliners = row.lineup.filter(({ billing }) => billing === LineupBilling.HEADLINER).map(({ artist }) => artist.name);
     const lineup = row.lineup.filter(({ billing }) => billing === LineupBilling.LINEUP).map(({ artist }) => artist.name);
+    compareRecord(mismatches, `lineup ${key}`, { headliners: [...item.headliners], lineup: [...item.lineup] }, { headliners, lineup });
     if (JSON.stringify(headliners) !== JSON.stringify([...item.headliners])) mismatches.push(`${key}: headliners differ`);
     if (JSON.stringify(lineup) !== JSON.stringify([...item.lineup])) mismatches.push(`${key}: lineup differs`);
     compareRecord(mismatches, `edition ${key}`, {
@@ -431,6 +456,10 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
       image: item.image ?? null,
       identityState: identityState[item.identityState],
       topTracks: [...item.topTracks],
+      recentSetlists: item.recentSetlists,
+      freshness: item.freshness,
+      links: item.links,
+      provenance: item.provenance,
       identities: Object.entries(item.identities).filter(([, externalId]) => Boolean(externalId)).sort(([left], [right]) => left.localeCompare(right)),
     }, {
       name: row.name,
@@ -441,18 +470,23 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
       image: row.imageUrl ? { url: row.imageUrl, alt: row.imageAlt, width: row.imageWidth, height: row.imageHeight } : null,
       identityState: row.identityState,
       topTracks: row.topTracks,
+      recentSetlists: row.recentSetlists,
+      freshness: row.freshness,
+      links: row.links.map(({ label, url, source, verified }) => ({ label, url, source, verified })),
+      provenance: row.provenance.map(({ field, source, url, checkedAt }) => ({ field, source, url, checkedAt: checkedAt.toISOString().slice(0, 10) })),
       identities: row.identities.map(({ provider, externalId }) => [provider, externalId]),
     });
   }
 
-  const playlistBySlug = new Map(databasePlaylists.map((item) => [item.edition.festival.slug, item]));
+  const playlistBySlug = new Map(databasePlaylists.filter(item => item.edition.recordState === "CURRENT").map((item) => [`${item.edition.festival.slug}:${item.provider}`, item]));
   for (const [slug, item] of Object.entries(seed.playlists)) {
-    if (!item.spotifyUrl) continue;
-    const row = playlistBySlug.get(slug);
+    for (const [provider, url] of [["spotify", item.spotifyUrl], ["youtube_music", item.youtubeMusicUrl]] as const) {
+    if (!url) continue;
+    const row = playlistBySlug.get(`${slug}:${provider}`);
     if (!row) { mismatches.push(`${slug}: missing playlist`); continue; }
-    compareRecord(mismatches, `playlist ${slug}`, {
-      provider: "spotify",
-      url: item.spotifyUrl,
+    compareRecord(mismatches, `playlist ${slug}:${provider}`, {
+      provider,
+      url,
       artistCount: item.artists,
       trackCount: item.tracks,
       syncedAt: new Date(item.updatedAt).toISOString(),
@@ -464,5 +498,8 @@ export async function verifyCatalogParity(db: PrismaClient, seed: CatalogSeed): 
       syncedAt: row.syncedAt?.toISOString() ?? null,
     });
   }
-  return { ok: mismatches.length === 0, expected, actual, mismatches };
+  }
+  expectedRecords.counts = expected; actualRecords.counts = actual;
+  const digest = (records: Record<string, unknown>) => createHash("sha256").update(comparable(records)).digest("hex");
+  return { ok: mismatches.length === 0, expected, actual, mismatches, hashes: { expected: digest(expectedRecords), actual: digest(actualRecords) } };
 }

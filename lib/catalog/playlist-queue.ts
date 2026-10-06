@@ -1,9 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
-// This module is deliberately not wired to the existing HTTP playlist route or
-// scheduler. A later cutover must fence *all* playlist-side effects, retire
-// the legacy route, serialize jobs for the same festival, and reconcile old
-// RUNNING rows with no lease before invoking a DB-backed worker.
+// Shared protocol for the independent worker. Legacy rows require explicit reconciliation.
 export type PlaylistLease = { id: string; publicationId: string; festivalSlug: string; attempts: number; leaseOwner: string; leaseExpiresAt: Date };
 export type PlaylistClaimCursor = { requestedAt: Date; id: string };
 export type PlaylistClaimPage = { claim: PlaylistLease; nextCursor: null } | { claim: null; nextCursor: PlaylistClaimCursor | null };
@@ -246,5 +243,19 @@ export async function renewPlaylistRefreshLease(db: PrismaClient, claim: Playlis
     `;
     if (rows.length !== 1) throw new PlaylistLeaseLostError();
     return rows[0];
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+}
+
+// Persist a provider plan before any effects. Retry reuses it after an ambiguous
+// write instead of selecting different tracks from changing external searches.
+export async function stagePlaylistPlan(db: PrismaClient, claim: PlaylistLease, plan: Prisma.InputJsonValue) {
+  validateLease(claim);
+  return db.$transaction(async tx => {
+    await lockPlaylistLease(tx, claim);
+    const [row] = await tx.$queryRaw<{ desiredPlan: Prisma.JsonValue | null }[]>`SELECT "desiredPlan" FROM "CatalogPlaylistRefresh" WHERE id = ${claim.id}`;
+    if (row.desiredPlan !== null) return row.desiredPlan;
+    await tx.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "desiredPlan" = ${JSON.stringify(plan)}::jsonb WHERE id = ${claim.id}`;
+    await requirePlaylistLease(tx, claim);
+    return plan;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
 }

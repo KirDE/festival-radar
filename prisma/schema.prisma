@@ -846,6 +846,7 @@ model CatalogPublication {
 }
 
 model CatalogPlaylistRefresh {
+  desiredPlan   Json?
   id            String                       @id @default(cuid())
   publicationId String                       @unique
   festivalSlug  String
@@ -878,4 +879,13 @@ model AnalyticsDaily {
 
   @@unique([day, path, locale])
   @@index([day])
+}
+
+// Durable provider progress; catalogue identities require reviewed publication.
+model OperationalState {
+  key            String @id
+  payload        Json
+  leaseOwner     String?
+  leaseExpiresAt DateTime?
+  updatedAt      DateTime @updatedAt
 }

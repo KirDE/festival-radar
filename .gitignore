@@ -11,3 +11,5 @@ outputs/
 out/
 node_modules/
 *.tsbuildinfo
+
+/node_modules

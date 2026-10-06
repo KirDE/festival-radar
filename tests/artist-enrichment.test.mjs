@@ -9,7 +9,9 @@ test("artist enrichment script exposes operational safety controls", async () =>
   assert.match(source, /1100/);
   assert.match(source, /multiple_exact_matches/);
   assert.match(source, /manualReview/);
-  assert.match(source, /\.tmp/);
+  assert.match(source, /claimOperationalState/);
+  assert.match(source, /store.save/);
+  assert.doesNotMatch(source, /data\/|writeFile|rename/);
   assert.doesNotMatch(source, /client.secret|api.key/i);
 });
 
