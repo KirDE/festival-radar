@@ -10,6 +10,8 @@ export async function claimOperationalState(db: PrismaClient, key: string) {
     WHERE key = ${key} AND ("leaseOwner" IS NULL OR "leaseExpiresAt" <= (clock_timestamp() AT TIME ZONE 'UTC')) RETURNING payload`;
   if (rows.length !== 1) throw new Error('Operational task already running');
   return {
+    key,
+    owner,
     payload: rows[0].payload,
     async save(value: unknown) {
       const count = await db.$executeRaw`UPDATE "OperationalState" SET payload = ${JSON.stringify(value)}::jsonb, "updatedAt" = (clock_timestamp() AT TIME ZONE 'UTC')
