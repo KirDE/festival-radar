@@ -31,8 +31,12 @@ test("square festival logos fit inside mobile card tiles without clipping", asyn
 });
 
 test("missing festival logo initials contrast against the white tile in a dark hero", async ({ page }) => {
-  await page.route("**/api/logos/synthetic-fest.png", (route) => route.fulfill({ status: 404 }));
+  const squarePng = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==", "base64");
+  await page.route("**/api/logos/synthetic-fest.png", (route) => route.fulfill({ status: 200, contentType: "image/png", body: squarePng }));
   await page.goto("/en/festivals/synthetic-fest/");
+  const image = page.locator(".detailHero .festivalLogo img");
+  await expect(image).toHaveJSProperty("naturalWidth", 1);
+  await image.evaluate((node) => node.dispatchEvent(new Event("error")));
   const fallback = page.locator(".detailHero .festivalLogo span[role=img]");
   await expect(fallback).toBeVisible();
   await expect(fallback).toHaveText("SF");
