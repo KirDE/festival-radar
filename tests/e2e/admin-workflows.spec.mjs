@@ -24,6 +24,23 @@ test("admin edits, reviews, diagnostics and audit survive reload", async ({ page
 
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Detected changes" })).toBeVisible();
+  // Switching must preserve the authenticated document, including its query and hash.
+  await page.goto("/admin/?section=review#main-content");
+  await expect.poll(() => page.locator(".adminLanguage select").evaluate((element) => Object.keys(element).some((key) => key.startsWith("__reactProps")))).toBe(true);
+  const adminUrl = page.url();
+  await page.evaluate(() => { window.__adminLanguageDocument = 42; });
+  for (const language of ["de", "ru", "en"]) {
+    await page.locator(".adminLanguage select").selectOption(language);
+    await expect(page.locator("html")).toHaveAttribute("lang", language);
+    expect(page.url()).toBe(adminUrl);
+    expect(await page.evaluate(() => window.__adminLanguageDocument)).toBe(42);
+  }
+  await page.locator(".adminLanguage select").selectOption("de");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  expect(page.url()).toBe(adminUrl);
+  await page.locator(".adminLanguage select").selectOption("en");
+
   await expect(page.locator(".adminRole")).toContainText("Administrator");
   await expect(page.locator(".adminRole")).toContainText("browser-admin@example.test");
   await page.getByRole("button", { name: /Festival submissions/ }).click();

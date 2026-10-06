@@ -278,3 +278,26 @@ YOUTUBE_MUSIC_PLAYLIST_ID=... python3 scripts/spotify_gmm_2026/youtube_music_aut
 ```
 
 Pass `--update-metadata` only when the playlist title or description needs to be rewritten. Use `--max-new-items -1` to disable the safety cap.
+
+### Language preferences
+
+Selecting EN/DE/RU updates the UI and `html lang` in place: pathname, query
+and hash stay unchanged. The choice is saved in localStorage and a benign
+first-party `festival-radar-language` preference cookie (one year, SameSite=Lax,
+Secure on HTTPS; no identity or tracking value). Blocked storage or cookies are
+handled independently. Bare routes use the cookie for server-rendered UI;
+cookie-dependent documents are private/no-store (the proxy requests a Cookie
+Vary header, which Next.js may replace with its own Vary set). The proxy
+sets no preference cookie and excludes APIs as before; auth cookies are unchanged.
+
+Existing `/en/`, `/de/`, `/ru/` routes, metadata, canonicals/hreflang, sitemap,
+manifests and offline/share paths are retained. Fresh direct links use their URL
+locale. A saved choice wins for client UI after hydration, including on prefixed
+reloads; prefixed SSR metadata and server-only content still follow the URL
+locale. Changing language does not refresh server-only content or metadata.
+
+Regression coverage: `tests/admin-language.test.mjs`,
+`tests/language-preference.test.ts` and `tests/e2e/language-preference.spec.mjs`.
+Run `npx playwright test --config playwright.preference.config.mjs` for the
+browser tests marked `[no-db]`, which need no catalogue or account database;
+planner/admin browser coverage uses the existing disposable-database E2E setup.

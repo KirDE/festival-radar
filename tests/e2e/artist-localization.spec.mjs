@@ -31,7 +31,7 @@ test("language switching preserves the current artist", async ({ page }) => {
     const picker = page.locator(".languagePicker select");
     await expect.poll(() => picker.evaluate((element) => Object.keys(element).some((key) => key.startsWith("__reactProps")))).toBe(true);
     await picker.selectOption(language);
-    await expect(page).toHaveURL(new RegExp(`/${language}/artists/sample-artist/$`));
+    await expect(page).toHaveURL(/\/en\/artists\/sample-artist\/$/);
     await expect(page.locator("html")).toHaveAttribute("lang", language);
     await expect(page.getByText(locales[language].recentSetlists, { exact: true })).toBeVisible();
   }
