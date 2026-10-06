@@ -1,4 +1,5 @@
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { publishArtistEnrichment as publishPersistedEnrichment, exactArtistName, validateEnrichmentProfile } from "../lib/catalog/artist-enrichment-publication.ts";
 import { boundedEnrichmentEvidence, migrateEnrichmentState } from "../lib/catalog/artist-enrichment-state.ts";
 const userAgent = process.env.MUSICBRAINZ_USER_AGENT || "FestivalRadar/1.0 (https://github.com/KirDE/festival-radar)";
@@ -140,7 +141,7 @@ async function main() {
   } finally { await store?.release(); await db.$disconnect(); }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   // Suppress raw driver/network errors, which may include a credential-bearing URL.
   main().catch(() => { process.stderr.write("Artist enrichment failed; durable progress retained\n"); process.exitCode = 1; });
 }

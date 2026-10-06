@@ -1,9 +1,27 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { publishArtistEnrichment, validateEnrichmentProfile } from '../lib/catalog/artist-enrichment-publication.ts';
 import { migrateEnrichmentState } from '../lib/catalog/artist-enrichment-state.ts';
 import { runEnrichment } from '../scripts/enrich-artists.mjs';
+
+test('symlinked release entrypoint runs instead of silently exiting', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'festival-enrichment-entry-'));
+  try {
+    const link = join(dir, 'enrich-artists.mjs');
+    symlinkSync(fileURLToPath(new URL('../scripts/enrich-artists.mjs', import.meta.url)), link);
+    const run = spawnSync(process.execPath, ['--experimental-strip-types', link], {
+      encoding: 'utf8', env: { ...process.env, DATABASE_URL: '' }, timeout: 10_000,
+    });
+    assert.equal(run.status, 1, run.stderr);
+    assert.match(run.stderr, /Artist enrichment failed; durable progress retained/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 const id = '11111111-1111-4111-8111-111111111111';
 const otherId = '22222222-2222-4222-8222-222222222222';
