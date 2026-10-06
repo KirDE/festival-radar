@@ -1,11 +1,12 @@
 # Agent-owned ingestion review queue
 
-The scheduled review agent owns triage of ingestion cases, not database decisions or
-publication. Use the read-only queue export from the reviewed isolated checkout:
+The scheduled review agent owns triage of ingestion cases. The export itself
+never makes database decisions or publishes anything. Use the read-only queue export
+from the reviewed isolated checkout:
 
 ```sh
 node scripts/export-ingestion-review-queue.mjs \
-  "--expected-head=<reviewed-full-40-hex-commit>" --limit=50
+  "--expected-head=<reviewed-full-40-hex-commit>" --limit=100
 ```
 
 Replace the placeholder with the reviewed **full 40-character branch commit** after deployment;
@@ -15,7 +16,8 @@ a client, or accessing the database. The expected revision is a deployment input
 something the schedule should compute dynamically. It does not check working tree
 cleanliness; deploy an independently reviewed, clean checkout. Unknown/duplicate arguments,
 short or mismatched commits, missing `DATABASE_URL`, and limits outside 1–100 fail.
-The default limit is 50. Use the Node entry point directly for stdout-only JSON;
+The default limit is 50; pass `--limit=100` for the current live queue, since more than
+50 identities are expected. Use the Node entry point directly for stdout-only JSON;
 `npm run ingestion:review-queue -- ...` may add npm banners.
 
 Configure `DATABASE_URL` through the scheduler's secret environment with a PostgreSQL
@@ -93,10 +95,12 @@ correlation, not authentication, correctness, or permission to publish.
 4. Produce a review proposal with provenance IDs, fingerprint, official references,
    verification time, differences, and unresolved questions. Escalate stale/ambiguous cases
    for fresh evidence instead of adopting their historical normalized values.
-5. Submit proposals to an independent human/operator review. The scheduled agent must not
-   autonomously approve/reject candidates, change source configuration, modify the database,
-   publish catalogue updates, or trigger downstream workers. Any later mutation requires an
-   explicitly authorized operator workflow with its own freshness checks and audit trail.
+5. The assistant reviews evidence and may apply narrowly scoped database changes under the
+   owner's authorization for agent-owned review, using an audited publication path,
+   current edition/version checks, and post-write verification. Never infer permission to
+   publish from a PENDING candidate or a static `manual_review` warning alone; keep ambiguous
+   cases unchanged with a reason and recheck when new official evidence appears. Durable parser
+   fixes belong in a branch and verified PR before changing the live source strategy.
 
 Synthetic checks (no database required):
 
