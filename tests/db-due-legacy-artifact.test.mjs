@@ -11,49 +11,57 @@ const writeAt = async (dir, name, content, time) => {
   const file = path.join(dir, name); await writeFile(file, content); await utimes(file, time, time); return file;
 };
 const classify = dir => diagnoseLegacyArtifacts(start, dir, now);
+const expected = (status, reason = 'safe-evidence') => ({ status, reason });
 test('strict oneshot snapshot and bounded marker', () => {
-  assert.equal(parseFailedStart(record), now);
+  assert.deepEqual(parseFailedStart(record), { start: now, reason: 'safe-evidence' });
+  assert.deepEqual(parseFailedStart(''), { start: null, reason: 'systemd-unavailable' });
+  assert.deepEqual(parseFailedStart(record.replace('ExecMainStartTimestamp=Tue 2026-10-06 03:00:01 UTC\n', '')), { start: null, reason: 'start-absent' });
+  assert.deepEqual(parseFailedStart(record.replace('ExecMainStartTimestamp=Tue 2026-10-06 03:00:01 UTC', 'ExecMainStartTimestamp=')), { start: null, reason: 'start-absent' });
+  assert.deepEqual(parseFailedStart(record.replace('UTC', 'bad/zone')), { start: null, reason: 'start-invalid' });
   for (const bad of [record + record, record.replace('failed', 'private'), record.replace('ExecMainStatus=1', 'ExecMainStatus=0'),
     record.replace('UTC', 'unsafe/zone'), record + 'Private=secret\n', record.replace('LoadState=loaded\n', ''), 'x'.repeat(641)])
-    assert.equal(parseFailedStart(bad), null);
-  const good = 'DB_DUE_LEGACY_ARTIFACT status=current-temp\n';
+    assert.equal(parseFailedStart(bad).start, null);
+  const good = 'DB_DUE_LEGACY_ARTIFACT status=current-temp reason=safe-evidence\n';
+  const unknown = 'DB_DUE_LEGACY_ARTIFACT status=unknown reason=collection-missing\n';
+  assert.equal(validateLegacyArtifact(Buffer.from(unknown), sha), unknown);
   assert.equal(validateLegacyArtifact(Buffer.from(good), sha), good);
-  for (const bad of [good + good, good + 'private', good.trim(), 'DB_DUE_LEGACY_ARTIFACT status=private\n', 'x'.repeat(257)])
+  for (const bad of [good + good, good + 'private', good.trim(), 'DB_DUE_LEGACY_ARTIFACT status=unknown reason=safe-evidence\n', 'DB_DUE_LEGACY_ARTIFACT status=no-artifact reason=collection-missing\n', 'DB_DUE_LEGACY_ARTIFACT status=private reason=secret\n', 'x'.repeat(257)])
     assert.throws(() => validateLegacyArtifact(Buffer.from(bad), sha), /rejected/);
 });
 test('current failure evidence vs retained success, malformed, missing, oversize, symlinks', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'legacy-artifact-'));
   try {
-    assert.equal(await classify(dir), 'no-artifact');
+    assert.deepEqual(await classify(dir), expected('no-artifact'));
     await writeAt(dir, 'latest.json', '{"summary":{"status":"COMPLETED"},"readBack":{"status":"COMPLETED"},"private":"secret"}', start - 60);
-    assert.equal(await classify(dir), 'retained-success-no-current-artifact');
+    assert.deepEqual(await classify(dir), expected('retained-success-no-current-artifact'));
     await writeAt(dir, 'latest.json.tmp', 'private response', start);
-    assert.equal(await classify(dir), 'inconclusive');
+    assert.deepEqual(await classify(dir), expected('inconclusive'));
     await writeAt(dir, 'latest.json.tmp', 'private response', start + 30);
-    assert.equal(await classify(dir), 'current-temp');
+    assert.deepEqual(await classify(dir), expected('current-temp'));
     await utimes(path.join(dir, 'latest.json.tmp'), start - 60, start - 60);
-    assert.equal(await classify(dir), 'retained-success-no-current-artifact');
+    assert.deepEqual(await classify(dir), expected('retained-success-no-current-artifact'));
     await writeAt(dir, 'latest.json', '{"summary":{"status":"PARTIAL"},"readBack":{"status":"PARTIAL"}}', start + 10);
-    assert.equal(await classify(dir), 'current-success-artifact');
+    assert.deepEqual(await classify(dir), expected('current-success-artifact'));
     await writeAt(dir, 'latest.json', '{"summary":{"status":"FAILED"},"readBack":{"status":"FAILED"}}', start + 10);
-    assert.equal(await classify(dir), 'current-other-artifact');
+    assert.deepEqual(await classify(dir), expected('current-other-artifact'));
     await writeAt(dir, 'latest.json', '{broken', start - 60);
-    assert.equal(await classify(dir), 'unknown');
+    assert.deepEqual(await classify(dir), expected('unknown', 'final-evidence-invalid'));
     await writeAt(dir, 'latest.json', 'x'.repeat(65537), start - 60);
-    assert.equal(await classify(dir), 'unknown');
+    assert.deepEqual(await classify(dir), expected('unknown', 'final-file-unsafe'));
     await rm(path.join(dir, 'latest.json'));
     await writeAt(dir, 'latest.json.tmp', 'x'.repeat(1048577), start + 10);
-    assert.equal(await classify(dir), 'unknown');
+    assert.deepEqual(await classify(dir), expected('unknown', 'temp-file-unsafe'));
     await rm(path.join(dir, 'latest.json.tmp'));
     await symlink('/etc/passwd', path.join(dir, 'latest.json'));
-    assert.equal(await classify(dir), 'unknown');
+    assert.deepEqual(await classify(dir), expected('unknown', 'final-file-unsafe'));
     await rm(path.join(dir, 'latest.json'));
     await symlink('/etc/passwd', path.join(dir, 'latest.json.tmp'));
-    assert.equal(await classify(dir), 'unknown');
-    assert.equal(await classify(path.join(dir, 'absent')), 'unknown');
+    assert.deepEqual(await classify(dir), expected('unknown', 'temp-file-unsafe'));
+    assert.deepEqual(await classify(path.join(dir, 'absent')), expected('unknown', 'collection-missing'));
     const link = path.join(dir, 'parent-link'); await symlink(dir, link);
-    assert.equal(await classify(path.join(link, 'absent')), 'unknown');
-    assert.equal(await diagnoseLegacyArtifacts(now + 120, dir, now), 'unknown');
+    assert.deepEqual(await classify(path.join(link, 'absent')), expected('unknown', 'collection-unsafe'));
+    assert.deepEqual(await classify(link), expected('unknown', 'collection-unsafe'));
+    assert.deepEqual(await diagnoseLegacyArtifacts(now + 120, dir, now), expected('unknown', 'start-invalid'));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 test('manual protected workflow uses only fixed SHA mode and validates exact marker', async () => {
@@ -75,6 +83,7 @@ test('manual protected workflow uses only fixed SHA mode and validates exact mar
   assert.match(branch, /ExecMainStartTimestamp/);
   assert.match(branch, /runuser -u www-data --/);
   assert.match(branch, /head -c 257/);
+  assert.match(branch, /reason=\(systemd-unavailable/);
   assert.doesNotMatch(branch, /systemctl (start|stop|enable|disable)|journalctl|curl |request.json/);
   assert.match(packageScript, /cp scripts\/deploy\/diagnose-legacy-ingestion.mjs/);
   assert.match(packageScript, /grep -Fxq 'app\/scripts\/deploy\/diagnose-legacy-ingestion.mjs'/);
@@ -90,10 +99,10 @@ test('packaged CLI runs through a current-style symlink and reads no arbitrary p
     for (const entry of [original, linked]) {
       const result = spawnSync(process.execPath, [entry], { input: 'malformed systemd record', encoding: 'utf8' });
       assert.equal(result.status, 0);
-      assert.equal(result.stdout, 'DB_DUE_LEGACY_ARTIFACT status=unknown\n');
+      assert.equal(result.stdout, 'DB_DUE_LEGACY_ARTIFACT status=unknown reason=systemd-invalid\n');
       assert.equal(result.stderr, '');
       const rejected = spawnSync(process.execPath, [entry, '/etc/passwd'], { input: '', encoding: 'utf8' });
-      assert.equal(rejected.stdout, 'DB_DUE_LEGACY_ARTIFACT status=unknown\n');
+      assert.equal(rejected.stdout, 'DB_DUE_LEGACY_ARTIFACT status=unknown reason=systemd-unavailable\n');
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
 });

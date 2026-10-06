@@ -7,6 +7,8 @@ The fixed marker compares the failed legacy oneshot's trusted systemd start time
 - **current-temp**: temporary response modified after the failed oneshot began; evidence of a current attempt, not a diagnosis of its error.
 - **retained-success-no-current-artifact**: earlier successful final response remains with no post-start temp/final artifact. A new failure may have happened before output was written. This does not prove the last attempt succeeded or was harmless.
 - **current-success-artifact / current-other-artifact**: final response modified after start with matching nested status enums or without an accepted status. A failed unit can still have a successful HTTP response if a later command failed.
-- **no-artifact**: neither file exists. **inconclusive**: artifacts cannot be ordered/classified safely, including same-second timestamps. **unknown**: invalid/unavailable evidence.
+- **no-artifact**: neither file exists. **inconclusive**: artifacts cannot be ordered/classified safely, including same-second timestamps.
+
+The marker also carries one strict fixed-field `reason`. All non-unknown statuses use `safe-evidence` (this describes successful *classification*, not a safe retry or successful ingestion). `unknown` uses only `systemd-unavailable`, `systemd-invalid`, `start-absent`, `start-invalid`, `collection-missing`, `collection-unsafe`, `final-file-unsafe`, `temp-file-unsafe`, or `final-evidence-invalid`. A missing collection directory is not equivalent to two absent files: `no-artifact` requires a safe existing directory and safe absence of both names. Invalid JSON never emits private content. Reasons are diagnostic categories, not proof of root cause. The relay and protected validator reject mismatched status/reason pairs and any extra fields.
 
 Do not use the result alone to reset failure, resume a timer, switch schedulers or infer a safe retry. No production workflow is invoked by this PR.

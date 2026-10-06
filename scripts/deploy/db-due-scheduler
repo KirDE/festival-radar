@@ -54,10 +54,10 @@ if [[ "$action" == diagnose-legacy-artifact ]]; then
   # Exact deployed code and activation lock were checked above. No unit action.
   record="$(timeout --signal=TERM --kill-after=2s 5s systemctl show --all --property=LoadState,ActiveState,Result,ExecMainCode,ExecMainStatus,ExecMainStartTimestamp "$legacy_service" 2>/dev/null | tr '\000' '\001' | head -c 641)" || record=
   result="$(printf '%s' "$record" | timeout --signal=TERM --kill-after=2s 8s /usr/sbin/runuser -u www-data -- "$release/.runtime/node" "$release/scripts/deploy/diagnose-legacy-ingestion.mjs" 2>/dev/null | head -c 257)" || result=
-  if [[ "$result" =~ ^DB_DUE_LEGACY_ARTIFACT\ status=(unknown|current-temp|current-success-artifact|current-other-artifact|retained-success-no-current-artifact|no-artifact|inconclusive)$ ]]; then
+  if [[ "$result" =~ ^DB_DUE_LEGACY_ARTIFACT\ status=unknown\ reason=(systemd-unavailable|systemd-invalid|start-absent|start-invalid|collection-missing|collection-unsafe|final-file-unsafe|temp-file-unsafe|final-evidence-invalid)$|^DB_DUE_LEGACY_ARTIFACT\ status=(current-temp|current-success-artifact|current-other-artifact|retained-success-no-current-artifact|no-artifact|inconclusive)\ reason=safe-evidence$ ]]; then
     printf '%s\n' "$result"
   else
-    printf 'DB_DUE_LEGACY_ARTIFACT status=unknown\n'
+    printf 'DB_DUE_LEGACY_ARTIFACT status=unknown reason=systemd-unavailable\n'
   fi
   exit 0
 fi
