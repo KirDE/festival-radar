@@ -1,9 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { BOUNDS, guardHead, normalizedFingerprint, parseArgs, readReviewQueue, runCli, safeUrl } from '../lib/ingestion/review-queue.mjs';
+import { BOUNDS, guardHead, normalizedFingerprint, parseArgs, readReviewQueue, runCli, safeUrl, validatedDeployedRevision } from '../lib/ingestion/review-queue.mjs';
 
 const HEAD = 'a'.repeat(40);
+
+test('active stamped release is accepted without Git metadata, never a stale or mismatched release', () => {
+  const root = '/opt/festival-radar/releases/' + HEAD;
+  assert.equal(validatedDeployedRevision(root, root, HEAD), HEAD);
+  assert.equal(validatedDeployedRevision(root, '/opt/festival-radar/releases/' + 'b'.repeat(40), HEAD), null);
+  assert.equal(validatedDeployedRevision(root, root, 'b'.repeat(40)), null);
+  assert.equal(validatedDeployedRevision(root + '/nested', root + '/nested', HEAD), null);
+});
 const source = (overrides = {}) => ({ id: 's1', festivalId: 'f1', editionId: 'e1', festivalSlug: 'rock', url: 'https://official.test/', enabled: true, strategies: ['manual_review'], parserKey: 'manual_review', editionYear: 2026, createdAt: '2026-01-01', updatedAt: '2026-01-01', configurationBackfilledAt: '2026-01-01', ...overrides });
 const attempt = (overrides = {}) => ({ id: 'a1', runId: 'r1', festivalSlug: 'rock', requestedUrl: 'https://official.test/', finalUrl: 'https://official.test/', status: 'REVIEW', startedAt: '2026-02-01', endedAt: '2026-02-02', ...overrides });
 const candidate = (overrides = {}) => ({ id: 'c1', runId: 'r1', attemptId: 'a1', festivalSlug: 'rock', schemaVersion: 1, sourceYear: 2026, createdAt: '2026-02-02', normalized: { lineup: ['A'], city: 'Secret city' }, attempt: attempt(), evidence: [], ...overrides });

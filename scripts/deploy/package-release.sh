@@ -15,7 +15,7 @@ cp -a public "$stage/app/public"
 cp package.json package-lock.json "$stage/app/"
 cp -a prisma "$stage/app/prisma"
 cp -a lib "$stage/app/"
-cp scripts/ingest-festivals.mjs scripts/drain-ingestion-notifications.mjs "$stage/app/scripts/"
+cp scripts/ingest-festivals.mjs scripts/drain-ingestion-notifications.mjs scripts/export-ingestion-review-queue.mjs "$stage/app/scripts/"
 cp scripts/db-due-tick.mjs scripts/report-db-due-health.mjs scripts/report-db-due-pilot.mjs "$stage/app/scripts/"
 cp scripts/audit-final-cutover.ts scripts/import-timetable.mjs scripts/enrich-artists.mjs scripts/playlist-dispatch.ts scripts/playlist-cutover.ts scripts/playlist-worker.ts scripts/playlist-lease-guard.ts scripts/resolve-artist-identities.mjs scripts/check-festival-sources.mjs scripts/export-playlist-catalog.mjs scripts/build-playlist-status.mjs "$stage/app/scripts/"
 cp -a scripts/spotify_gmm_2026/. "$stage/app/scripts/spotify_gmm_2026/"
@@ -55,6 +55,8 @@ if [[ "${DB_ONLY_RELEASE:-false}" == true ]]; then
   fi
 fi
 grep -Fxq 'app/scripts/drain-ingestion-notifications.mjs' "$archive_contents"
+grep -Fxq 'app/scripts/export-ingestion-review-queue.mjs' "$archive_contents"
+grep -Fxq 'app/lib/ingestion/review-queue.mjs' "$archive_contents"
 grep -Fxq 'app/scripts/spotify_gmm_2026/spotify_auth.py' "$archive_contents"
 grep -Eq '^app/\.python/(requests|ytmusicapi)/' "$archive_contents"
 grep -Fxq 'app/scripts/notifications/dispatch-production.sh' "$archive_contents"

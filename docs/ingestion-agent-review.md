@@ -9,10 +9,11 @@ node scripts/export-ingestion-review-queue.mjs \
   "--expected-head=<reviewed-full-40-hex-commit>" --limit=100
 ```
 
-Replace the placeholder with the reviewed **full 40-character branch commit** after deployment;
-never dynamically derive this value from the checkout being validated.
-The CLI checks the actual HEAD of its own worktree before importing Prisma, constructing
-a client, or accessing the database. The expected revision is a deployment input, not
+Replace the placeholder with the reviewed **full 40-character deployed merge commit** after deployment;
+obtain it independently from verified deployment health; never dynamically derive it from the checkout being validated.
+The CLI checks the actual Git HEAD of its own worktree or the active stamped
+`/opt/festival-radar/releases/<commit>` before importing Prisma, constructing a client,
+or accessing the database. The expected revision is a deployment input, not
 something the schedule should compute dynamically. It does not check working tree
 cleanliness; deploy an independently reviewed, clean checkout. Unknown/duplicate arguments,
 short or mismatched commits, missing `DATABASE_URL`, and limits outside 1–100 fail.
@@ -20,8 +21,8 @@ The default limit is 50; pass `--limit=100` for the current live queue, since mo
 50 identities are expected. Use the Node entry point directly for stdout-only JSON;
 `npm run ingestion:review-queue -- ...` may add npm banners.
 
-Configure `DATABASE_URL` through the scheduler's secret environment with a PostgreSQL
-role permitted only SELECT on the relevant tables. Never include it in prompts or artifacts.
+Configure `DATABASE_URL` through the scheduler's secret environment, preferably with
+a PostgreSQL role permitted only SELECT on the relevant tables. Never include it in prompts or artifacts.
 The CLI uses a RepeatableRead transaction and `SET TRANSACTION READ ONLY`, so PostgreSQL
 also rejects writes. It has no fetch, model, publication, decision, notification, or filesystem
 write paths. JSON goes only to stdout; exit 0 means a complete export. Exit 1 returns a fixed,
