@@ -1,6 +1,7 @@
 import { db } from "../lib/db.ts";
 import { readCatalog } from "../lib/catalog/repository.ts";
 import { claimOperationalState } from "../lib/catalog/operational-state.ts";
+import { publishArtistEnrichment, exactArtistName } from "../lib/catalog/artist-enrichment-publication.ts";
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required");
 let store;
 const checkedAt = new Date().toISOString().slice(0, 10);
@@ -8,7 +9,7 @@ const userAgent = process.env.MUSICBRAINZ_USER_AGENT || "FestivalRadar/1.0 (http
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 
 function normalized(value) {
-  return value.normalize("NFKD").replace(/[^\p{L}\p{N}]+/gu, " ").trim().toLocaleLowerCase("en");
+  return exactArtistName(value);
 }
 
 function chooseExact(name, artists) {
@@ -37,6 +38,8 @@ function relationLinks(relations = []) {
 
 async function main() {
   store = await claimOperationalState(db, "artist-enrichment");
+  // Retry the persisted result before the daily gate or any provider request.
+  await publishArtistEnrichment(db, store);
   if (store.payload?.nextRunAt && Date.parse(store.payload.nextRunAt) > Date.now()) return;
   const cache = store.payload?.cache ?? {};
   const artists = (await readCatalog()).artists;
@@ -59,6 +62,10 @@ async function main() {
       await store.save({ cache, profiles, manualReview });
     }
     const selected = chooseExact(name, search.artists || []);
+    if (search.count > (search.artists || []).length) {
+      manualReview.push({ name, slug: key, reason: "truncated_provider_search" });
+      continue;
+    }
     if (!selected.match) {
       manualReview.push({ name, slug: key, reason: selected.reason, candidateIds: (search.artists || []).slice(0, 3).map(({ id }) => id) });
       continue;
@@ -79,7 +86,8 @@ async function main() {
   }
   const result = { schemaVersion: 1, generatedAt: new Date().toISOString(), source: "musicbrainz", profiles, manualReview };
   await store.save({ cache, result, nextRunAt: new Date(Date.now() + 86_400_000).toISOString() });
-  process.stdout.write(`${JSON.stringify({ artists: artists.length, enriched: Object.keys(profiles).length, manualReview: manualReview.length })}\n`);
+  const publication = await publishArtistEnrichment(db, store);
+  process.stdout.write(`${JSON.stringify({ artists: artists.length, enriched: Object.keys(profiles).length, manualReview: manualReview.length, changed: publication?.changed ?? 0 })}\n`);
 }
 
 try { await main(); } finally { await store?.release(); await db.$disconnect(); }
