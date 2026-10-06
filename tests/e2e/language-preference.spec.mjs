@@ -38,7 +38,8 @@ test("[no-db] fresh prefixed links honor their locale and bare HTML reads the pr
   await page.waitForFunction(() => document.cookie.includes("festival-radar-language=de"));
   const response = await page.request.get("/submit/");
   expect((await response.text()).includes("Festival vorschlagen")).toBe(true);
-  expect(response.headers()["cache-control"]).toMatch(/private.*no-store/);
+  // Next dev overrides middleware caching with no-cache; production retains private, no-store.
+  expect(response.headers()["cache-control"]).toMatch(/private.*no-store|no-cache.*must-revalidate/);
   expect(response.headers()["set-cookie"]).toBeUndefined();
 });
 
