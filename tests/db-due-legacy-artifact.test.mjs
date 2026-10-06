@@ -79,3 +79,32 @@ test('manual protected workflow uses only fixed SHA mode and validates exact mar
   assert.match(packageScript, /cp scripts\/deploy\/diagnose-legacy-ingestion.mjs/);
   assert.match(packageScript, /grep -Fxq 'app\/scripts\/deploy\/diagnose-legacy-ingestion.mjs'/);
 });
+test('packaged CLI runs through a current-style symlink and reads no arbitrary paths', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const original = fileURLToPath(new URL('../scripts/deploy/diagnose-legacy-ingestion.mjs', import.meta.url));
+  const dir = await mkdtemp(path.join(tmpdir(), 'legacy-cli-symlink-'));
+  try {
+    const linked = path.join(dir, 'current.mjs');
+    await symlink(original, linked);
+    for (const entry of [original, linked]) {
+      const result = spawnSync(process.execPath, [entry], { input: 'malformed systemd record', encoding: 'utf8' });
+      assert.equal(result.status, 0);
+      assert.equal(result.stdout, 'DB_DUE_LEGACY_ARTIFACT status=unknown\n');
+      assert.equal(result.stderr, '');
+      const rejected = spawnSync(process.execPath, [entry, '/etc/passwd'], { input: '', encoding: 'utf8' });
+      assert.equal(rejected.stdout, 'DB_DUE_LEGACY_ARTIFACT status=unknown\n');
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+test('diagnostic targets actual ingestion collection artifact names', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const runner = await readFile('scripts/deploy/run-collection-job.sh', 'utf8');
+  const reader = await readFile('scripts/deploy/diagnose-legacy-ingestion.mjs', 'utf8');
+  assert.match(runner, /output="\$shared\/collection-jobs\/\$job"/);
+  assert.match(runner, /\$output\/latest\.json\.tmp/);
+  assert.match(runner, /\$output\/latest\.json/);
+  assert.match(reader, /const DIRECTORY = '\/opt\/festival-radar\/shared\/collection-jobs\/ingestion'/);
+  assert.match(reader, /inspect\('latest\.json', true\)/);
+  assert.match(reader, /inspect\('latest\.json\.tmp', false\)/);
+});

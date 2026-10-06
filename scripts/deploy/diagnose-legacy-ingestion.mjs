@@ -1,6 +1,6 @@
-import { constants } from 'node:fs';
+import { constants, realpathSync } from 'node:fs';
 import { lstat, open } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -76,7 +76,12 @@ export function parseFailedStart(record) {
   } catch { return null; }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Node canonicalizes import.meta.url but may retain a symlink in argv[1].
+// Compare canonical paths so the packaged CLI cannot silently skip execution.
+let isEntrypoint = false;
+try { isEntrypoint = Boolean(process.argv[1]) && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url); }
+catch { /* Imported module or unavailable argv path. */ }
+if (isEntrypoint) {
   let result = 'unknown';
   try {
     if (process.argv.length === 2) {
