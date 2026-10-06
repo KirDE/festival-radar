@@ -20,36 +20,37 @@ async function loadWorker({ fetchImpl, cachesImpl } = {}) {
   return { helpers: context.module.exports, listeners };
 }
 
-test("install stamps every precache entry and serves the versioned payload offline", async () => {
-  const entries = new Map();
-  const cacheKey = (key) => new URL(typeof key === "string" ? key : key.url, "https://festivals.test").pathname;
-  const cache = {
-    put: async (key, response) => entries.set(cacheKey(key), response),
-    match: async (key) => entries.get(cacheKey(key)),
-    delete: async (key) => entries.delete(cacheKey(key)),
-    keys: async () => [...entries.keys()],
-  };
-  const caches = { open: async () => cache, match: cache.match, keys: async () => [], delete: async () => true };
+test("install stamps the offline shell and warms a revision-aware DB catalogue that survives offline", async () => {
+  const { cache, caches } = memoryCache();
+  let online = true;
   const { listeners } = await loadWorker({
     cachesImpl: caches,
-    fetchImpl: async (request) => new Response(String(request).includes(".json") ? '{"festivals":[]}' : "asset", { status: 200 }),
+    fetchImpl: async (request) => {
+      if (!online) throw new TypeError("offline");
+      if (request instanceof Request) return catalogReply();
+      if (String(request).startsWith("/offline/")) return new Response(null, { status: 404 });
+      return new Response("public shell or asset");
+    },
   });
   let install;
   listeners.install({ waitUntil: (promise) => { install = promise; } });
   await install;
 
-  for (const response of entries.values()) {
-    assert.ok(Number(response.headers.get("x-festival-radar-cached-at")) > 0);
+  for (const key of await cache.keys()) {
+    assert.ok(Number((await cache.match(key)).headers.get("x-festival-radar-cached-at")) > 0);
   }
-
-  let offlineResponse;
-  listeners.fetch({
-    request: { method: "GET", url: "https://festivals.test/offline/festivals-2027-v1.json", mode: "cors" },
-    respondWith: (promise) => { offlineResponse = promise; },
-  });
-  assert.deepEqual(await (await offlineResponse).json(), { festivals: [] });
+  assert.equal((await cache.match(CATALOG_URL)).headers.get("etag"), `"${revisionA}"`);
+  online = false;
   for (const path of ["/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png"]) {
-    assert.ok(await cache.match(path), `${path} remains available offline`);
+    const response = await dispatch(listeners, new Request(`https://festivals.test${path}`));
+    assert.equal(await response.text(), "public shell or asset", `${path} remains available offline`);
+  }
+  const navigation = await dispatch(listeners, { method: "GET", url: "https://festivals.test/festivals/a", mode: "navigate" });
+  assert.equal(await navigation.text(), "public shell or asset");
+  for (const url of [CATALOG_URL, `${CATALOG_URL}/`]) {
+    const response = await dispatch(listeners, new Request(url));
+    assert.equal(response.headers.get("x-catalog-revision"), revisionA);
+    assert.deepEqual(await response.json(), payload());
   }
 });
 
@@ -63,6 +64,7 @@ test("only same-origin allowlisted, successful public responses are cacheable", 
   const { helpers } = await loadWorker();
   assert.equal(helpers.sameOrigin(new URL("https://cdn.example/icon.png")), false);
   assert.equal(helpers.isPublicAsset(new URL("https://festivals.test/_next/static/app.js")), true);
+  assert.equal(helpers.isPublicAsset(new URL("https://festivals.test/offline/festivals-2027-v1.json")), false);
   assert.equal(helpers.cacheable(new Response("missing", { status: 404 })), false);
   assert.equal(helpers.cacheable(new Response("error", { status: 500 })), false);
   assert.equal(helpers.cacheable(new Response("private", { status: 200, headers: { "cache-control": "private" } })), false);
@@ -266,23 +268,31 @@ test("first network response survives Cache Storage open and write failures", as
   }
 });
 
-test("install warms DB catalogue anonymously but DB failure preserves legacy precache", async () => {
-  for (const available of [true, false]) {
+test("install succeeds without static snapshots when the DB catalogue is unavailable", async () => {
+  for (const failure of ["network", "http"]) {
     const { cache, caches } = memoryCache();
+    const fetchedPaths = [];
     const { listeners } = await loadWorker({ cachesImpl: caches, fetchImpl: async (request) => {
+      const path = new URL(request instanceof Request ? request.url : request, "https://festivals.test").pathname;
+      fetchedPaths.push(path);
+      if (path.startsWith("/offline/")) return new Response(null, { status: 404 });
       if (request instanceof Request) {
         assert.equal(request.credentials, "omit");
-        if (!available) throw new TypeError("DB unavailable");
-        return catalogReply();
+        if (failure === "network") throw new TypeError("DB unavailable");
+        return new Response(null, { status: 503, headers: { "Cache-Control": "no-store" } });
       }
-      return new Response(String(request).endsWith(".json") ? JSON.stringify({ festivals: [] }) : "asset");
+      return new Response("public shell");
     } });
     let installed;
     listeners.install({ waitUntil: (promise) => { installed = promise; } });
     await installed;
-    assert.ok(await cache.match("/offline/festivals-2027-v1.json"));
+    assert.deepEqual(fetchedPaths.sort(), [
+      "/api/offline/catalog/", "/icons/icon-192.png", "/icons/icon-512.png",
+      "/icons/icon-maskable-512.png", "/manifest.webmanifest", "/offline.html",
+    ].sort());
+    assert.equal(await cache.match("/offline/festivals-2027-v1.json"), undefined);
     assert.ok(await cache.match("/offline.html"));
-    assert.equal(Boolean(await cache.match(CATALOG_URL)), available);
+    assert.equal(await cache.match(CATALOG_URL), undefined);
   }
 });
 
