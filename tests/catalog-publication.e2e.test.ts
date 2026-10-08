@@ -209,6 +209,7 @@ test("production Node exports playlist input from the committed database catalog
 test("guarded Rockharz sources UPDATE existing 2027 rows, audit playlist deferral and replay idempotently", async () => {
   const festival = await db.festival.findUniqueOrThrow({ where: { slug: "rockharz" } });
   const edition = await db.festivalEdition.findFirstOrThrow({ where: { festivalId: festival.id, year: 2027, recordState: "CURRENT" } });
+  await db.festivalEdition.update({ where: { id: edition.id }, data: { status: "TBA" } });
   const sources = [
     ["bands", "https://www.rockharz-festival.com/bands"],
     ["headliner", "https://www.rockharz-festival.com/headliner-alarm"],
@@ -217,12 +218,16 @@ test("guarded Rockharz sources UPDATE existing 2027 rows, audit playlist deferra
   for (const [key, url] of sources) {
     const html = await readFile(new URL(`./fixtures/official-markup/rockharz-${key}-2027.html`, import.meta.url), "utf8");
     const candidate = extractFestivalCandidate(html, parserSource("rockharz", { url }), new Date().toISOString());
-    const value = evaluateCandidate({ ...catalogSeed.festivals[0], slug: "rockharz", editionYear: 2027, city: "Ballenstedt", startDate: "2027-07-07", endDate: "2027-07-10", lineup: [], headliners: [], ticketStatus: "unknown" }, candidate);
+    const value = evaluateCandidate({ ...catalogSeed.festivals[0], slug: "rockharz", editionYear: 2027, city: "Ballenstedt", startDate: "2027-07-07", endDate: "2027-07-10", status: "tba", lineup: [], headliners: [], ticketStatus: "unknown" }, candidate);
     assert.equal(value.publishable, true);
     const artistsBefore = new Set((await db.artist.findMany({ select: { slug: true } })).map((a) => a.slug));
     const attempt = await persist(value);
     const publication = await publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix });
     assert.ok(publication);
+    if (key === "headliner") {
+      assert.deepEqual(publication.fields.sort(), ["headliners", "status"]);
+      assert.equal((await db.festivalEdition.findUniqueOrThrow({ where: { id: edition.id } })).status, "PARTIAL");
+    }
     for (const a of await db.artist.findMany({ select: { slug: true } })) if (!artistsBefore.has(a.slug)) createdArtists.push(a.slug);
     assert.equal(publication.playlistRefreshRequested, false);
     assert.equal(await db.catalogPlaylistRefresh.count({ where: { publicationId: publication.id } }), 0);
@@ -255,16 +260,86 @@ test("guarded Rockharz sources UPDATE existing 2027 rows, audit playlist deferra
   assert.equal(await db.catalogPlaylistRefresh.count({ where: { festivalSlug: "rockharz" } }), 0);
 });
 
+test("Rockharz status-only repair after 30 acts preserves artists/tickets and never queues on replay", async () => {
+  const edition = await db.festivalEdition.findFirstOrThrow({ where: { festival: { slug: "rockharz" }, year: 2027, recordState: "CURRENT" } });
+  await db.festivalEdition.update({ where: { id: edition.id }, data: { status: "TBA" } });
+  const entries = await db.lineupEntry.findMany({ where: { editionId: edition.id }, include: { artist: true }, orderBy: { id: "asc" } });
+  assert.equal(entries.length, 30);
+  assert.equal(edition.ticketStatus, "UNAVAILABLE");
+  const url = "https://www.rockharz-festival.com/headliner-alarm";
+  const html = await readFile(new URL("./fixtures/official-markup/rockharz-headliner-2027.html", import.meta.url), "utf8");
+  const candidate = extractFestivalCandidate(html, parserSource("rockharz", { url }), new Date().toISOString());
+  const current = { ...catalogSeed.festivals[0], slug: "rockharz", editionYear: 2027, status: "tba" as const,
+    ticketStatus: "unavailable" as const, headliners: ["AMON AMARTH"], lineup: entries.filter((e) => e.billing === "LINEUP").map((e) => e.artist.name) };
+  const value = evaluateCandidate(current, candidate);
+  assert.equal(value.publishable, true);
+  assert.deepEqual(value.changes.map((c) => c.field), ["status"]);
+  const attempt = await persist(value);
+  const publication = await publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix });
+  assert.ok(publication);
+  assert.deepEqual(publication.fields, ["status"]);
+  assert.equal(publication.lineupChanged, false);
+  assert.equal(publication.playlistRefreshRequested, false);
+  const updated = await db.festivalEdition.findUniqueOrThrow({ where: { id: edition.id } });
+  assert.equal(updated.status, "PARTIAL");
+  assert.equal(updated.ticketStatus, "UNAVAILABLE");
+  assert.deepEqual(await db.lineupEntry.findMany({ where: { editionId: edition.id }, include: { artist: true }, orderBy: { id: "asc" } }), entries);
+  const stored = await db.ingestionCandidate.findUniqueOrThrow({ where: { attemptId: attempt.id } });
+  assert.equal(stored.reviewState, "PUBLISHED");
+  assert.equal(stored.catalogueVersion, publication.id);
+  const replay = await publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix });
+  assert.equal(replay?.id, publication.id);
+  assert.equal(replay?.playlistRefreshRequested, false);
+  assert.equal(await db.catalogPublication.count({ where: { sourceId: publication.sourceId } }), 1);
+  assert.equal(await db.catalogPlaylistRefresh.count({ where: { festivalSlug: "rockharz" } }), 0);
+  assert.deepEqual(evaluateCandidate({ ...current, status: "partial" }, candidate).changes, []);
+});
+
+test("Rockharz status-only repair rejects source, edition and status evidence drift atomically", async () => {
+  const edition = await db.festivalEdition.findFirstOrThrow({ where: { festival: { slug: "rockharz" }, year: 2027, recordState: "CURRENT" } });
+  const url = "https://www.rockharz-festival.com/headliner-alarm";
+  const html = await readFile(new URL("./fixtures/official-markup/rockharz-headliner-2027.html", import.meta.url), "utf8");
+  for (const drift of ["url", "edition", "candidate-evidence", "persisted-evidence"]) {
+    await db.festivalEdition.update({ where: { id: edition.id }, data: { status: "TBA" } });
+    const candidate = extractFestivalCandidate(html, parserSource("rockharz", { url }), new Date().toISOString());
+    const value = evaluateCandidate({ ...catalogSeed.festivals[0], slug: "rockharz", editionYear: 2027, status: "tba", headliners: ["AMON AMARTH"] }, candidate);
+    if (drift === "url") {
+      value.sourceUrl += "/";
+      candidate.sourceUrl = value.sourceUrl;
+      candidate.evidence.forEach((e) => e.sourceUrl = value.sourceUrl);
+    }
+    if (drift === "edition") candidate.observedEditionYears = [];
+    if (drift === "candidate-evidence") candidate.evidence = candidate.evidence.filter((e) => e.field !== "status");
+    const persistedValue = structuredClone(value);
+    if (drift === "persisted-evidence") persistedValue.candidate.evidence = persistedValue.candidate.evidence.filter((e) => e.field !== "status");
+    const attempt = await persist(persistedValue);
+    await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix }), /matching verified source evidence/);
+    assert.equal((await db.festivalEdition.findUniqueOrThrow({ where: { id: edition.id } })).status, "TBA");
+    const stored = await db.ingestionCandidate.findUniqueOrThrow({ where: { attemptId: attempt.id } });
+    assert.equal(stored.reviewState, "PENDING");
+    assert.equal(await db.catalogPublication.count({ where: { sourceId: "ingestion:" + stored.id } }), 0);
+    assert.equal(await db.catalogPlaylistRefresh.count({ where: { festivalSlug: "rockharz" } }), 0);
+  }
+});
+
 test("unreviewed Rockharz 2027 lineup source fails closed without provider queue or partial catalogue write", async () => {
   const name = `Unsupported Source ` + suffix;
   const value = result(name, { festivalSlug: "rockharz", sourceUrl: "https://www.rockharz-festival.com/bands/" });
   value.candidate.festivalSlug = value.festivalSlug;
   value.candidate.sourceUrl = value.sourceUrl;
   value.candidate.evidence.forEach((e) => e.sourceUrl = value.sourceUrl);
+  value.candidate.status = "partial";
+  value.candidate.evidence.push({ field: "status", sourceUrl: value.sourceUrl, observedAt: value.fetchedAt, excerpt: "Synthetic wrong-source status" });
+  value.changes.push({ kind: "status_changed", field: "status", before: "tba", after: "partial", reviewRequired: false });
+  const edition = await db.festivalEdition.findFirstOrThrow({ where: { festival: { slug: "rockharz" }, year: 2027, recordState: "CURRENT" } });
+  await db.festivalEdition.update({ where: { id: edition.id }, data: { status: "TBA" } });
   const attempt = await persist(value);
   const before = await db.artist.count();
   await assert.rejects(publishIngestionResult(db, { attemptId: attempt.id, result: value, sourceCommit: suffix }), /matching verified source evidence/);
   assert.equal(await db.artist.count(), before);
+  assert.equal((await db.festivalEdition.findUniqueOrThrow({ where: { id: edition.id } })).status, "TBA");
+  const stored = await db.ingestionCandidate.findUniqueOrThrow({ where: { attemptId: attempt.id } });
+  assert.equal(await db.catalogPublication.count({ where: { sourceId: "ingestion:" + stored.id } }), 0);
   assert.equal(await db.catalogPlaylistRefresh.count({ where: { festivalSlug: "rockharz" } }), 0);
   assert.equal((await db.ingestionCandidate.findUniqueOrThrow({ where: { attemptId: attempt.id } })).reviewState, "PENDING");
 });

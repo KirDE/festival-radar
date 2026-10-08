@@ -106,15 +106,16 @@ test("closed post entry-content and content grid cannot borrow sidebar tiles or 
   noEvidence("bands", fixtures.bands.replace(first, `<div class="band_item">${first}</div>`));
 });
 
-test("dated headliner article yields explicit AMON AMARTH billing only", () => {
+test("dated headliner article yields explicit AMON AMARTH billing and partial status", () => {
   const candidate = extract("headliner");
   assert.deepEqual(candidate.headliners, ["AMON AMARTH"]);
-  onlyFields("headliner", candidate, ["headliners"]);
+  onlyFields("headliner", candidate, ["headliners", "status"]);
+  assert.equal(candidate.status, "partial");
   assert.match(candidate.evidence[0].excerpt, /2026-10-07T14:30:22\+00:00/);
   const result = evaluateCandidate(current, candidate);
   assert.equal(result.publishable, true);
   assert.deepEqual(candidate.warnings, []);
-  assert.deepEqual(result.changes.map(({ kind }) => kind), ["headliner_added"]);
+  assert.deepEqual(result.changes.map(({ kind }) => kind).sort(), ["headliner_added", "status_changed"]);
   for (const [before, after] of [
     ['id="post-84153"', 'id="post-84154"'], ["HEADLINER-ALARM!", "HEADLINER!"],
     ["2026-10-07T14:30:22+00:00", "2026-10-08T14:30:22+00:00"],
@@ -127,6 +128,20 @@ test("dated headliner article yields explicit AMON AMARTH billing only", () => {
   noEvidence("headliner", fixtures.headliner.replace(p, p + p));
   noEvidence("headliner", fixtures.headliner.replace(p, p + "<p>ANOTHER ARTIST is headliner.</p>"));
   noEvidence("headliner", fixtures.headliner.replace(p, "").replace("</body>", p + "</body>"));
+});
+
+test("headliner status repairs TBA with simultaneous billing or existing 30 acts, then is unchanged", () => {
+  const candidate = extract("headliner");
+  const fresh = evaluateCandidate({ ...current, status: "tba" }, candidate);
+  assert.equal(fresh.publishable, true);
+  assert.deepEqual(fresh.changes.map(({ field }) => field).sort(), ["headliners", "status"]);
+  const production = { ...current, status: "tba", ticketStatus: "unavailable", lineup: canonicalArtists, headliners: ["AMON AMARTH"] };
+  const repair = evaluateCandidate(production, candidate);
+  assert.equal(repair.publishable, true);
+  assert.deepEqual(repair.changes, [{ kind: "status_changed", field: "status", before: "tba", after: "partial", reviewRequired: false }]);
+  const replay = evaluateCandidate({ ...production, status: "partial" }, candidate);
+  assert.deepEqual(replay.changes, []);
+  assert.equal(replay.publishable, false);
 });
 
 test("marketplace hero parses corroborated evergreen dates and review-gated city changes; repeated footer only corroborates", () => {

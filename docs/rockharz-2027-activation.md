@@ -14,7 +14,7 @@ from their own URL; no cross-source facts or inferred ticketsUrl.
 | Exact source URL | Bounded evidence/output |
 | --- | --- |
 | https://www.rockharz-festival.com/bands | Unique canonical/OG URL, post-65077, Bands h1, entry-content, one 2027 h3 followed by closed #content. Extract lightbox anchor title/news asset, validate distinct image linkespalte asset, p and inert bandsocials wrappers. Lineup only. |
-| https://www.rockharz-festival.com/headliner-alarm | Unique canonical/OG URL, article:published_time `2026-10-07T14:30:22+00:00`, post-84153, HEADLINER-ALARM! h1, exact bounded 2027 billing paragraph. Headliners only: AMON AMARTH. |
+| https://www.rockharz-festival.com/headliner-alarm | Unique canonical/OG URL, article:published_time `2026-10-07T14:30:22+00:00`, post-84153, HEADLINER-ALARM! h1, exact bounded 2027 billing paragraph. Headliners: AMON AMARTH; status: partial, with evidence from the same confirmed billing. |
 | https://ticketmarktplatz.rockharz-festival.com/ | Exact ROCKHARZ Ticketmarktplatz 2027 document title, unique main#top/hero, Ticketmarktplatz h1 and kicker. Parse 2027 dates in any German named month and bounded city independently; unique footer must corroborate. Valid changed dates are supported; reversed/overflow/conflicting dates fail. Dates/city only. |
 | https://www.rockharz-festival.com/das-rockharz-2027-ist-ausverkauft | Unique canonical/OG URL, article:published_time `2026-07-09T15:33:09+00:00`, post-82346, exact sold-out h1 and bounded edition-specific statement. Typed ticketStatus unavailable only, carried through normal adapter evidence and extraction merger. |
 
@@ -53,7 +53,13 @@ Rockharz **2027 only** lineup/headliner catalogue publications from exact review
 publication still records `lineupChanged: true`, but its immutable evidence records
 `playlistRefresh.status: deferred`, policy, reason and candidate/evidence IDs. No
 `CatalogPlaylistRefresh` row is created; replay returns the persisted absence
-without queueing. Source/edition/field/persisted-evidence drift fails closed and
+without queueing. The exact `/headliner-alarm` contract also permits a simultaneous
+`status: partial` change, or a status-only repair when AMON AMARTH is already
+published (including the existing 29 lineup + 1 headliner state). Every changed
+field requires both candidate and persisted evidence from that exact URL;
+status additionally requires candidate/after value `partial`. Status-only audit
+records deferral with `lineupChanged: false` and never creates a refresh row.
+Source/edition/field/persisted-evidence drift fails closed and
 rolls back rather than falling through to provider enqueue. Ticket-only changes
 never queue. Other festivals/editions and admin edits retain default behavior.
 A separate authorization is needed to initiate later provider activity.
