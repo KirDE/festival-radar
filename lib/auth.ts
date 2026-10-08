@@ -25,6 +25,16 @@ export async function currentUser() {
   return { id: session.user.id, email: session.user.email, role: session.user.role, emailVerified: session.user.emailVerifiedAt !== null };
 }
 
+/** Internal request-cookie binding; re-read the row under lock after network I/O. */
+export async function currentSessionIdentity() {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  const tokenHash = digest(token);
+  const session = await db.session.findUnique({ where: { tokenHash }, include: { user: true } });
+  if (!session || session.expiresAt <= new Date()) return null;
+  return { sessionId: session.id, tokenHash, userId: session.userId };
+}
+
 export async function destroySession() {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;

@@ -192,6 +192,7 @@ model User {
   submissionAuditEntries    FestivalSubmissionAudit[]
   emailVerificationTokens   EmailVerificationToken[]
   passkeys                  Passkey[]
+  novaRawCaptures           NovaRockRawCardCapture[]
 }
 
 model Passkey {
@@ -275,6 +276,7 @@ model Festival {
   editions    FestivalEdition[]
   sources     FestivalSource[]
   logo        FestivalLogo?
+  novaRawCaptures NovaRockRawCardCapture[]
 
   @@index([countryCode, slug])
 }
@@ -321,6 +323,7 @@ model FestivalEdition {
   timetable       TimetablePerformance[]
   playlists       FestivalPlaylist[]
   sources         FestivalSource[]
+  novaRawCaptures NovaRockRawCardCapture[]
 
   @@unique([festivalId, year])
   @@index([year, recordState])
@@ -481,6 +484,7 @@ model FestivalSource {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   festival           Festival? @relation(fields: [festivalId], references: [id], onDelete: SetNull)
+  novaRawCaptures NovaRockRawCardCapture[]
 
   @@unique([festivalSlug, url])
   @@index([enabled, refreshPolicy])
@@ -755,6 +759,7 @@ model IngestionAttempt {
   retries        IngestionAttempt[]     @relation("AttemptRetry")
   run            IngestionRun           @relation(fields: [runId], references: [id], onDelete: Cascade)
   candidate      IngestionCandidate?
+  novaRawCapture NovaRockRawCardCapture?
 
   @@index([runId, festivalSlug])
   @@index([festivalSlug, endedAt])
@@ -783,6 +788,7 @@ model IngestionCandidate {
   run              IngestionRun         @relation(fields: [runId], references: [id], onDelete: Restrict)
   attempt          IngestionAttempt     @relation(fields: [attemptId], references: [id], onDelete: Restrict)
   novaContentSeal  NovaRockContentSeal?
+  novaRawCapture   NovaRockRawCardCapture?
   evidence         IngestionEvidence[]
   diffs            IngestionDiff[]
 
@@ -907,4 +913,34 @@ model NovaRockContentSeal {
   snapshot      Json
   createdAt     DateTime @default(now())
   candidate     IngestionCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  rawCapture    NovaRockRawCardCapture?
+}
+
+// Restricted original document; never read by public/catalogue APIs.
+// Session ID deliberately has no FK: deleting/revoking a session must remain
+// possible without mutating the immutable historical capture.
+model NovaRockRawCardCapture {
+  id                      String @id @default(cuid())
+  sealId                  String @unique
+  candidateId             String @unique
+  attemptId               String @unique
+  sourceId                String
+  festivalId              String
+  editionId               String
+  configurationGeneration Int
+  leaseVersion            Int
+  reviewerId              String
+  sessionId               String
+  rawBytes                Bytes
+  rawDocumentSha256       String @db.Char(64)
+  completedAt             DateTime
+  cards                   Json
+  createdAt               DateTime @default(now())
+  seal                    NovaRockContentSeal @relation(fields: [sealId], references: [id], onDelete: Restrict)
+  candidate               IngestionCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  attempt                 IngestionAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  source                  FestivalSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  festival                Festival @relation(fields: [festivalId], references: [id], onDelete: Restrict)
+  edition                 FestivalEdition @relation(fields: [editionId], references: [id], onDelete: Restrict)
+  reviewer                User @relation(fields: [reviewerId], references: [id], onDelete: Restrict)
 }
