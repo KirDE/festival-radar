@@ -133,11 +133,16 @@ export async function sealNovaRockContent(db: PrismaClient, candidateId: string)
 
 /** Fresh read with transaction revalidation. Success conveys integrity only, never approval. */
 export async function verifyNovaRockContentSeal(db: PrismaClient, sealId: string) {
-  return db.$transaction(async (tx) => {
-    const seal = await tx.novaRockContentSeal.findUniqueOrThrow({ where: { id: sealId } });
-    await lock(tx, seal.candidateId);
-    const content = await load(tx, seal.candidateId);
-    if (seal.version !== 1 || seal.contentDigest !== content.contentDigest || !equal(seal.snapshot, content.snapshot)) throw new Error("Content seal mismatch");
-    return { sealId: seal.id, candidateId: seal.candidateId, contentDigest: content.contentDigest, authority: "NONE" as const };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10000 });
+  return db.$transaction((tx) => verifyNovaRockContentSealInTransaction(tx, sealId),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 10000 });
+}
+
+/** Internal composition primitive. Caller must use Serializable isolation.
+ * Still integrity only: never reviewer or publication authority. */
+export async function verifyNovaRockContentSealInTransaction(tx: Tx, sealId: string) {
+  const seal = await tx.novaRockContentSeal.findUniqueOrThrow({ where: { id: sealId } });
+  await lock(tx, seal.candidateId);
+  const content = await load(tx, seal.candidateId);
+  if (seal.version !== 1 || seal.contentDigest !== content.contentDigest || !equal(seal.snapshot, content.snapshot)) throw new Error("Content seal mismatch");
+  return { sealId: seal.id, candidateId: seal.candidateId, contentDigest: content.contentDigest, authority: "NONE" as const };
 }

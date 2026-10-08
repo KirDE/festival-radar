@@ -43,6 +43,9 @@ jobs:
       - run: npx prisma migrate reset --force
       - run: node --import tsx tests/novarock-content-seal-concurrency.e2e.test.ts
       - run: npx prisma migrate reset --force
+      # Draft suite retains an immutable seal and checks that review remains non-authorizing.
+      - run: node --import tsx tests/novarock-review-draft.e2e.test.ts
+      - run: npx prisma migrate reset --force
       - run: npm run test:logo-assets
       - run: npm run test:playlist-queue
       - run: npm run test:sources
