@@ -89,7 +89,9 @@ test("PostgreSQL permits lifecycle-only transitions, freezes content and rejects
     await reject(db.ingestionDiff.delete({ where: { id: diff.id } }));
     const { id: _diffId, ...extraDiff } = diff;
     await reject(db.ingestionDiff.create({ data: { ...extraDiff, beforeValue: extraDiff.beforeValue as any, afterValue: extraDiff.afterValue as any } }));
-    await reject(db.$executeRawUnsafe('TRUNCATE "NovaRockContentSeal"'));
+    // Include the new referencing capture table so PostgreSQL reaches the
+    // append-only statement triggers rather than rejecting FK dependency first.
+    await reject(db.$executeRawUnsafe('TRUNCATE "NovaRockContentSeal", "NovaRockRawCardCapture"'));
     // A transaction error must leave the seal and original content intact.
     await assert.rejects(db.$transaction(async (tx) => {
       await tx.ingestionSourceState.update({ where: { festivalSlug: "nova-rock" }, data: { lastSuccessfulCheck: new Date("2028-01-01") } });
