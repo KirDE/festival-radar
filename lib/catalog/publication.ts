@@ -170,6 +170,7 @@ async function createPublication(db: Database, input: {
   actorLabel: string;
   fields: string[];
   evidence: unknown;
+  playlistRefreshDeferral?: { policy: string; reason: string };
 }) {
   if (!input.fields.length) return null;
   const lineupChanged = input.fields.some((field) => field === "lineup" || field === "headliners");
@@ -178,8 +179,9 @@ async function createPublication(db: Database, input: {
     editionYear: input.editionYear, actorLabel: input.actorLabel, fields: input.fields,
     lineupChanged, evidence: json(input.evidence),
   } });
-  if (lineupChanged) await db.catalogPlaylistRefresh.create({ data: { publicationId: publication.id, festivalSlug: input.festivalSlug } });
-  return { ...publication, playlistRefreshRequested: lineupChanged };
+  const playlistRefreshRequested = lineupChanged && !input.playlistRefreshDeferral;
+  if (playlistRefreshRequested) await db.catalogPlaylistRefresh.create({ data: { publicationId: publication.id, festivalSlug: input.festivalSlug } });
+  return { ...publication, playlistRefreshRequested };
 }
 
 export async function publishIngestionResult(client: PrismaClient, input: { attemptId: string; result: IngestionResult; sourceCommit: string; sourceLease?: { id: string; owner: string; updatedAt: Date }; notificationEvents?: PublishedNotificationEvent[] }) {
@@ -206,8 +208,9 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
     if (!candidate || !candidate.publishable) throw new Error("Publishable ingestion candidate was not persisted");
     if (input.sourceLease && (candidate.festivalSlug !== input.result.festivalSlug || candidate.attempt.requestedUrl !== input.result.sourceUrl)) throw new Error("Leased candidate source does not match persisted attempt");
     const sourceId = `ingestion:${candidate.id}`;
-    const existing = await db.catalogPublication.findUnique({ where: { sourceId } });
-    if (existing) return { ...existing, playlistRefreshRequested: existing.lineupChanged };
+    const existing = await db.catalogPublication.findUnique({ where: { sourceId }, include: { playlistRefresh: { select: { id: true } } } });
+    // Replay reports the persisted queue relation, never creating a new job.
+    if (existing) return { ...existing, playlistRefreshRequested: Boolean(existing.playlistRefresh) };
     if (candidate.reviewState !== "PENDING") throw new Error(`Candidate is not pending: ${candidate.reviewState}`);
     if (candidate.diffs.some(({ reviewRequired }) => reviewRequired)) throw new Error("Persisted candidate requires review");
     const normalizedDiffs = (values: { field: string; before: unknown; after: unknown }[]) => values.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
@@ -217,10 +220,29 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
     const expectedYear = input.result.candidate.observedEditionYears.length === 1 ? input.result.candidate.observedEditionYears[0] : candidate.sourceYear ?? undefined;
     if (!expectedYear && input.result.changes.some(({ field }) => field === "lineup" || field === "headliners")) throw new Error("Cannot publish a lineup without one verified edition year");
     const applied = await applyFestivalChanges(db, { festivalSlug: input.result.festivalSlug, expectedYear, changes: input.result.changes, strictBefore: true, observedAt: new Date(input.result.fetchedAt) });
+    // Rockharz 2027 lineup/headliner publication is authorized as catalogue
+    // data, not as public provider playlist activity. Exact edition/source/field
+    // and persisted evidence must match; never fall through to default enqueue.
+    const sourceField = input.result.sourceUrl === "https://www.rockharz-festival.com/bands" ? "lineup"
+      : input.result.sourceUrl === "https://www.rockharz-festival.com/headliner-alarm" ? "headliners" : undefined;
+    const rockharzLineup = input.result.festivalSlug === "rockharz" && expectedYear === 2027 &&
+      applied.edition.year === 2027 && input.result.changes.some(({ field }) => field === "lineup" || field === "headliners");
+    const verifiedSource = sourceField !== undefined && candidate.festivalSlug === "rockharz" &&
+      input.result.candidate.observedEditionYears.length === 1 && input.result.candidate.observedEditionYears[0] === 2027 &&
+      candidate.attempt.requestedUrl === input.result.sourceUrl && input.result.candidate.sourceUrl === input.result.sourceUrl &&
+      input.result.candidate.festivalSlug === "rockharz" && input.result.changes.every(({ field }) => field === sourceField) &&
+      input.result.candidate.evidence.some((e) => e.field === sourceField && e.sourceUrl === input.result.sourceUrl) &&
+      candidate.evidence.some((e) => e.field === sourceField && e.sourceUrl === input.result.sourceUrl);
+    if (rockharzLineup && !verifiedSource) throw new Error("Rockharz playlist deferral requires matching verified source evidence");
+    const playlistRefreshDeferral = rockharzLineup ? {
+      policy: "rockharz-2027-official-sources-v1",
+      reason: "Catalogue publication approved; provider playlist activity requires separate authorization",
+    } : undefined;
     const publication = await createPublication(db, {
       source: CatalogPublicationSource.INGESTION, sourceId, festivalSlug: input.result.festivalSlug,
-      editionYear: applied.edition.year, actorLabel: "automatic-ingestion", fields: applied.changedFields,
-      evidence: { candidateId: candidate.id, sourceCommit: input.sourceCommit, sourceUrl: input.result.sourceUrl, evidenceIds: candidate.evidence.map(({ id }) => id) },
+      editionYear: applied.edition.year, actorLabel: "automatic-ingestion", fields: applied.changedFields, playlistRefreshDeferral,
+      evidence: { candidateId: candidate.id, sourceCommit: input.sourceCommit, sourceUrl: input.result.sourceUrl, evidenceIds: candidate.evidence.map(({ id }) => id),
+        ...(playlistRefreshDeferral ? { playlistRefresh: { status: "deferred", ...playlistRefreshDeferral } } : {}) },
     });
     // The due-worker event batch is committed atomically with the catalogue.
     if (publication && input.notificationEvents?.length) {

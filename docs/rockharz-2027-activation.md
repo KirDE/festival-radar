@@ -48,11 +48,15 @@ extracted as review evidence rather than discarded. Date support is a range of
 or conflicting footer fails closed. No admin edit or special mutation endpoint
 is part of this workflow; the read-only review queue cannot publish REVIEW rows.
 
-Normal ingestion follows existing global publication behavior: a lineup/headliner
-change queues a `CatalogPlaylistRefresh` row; ticket-status-only changes do not.
-The parser does not call a provider or bypass the normal publication policy.
-Parent must separately review the queued refresh worker/provider consequences before
-activation; a provider-side action may follow ingestion under existing scheduling.
+Rockharz **2027 only** lineup/headliner catalogue publications from exact reviewed
+`/bands` and `/headliner-alarm` sources defer provider playlist refresh. The
+publication still records `lineupChanged: true`, but its immutable evidence records
+`playlistRefresh.status: deferred`, policy, reason and candidate/evidence IDs. No
+`CatalogPlaylistRefresh` row is created; replay returns the persisted absence
+without queueing. Source/edition/field/persisted-evidence drift fails closed and
+rolls back rather than falling through to provider enqueue. Ticket-only changes
+never queue. Other festivals/editions and admin edits retain default behavior.
+A separate authorization is needed to initiate later provider activity.
 
 Synthetic fixtures mirror actual structures, not live snapshots. Local read-only
 probes of the supplied `/tmp/rhz-*-live.html` captures dated October 8 2026 yielded
@@ -70,7 +74,8 @@ configuration.
 
 1. Parent rechecks the **read-only current** FestivalSource/catalogue inventory.
    Account for the existing enabled homepage row and any later exact-URL rows.
-   Record IDs and verify slug/festival ID/edition ID/year 2027, dates/artists,
+   Record the existing source ID for a CAS-retarget to `/bands`, and verify
+   slug/festival ID/edition ID/year 2027, dates/artists,
    exact URLs, strategies/parserKey, enabled state, cadence, fetch/follow-link,
    validators, leases and configuration versions/updatedAt. Check candidate/
    attempt freshness and pending provider jobs. Missing exact-URL rows require
@@ -86,23 +91,24 @@ configuration.
    before source cutover**; record it. The base or dynamically derived checkout
    SHA does not substitute for deployed revision verification.
 4. Parent separately reviews/manages a narrow, audited source-configuration
-   cutover: first fence the existing homepage row against competing leases and
-   change it to disabled/manual_review as approved, preserving its prior config.
-   Create or convert **only** reviewed rows for the four exact URLs above, bound
-   to the existing festival and 2027 edition, with strategies
-   `["official_markup"]`, parserKey `official_markup:rockharz`, no alternate
-   fetch/follow-link/fallback. Require exact preflight IDs/versions/URL/edition,
-   expected row counts, no active leases, and deployed registry SHA; audit before
-   and after, reset stale HTTP validators and set an intended cadence/next run.
-   Abort on drift. A version-guarded rollback disables new sources/restores the
-   prior homepage configuration; it never deletes committed catalogue facts or
-   immutable publication evidence. No source configuration or content mutation
-   is executed by this PR.
+   cutover. Fence leases and CAS-retarget the **existing homepage source ID** to
+   exact `/bands` for edition 2027; preserve its prior configuration for rollback.
+   Create **three**, not four, additional bound source rows for exact
+   `/headliner-alarm`, ticket-marketplace and sold-out article URLs. Each of the
+   four final rows uses strategies `["official_markup"]`, parserKey
+   `official_markup:rockharz`, no alternate fetch/follow-link/fallback. Require
+   exact preflight ID/versions/URL/edition, expected row counts, no active
+   leases, and deployed registry SHA; audit before and after, reset stale HTTP
+   validators and set intended cadence/next run. Abort on drift or concurrent
+   changes. A version-guarded rollback disables the three newly created rows
+   and restores the original source ID/configuration. It never deletes committed
+   catalogue facts or immutable publication evidence. This PR executes no
+   production source configuration or content mutation.
 5. Verify fresh baseline attempts publish the intended existing 2027 additions/
    ticket status (or are UNCHANGED when already applied), with source-specific
-   evidence and candidate/publication lineage. Confirm normal refresh queue rows
-   for lineup/headliner publications, none for ticket-only changes, and
-   idempotent replay without duplicate jobs. Novel
+   evidence and candidate/publication lineage. Confirm audited deferral and
+   **zero new playlist-refresh rows** for lineup/headliner publications; replay
+   remains false without enqueue. Novel
    names/date/venue drift stay REVIEW; invalid markup has zero fields/diffs.
    Independent review plus parser/policy revision and deployment is required
    before a REVIEW candidate can re-enter the normal importer. Do not assume
@@ -116,8 +122,8 @@ node --import tsx tests/ingestion-rockharz-markup.test.mjs
 npm run typecheck
 ```
 
-Disposable PostgreSQL host check (existing guarded E2E fixture, including normal
-playlist refresh queue behavior and Rockharz commit/replay/collision cases):
+Disposable PostgreSQL host check (existing guarded E2E fixture, including
+non-Rockharz default queue and Rockharz deferral/replay/collision cases):
 
 ```sh
 node --import tsx --test tests/catalog-publication.e2e.test.ts
