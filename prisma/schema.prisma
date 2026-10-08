@@ -338,6 +338,11 @@ model Artist {
   imageAlt       String?
   imageWidth     Int?
   imageHeight    Int?
+  spotifyPopularity Int?
+  spotifyFollowers BigInt?
+  spotifyStatsCheckedAt DateTime?
+  spotifyStatsArtistId String?
+  spotifyStatsSourceUrl String?
   identityState  ArtistIdentityState
   topTracks      String[]
   recentSetlists Json

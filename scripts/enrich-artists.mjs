@@ -2,6 +2,7 @@ import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { publishArtistEnrichment as publishPersistedEnrichment, exactArtistName, validateEnrichmentProfile } from "../lib/catalog/artist-enrichment-publication.ts";
 import { boundedEnrichmentEvidence, migrateEnrichmentState } from "../lib/catalog/artist-enrichment-state.ts";
+import { refreshSpotifyArtistStats, spotifyArtistFetcher } from "../lib/catalog/artist-spotify-stats.ts";
 const userAgent = process.env.MUSICBRAINZ_USER_AGENT || "FestivalRadar/1.0 (https://github.com/KirDE/festival-radar)";
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 
@@ -38,7 +39,7 @@ function relationLinks(relations = []) {
 }
 
 // Dependency injection exercises the real checkpoint/restart path without a network or DB.
-export async function runEnrichment({ db, store, readArtists, fetchSearch = (name) => request(`https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(`artist:${name}`)}&fmt=json&limit=10`), publish: publishArtistEnrichment = publishPersistedEnrichment, pause = sleep, now = () => new Date() }) {
+export async function runEnrichment({ db, store, readArtists, refreshSpotify = async () => {}, fetchSearch = (name) => request(`https://musicbrainz.org/ws/2/artist/?query=${encodeURIComponent(`artist:${name}`)}&fmt=json&limit=10`), publish: publishArtistEnrichment = publishPersistedEnrichment, pause = sleep, now = () => new Date() }) {
   // Retry durable publication before the daily gate, including flat imports.
   // The publisher reloads the locked payload; store.payload is only a claim snapshot.
   await publishArtistEnrichment(db, store);
@@ -71,6 +72,7 @@ export async function runEnrichment({ db, store, readArtists, fetchSearch = (nam
   let lastRequestAt = 0;
   for (const { name, slug: key } of artists) {
     if (completed.has(key)) continue;
+    await refreshSpotify(key);
     // Remove retryable review when attempting this artist again.
     for (let i = manualReview.length - 1; i >= 0; i--) if (manualReview[i].slug === key) manualReview.splice(i, 1);
     let search = cache[key];
@@ -136,7 +138,8 @@ async function main() {
   let store;
   try {
     store = await claimOperationalState(db, "artist-enrichment");
-    const summary = await runEnrichment({ db, store, readArtists: async () => (await readCatalog()).artists });
+    const fetchArtist = spotifyArtistFetcher();
+    const summary = await runEnrichment({ db, store, refreshSpotify: (slug) => refreshSpotifyArtistStats({ db, lease: store, slug, fetchArtist }), readArtists: async () => (await readCatalog()).artists });
     if (summary) process.stdout.write(`${JSON.stringify(summary)}\n`);
   } finally { await store?.release(); await db.$disconnect(); }
 }

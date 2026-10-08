@@ -17,6 +17,13 @@ export type ArtistProfile = {
   identities: { spotify?: string; musicbrainz?: string; setlistFm?: string };
   identityState: "linked" | "ambiguous" | "unresolved" | "retryable";
   links: { label: string; url: string; source: ArtistSource; verified: boolean }[];
+  spotifyStats?: {
+    popularity: number | null;
+    followers: number | null;
+    checkedAt: string;
+    artistId: string;
+    sourceUrl: string;
+  } | null;
   topTracks: string[];
   recentSetlists: { date: string; venue: string; url: string }[];
   provenance: { field: string; source: ArtistSource; url: string; checkedAt: string }[];

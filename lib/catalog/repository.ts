@@ -1,3 +1,4 @@
+import { verifiedSpotifyArtistId } from "../artist-spotify-identity.ts";
 import type { PrismaClient } from "@prisma/client";
 import type { ArtistProfile } from "../domain/artist.ts";
 import type { FestivalEdition } from "../domain/edition.ts";
@@ -100,6 +101,9 @@ export class DatabaseCatalogRepository implements CatalogRepository {
       links: row.links.map(({ label, url, source, verified }) => ({
         label, url, source: source as ArtistProfile["links"][number]["source"], verified,
       })),
+      spotifyStats: row.spotifyStatsCheckedAt && row.spotifyStatsArtistId && row.spotifyStatsArtistId === verifiedSpotifyArtistId(row) && row.spotifyStatsSourceUrl
+        ? { popularity: row.spotifyPopularity, followers: row.spotifyFollowers === null ? null : Number(row.spotifyFollowers),
+          checkedAt: row.spotifyStatsCheckedAt.toISOString(), artistId: row.spotifyStatsArtistId!, sourceUrl: row.spotifyStatsSourceUrl } : undefined,
       topTracks: row.topTracks, recentSetlists: row.recentSetlists as ArtistProfile["recentSetlists"],
       provenance: row.provenance.map(({ field, source, url, checkedAt }) => ({
         field, source: source as ArtistProfile["provenance"][number]["source"], url,

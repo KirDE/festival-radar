@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { Festival } from "@/lib/domain/festival";
 import { FestivalLogo } from "./FestivalLogo";
@@ -7,7 +8,7 @@ import { useLanguage } from "./LanguageProvider";
 import { PlanningTools } from "./PlanningTools";
 import type { PlaylistStatus } from "@/lib/domain/festival";
 import { ticketPresentation } from "@/lib/tickets";
-import { announcedArtists, hasAnnouncedLineup } from "@/lib/festival-lineup";
+import { announcedArtists, hasAnnouncedLineup, sortFestivalLineup, type LineupSort } from "@/lib/festival-lineup";
 import {
   FavoriteButton,
   useLocalPlanner,
@@ -19,13 +20,17 @@ export function FestivalDetail({
   festivals,
   artistSlugs,
   playlist,
+  artistPopularity = {},
 }: {
   item: Festival;
   festivals: Festival[];
   artistSlugs: Readonly<Record<string, string>>;
   playlist?: PlaylistStatus;
+  artistPopularity?: Readonly<Record<string, number | null>>;
 }) {
   const { language, locale, t } = useLanguage();
+  const [lineupSort, setLineupSort] = useState<LineupSort>("official");
+  const sortedLineup = sortFestivalLineup(item, lineupSort, locale, artistPopularity);
   const planner = useLocalPlanner();
   const displayNames = new Intl.DisplayNames([locale], { type: "region" });
   const prettyDate = (value: string) =>
@@ -159,8 +164,17 @@ export function FestivalDetail({
         {item.lineup.length > 0 && (
           <>
             <h3>{t(item.headliners.length > 0 ? "alsoAnnounced" : "announcedActs")}</h3>
+            <label className="lineupSort">
+              {t("lineupSort")}
+              <select value={lineupSort} onChange={(event) => setLineupSort(event.target.value as LineupSort)}>
+                <option value="official">{t("lineupOfficial")}</option>
+                <option value="alphabetical">{t("lineupAlphabetical")}</option>
+                <option value="chronological">{t("lineupChronological")}</option>
+                <option value="popularity">{t("lineupPopularity")}</option>
+              </select>
+            </label>
             <div className="lineupGrid">
-              {item.lineup.map((artist) => (
+              {sortedLineup.map((artist) => (
                 <Link href={`/${language}/artists/${artistSlugs[artist]}/`} key={artist}>
                   {artist}
                 </Link>
