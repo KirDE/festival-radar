@@ -5,7 +5,10 @@ const db = new PrismaClient();
 
 test.beforeAll(async () => {
   if (!process.env.DATABASE_URL || !/(?:test|integration)/i.test(new URL(process.env.DATABASE_URL).pathname)) throw new Error("A test DATABASE_URL is required");
-  await db.$executeRawUnsafe('TRUNCATE TABLE "AdminChange", "AdminDraft", "AdminParserRun", "AdminResourceState", "AdminAuditEntry", "Session", "User" CASCADE');
+  // Truncating User CASCADE would reach the append-only Nova capture table
+  // through its reviewer FK, even in a disposable database with no captures.
+  await db.$executeRawUnsafe('TRUNCATE TABLE "AdminChange", "AdminDraft", "AdminParserRun", "AdminResourceState", "AdminAuditEntry", "Session" CASCADE');
+  await db.$executeRawUnsafe('DELETE FROM "User"');
 });
 
 test.afterAll(async () => db.$disconnect());

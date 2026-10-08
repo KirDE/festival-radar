@@ -36,7 +36,10 @@ class Client {
 }
 
 test.before(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "AdminChange", "AdminDraft", "AdminParserRun", "AdminResourceState", "AdminAuditEntry", "Session", "User" CASCADE');
+  // Truncating User CASCADE would reach the append-only Nova capture table
+  // through its reviewer FK, even in a disposable database with no captures.
+  await db.$executeRawUnsafe('TRUNCATE TABLE "AdminChange", "AdminDraft", "AdminParserRun", "AdminResourceState", "AdminAuditEntry", "Session" CASCADE');
+  await db.$executeRawUnsafe('DELETE FROM "User"');
   const festival = await db.festival.upsert({
     where: { slug: "wacken-open-air" },
     create: { slug: "wacken-open-air", name: "Wacken Open Air", country: "Germany", countryCode: "DE", city: "Wacken", officialUrl: "https://www.wacken.com/", genres: ["metal"] },
