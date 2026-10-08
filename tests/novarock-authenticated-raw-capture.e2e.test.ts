@@ -14,6 +14,7 @@ import { novaContentFixture } from "./support/novarock-content-fixture.ts";
 import { captureAcquisitionProvenance } from "../lib/ingestion/provenance.ts";
 import { createIngestionRun, persistAttempt, finishIngestionRun } from "../lib/ingestion/repository.ts";
 import { sealNovaRockContent } from "../lib/ingestion/novarock-content-seal.ts";
+import { verifyNovaRockCardDocument } from "../lib/ingestion/novarock-card-observation.ts";
 
 requireLocalDisposableDatabase(process.env.DATABASE_URL);
 const db = new PrismaClient();
@@ -76,11 +77,41 @@ test(process.env.NOVA_CAPTURE_COMPETE_ONLY === "1" ? "isolated PG: simultaneous 
       queue: await db.catalogPlaylistRefresh.findMany({ orderBy: { id: "asc" } }),
       playlist: await db.festivalPlaylist.findMany({ orderBy: { id: "asc" } }),
     }); }
+    // The app DB writer is TRUSTED, not independently attested: it can forge a
+    // plausible first row from fixture bytes without using the HTTPS transport.
+    // This disposable-DB probe intentionally rolls its successful INSERT back.
+    const fakeBytes = readFileSync(fixturePath);
+    const parsed = verifyNovaRockCardDocument(fakeBytes, seal.snapshot);
+    const fakeData = (cards: unknown) => ({
+      id: "synthetic-first-insert-probe", sealId: seal.id, candidateId: candidate.id, attemptId: attempt.id,
+      sourceId: source.id, festivalId: fixture.festival.id, editionId: fixture.edition.id,
+      configurationGeneration: provenance.configurationGeneration, leaseVersion: provenance.leaseVersion,
+      reviewerId: user.id, sessionId: session.id, rawBytes: fakeBytes,
+      rawDocumentSha256: createHash("sha256").update(fakeBytes).digest("hex"), completedAt: new Date(),
+      cards: cards as Prisma.InputJsonValue,
+    });
+    for (const field of ["officialUrl", "day", "billing", "position"] as const) {
+      const malformed = parsed.cards.map((card) => ({ ...card }));
+      (malformed[0] as Record<string, unknown>)[field] = null;
+      await assert.rejects(db.novaRockRawCardCapture.create({ data: fakeData(malformed) }),
+        (error) => { assert.match(String(error), /Nova raw capture ordered card drift/); return true; },
+        "SQL must reject first INSERT with JSON null " + field);
+      assert.equal(await db.novaRockRawCardCapture.count(), 0);
+    }
+    const rollback = new Error("rollback synthetic DB-writer forgery");
+    await assert.rejects(db.$transaction(async (tx) => {
+      const forged = await tx.novaRockRawCardCapture.create({ data: fakeData(parsed.cards) });
+      assert.equal(forged.sessionId, session.id);
+      assert.deepEqual(Buffer.from(forged.rawBytes), fakeBytes);
+      throw rollback;
+    }), (error) => error === rollback);
+    assert.equal(await db.novaRockRawCardCapture.count(), 0);
     const before = await snapshot();
     server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "-H", "127.0.0.1", "-p", "32779"], {
       cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, APP_URL: origin,
         ADMIN_EMAILS: user.email, AUTH_SECRET: "synthetic-test-auth-secret-at-least-32-chars",
-        NODE_OPTIONS: "--require=" + preload, NOVA_CAPTURE_TEST_FIXTURE: fixturePath, NOVA_CAPTURE_TEST_BARRIER_DIR: barrier },
+        NODE_OPTIONS: "--require=" + preload, NOVA_CAPTURE_TEST_FIXTURE: fixturePath, NOVA_CAPTURE_TEST_BARRIER_DIR: barrier,
+        NOVA_ROCK_RAW_CAPTURE_ENABLED: "true" },
     });
     server.stdout?.on("data", (chunk) => { serverLog = (serverLog + String(chunk)).slice(-4000); });
     server.stderr?.on("data", (chunk) => { serverLog = (serverLog + String(chunk)).slice(-4000); });
@@ -91,6 +122,7 @@ test(process.env.NOVA_CAPTURE_COMPETE_ONLY === "1" ? "isolated PG: simultaneous 
       await new Promise((done) => setTimeout(done, 250));
     }
     assert.ok(ready, "isolated local Next server started: " + serverLog);
+    const requestCount = () => existsSync(join(barrier, "requests")) ? readFileSync(join(barrier, "requests")).byteLength : 0;
     const post = (body: unknown, headers: Record<string, string> = {}) => fetch(origin + path, { method: "POST",
       headers: { "Content-Type": "application/json", Cookie: "festival_radar_session=" + token, Origin: origin, ...headers },
       body: JSON.stringify(body) });
@@ -102,6 +134,8 @@ test(process.env.NOVA_CAPTURE_COMPETE_ONLY === "1" ? "isolated PG: simultaneous 
     assert.equal((await rawPost('{"sealId":"fake","sealId":"' + seal.id + '"}')).status, 400);
     assert.equal((await rawPost(JSON.stringify({ sealId: seal.id, padding: "x".repeat(600) }))).status, 400);
     assert.equal((await post({ sealId: seal.id }, { Cookie: "" })).status, 403);
+    assert.equal((await post({ sealId: "unknown-valid-syntax" })).status, 409);
+    assert.equal(requestCount(), 0, "invalid or unauthenticated requests cannot launch HTTPS");
     await db.session.update({ where: { id: session.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
     assert.equal((await post({ sealId: seal.id })).status, 403);
     await db.session.update({ where: { id: session.id }, data: { expiresAt: new Date(Date.now() + 600000) } });
@@ -149,10 +183,22 @@ test(process.env.NOVA_CAPTURE_COMPETE_ONLY === "1" ? "isolated PG: simultaneous 
       }
     }
     if (process.env.NOVA_CAPTURE_COMPETE_ONLY === "1") {
-      const attempts = await Promise.all([post({ sealId: seal.id }), post({ sealId: seal.id })]);
-      assert.deepEqual(attempts.map((response) => response.status).sort(), [201, 409]);
-      assert.equal(await db.novaRockRawCardCapture.count(), 1);
-      assert.deepEqual(await snapshot(), before, "competing inserts have zero publication side effects");
+      writeFileSync(join(barrier, "arm"), "compete");
+      const first = post({ sealId: seal.id });
+      void first.catch(() => {});
+      try {
+        await until(() => existsSync(join(barrier, "started")), "first transport held");
+        assert.equal((await post({ sealId: seal.id })).status, 409, "second request refused while first is in flight");
+        assert.equal(requestCount(), 1, "in-process competing seal requests coalesce before HTTPS");
+        writeFileSync(join(barrier, "release"), "1");
+        assert.equal((await first).status, 201);
+        assert.equal(requestCount(), 1);
+        assert.equal(await db.novaRockRawCardCapture.count(), 1);
+        assert.deepEqual(await snapshot(), before, "competing inserts have zero publication side effects");
+      } finally {
+        writeFileSync(join(barrier, "release"), "1");
+        await Promise.allSettled([first]);
+      }
       return;
     }
     if (process.env.NOVA_CAPTURE_RACE_ONLY === "1") {
@@ -164,6 +210,7 @@ test(process.env.NOVA_CAPTURE_COMPETE_ONLY === "1" ? "isolated PG: simultaneous 
       after.source = before.source;
       assert.deepEqual(after, before, "no candidate, catalogue, publication or queue mutation");
       assert.equal((await post({ sealId: seal.id })).status, 409, "fresh retry cannot adopt changed source generation");
+      assert.equal(requestCount(), 1, "stale seal preflight cannot re-fetch");
       return;
     }
     await writerFirst("edition", (tx) => tx.festivalEdition.update({ where: { id: fixture.edition.id }, data: { startDate: new Date("2027-06-11") } }));
@@ -209,8 +256,10 @@ test(process.env.NOVA_CAPTURE_COMPETE_ONLY === "1" ? "isolated PG: simultaneous 
     await assert.rejects(copy({ completedAt: "timestamp '2000-01-01'" }));
     await assert.rejects(copy(), sqlCode("23505"));
     assert.equal(await db.novaRockRawCardCapture.count(), 1);
+    const completedRequests = requestCount();
     const duplicates = await Promise.all([post({ sealId: seal.id }), post({ sealId: seal.id })]);
     assert.deepEqual(duplicates.map((r) => r.status), [409, 409]);
+    assert.equal(requestCount(), completedRequests, "already-captured seal does not re-fetch");
     await assert.rejects(db.novaRockRawCardCapture.update({ where: { id: capture.id }, data: { sessionId: "replaced" } }));
     await assert.rejects(db.novaRockRawCardCapture.delete({ where: { id: capture.id } }));
     await assert.rejects(db.$executeRawUnsafe('TRUNCATE "NovaRockRawCardCapture"'));

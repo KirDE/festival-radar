@@ -5,6 +5,10 @@ import { captureNovaRockRawCards } from "@/lib/ingestion/novarock-authenticated-
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
+  // This prerequisite is not deploy-ready: no cross-process rate limiter or
+  // independent DB-writer provenance boundary. Explicit local opt-in only.
+  if (process.env.NOVA_ROCK_RAW_CAPTURE_ENABLED !== "true")
+    return NextResponse.json({ authority: "NONE", error: "Capture unavailable." }, { status: 404 });
   if (!process.env.APP_URL || !requestHasTrustedOrigin(request, process.env.APP_URL))
     return NextResponse.json({ error: "Untrusted origin." }, { status: 403 });
   if (!await currentAdmin(["ADMIN"]))

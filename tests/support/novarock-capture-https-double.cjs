@@ -1,7 +1,7 @@
 // Test subprocess only. Production transport has no injectable URL/response seam.
 const https = require('node:https');
 const { EventEmitter } = require('node:events');
-const { readFileSync, existsSync, writeFileSync } = require('node:fs');
+const { readFileSync, existsSync, writeFileSync, appendFileSync } = require('node:fs');
 const { join } = require('node:path');
 const original = https.request;
 https.request = function(url, options, ...rest) {
@@ -9,6 +9,8 @@ https.request = function(url, options, ...rest) {
   if (options?.method !== 'GET' || options?.agent !== false || options?.servername !== 'www.novarock.at' ||
       options?.rejectUnauthorized !== true || Object.keys(options.headers).sort().join(',') !== 'Accept,Accept-Encoding')
     throw new Error('Test transport attempted altered host/credentials/headers');
+  const barrier = process.env.NOVA_CAPTURE_TEST_BARRIER_DIR;
+  if (barrier) appendFileSync(join(barrier, 'requests'), '1');
   const body = readFileSync(process.env.NOVA_CAPTURE_TEST_FIXTURE);
   const req = new EventEmitter();
   req.destroy = () => req;

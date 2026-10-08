@@ -61,13 +61,18 @@ BEGIN
    RAISE EXCEPTION 'Nova raw capture competing source or attempt'; END IF;
  FOR i IN 0..43 LOOP
    item := NEW.cards->i;
-   IF jsonb_typeof(item) <> 'object' OR
-      (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(item) key) <> ARRAY['billing','caption','day','officialUrl','position']::text[] OR
-      jsonb_typeof(item->'caption') <> 'string' OR length(item->>'caption') NOT BETWEEN 1 AND 100 OR
-      (item->>'officialUrl') !~ '^https://www[.]novarock[.]at/artist/[a-z0-9-]+/$' OR
-      (item->>'day') NOT IN ('2027-06-09','2027-06-10','2027-06-11','2027-06-12') OR
-      item->>'billing' <> (CASE WHEN i < 4 THEN 'HEADLINER' ELSE 'LINEUP' END) OR
-      item->>'position' <> (CASE WHEN i < 4 THEN i ELSE i-4 END)::text OR
+   IF jsonb_typeof(item) IS DISTINCT FROM 'object' OR
+      (SELECT array_agg(key ORDER BY key) FROM jsonb_object_keys(item) key) IS DISTINCT FROM ARRAY['billing','caption','day','officialUrl','position']::text[] OR
+      jsonb_typeof(item->'caption') IS DISTINCT FROM 'string' OR
+      jsonb_typeof(item->'officialUrl') IS DISTINCT FROM 'string' OR
+      jsonb_typeof(item->'day') IS DISTINCT FROM 'string' OR
+      jsonb_typeof(item->'billing') IS DISTINCT FROM 'string' OR
+      jsonb_typeof(item->'position') IS DISTINCT FROM 'number' OR
+      (length(item->>'caption') BETWEEN 1 AND 100) IS DISTINCT FROM TRUE OR
+      ((item->>'officialUrl') ~ '^https://www[.]novarock[.]at/artist/[a-z0-9-]+/$') IS DISTINCT FROM TRUE OR
+      ((item->>'day') IN ('2027-06-09','2027-06-10','2027-06-11','2027-06-12')) IS DISTINCT FROM TRUE OR
+      item->>'billing' IS DISTINCT FROM (CASE WHEN i < 4 THEN 'HEADLINER' ELSE 'LINEUP' END) OR
+      item->>'position' IS DISTINCT FROM (CASE WHEN i < 4 THEN i ELSE i-4 END)::text OR
       item->>'caption' IS DISTINCT FROM (CASE WHEN i < 4 THEN s.snapshot->'candidate'->'normalized'->'headliners'->>i
                                             ELSE s.snapshot->'candidate'->'normalized'->'lineup'->>(i-4) END) THEN
       RAISE EXCEPTION 'Nova raw capture ordered card drift'; END IF;
