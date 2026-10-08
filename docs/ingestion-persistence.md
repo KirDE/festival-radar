@@ -18,3 +18,7 @@ updated in the same transaction as every successful attempt, so scheduling survi
 
 For bounded, read-only agent triage exports and the independent verification workflow,
 see [Agent-owned ingestion review queue](ingestion-agent-review.md).
+
+DB-due attempts now retain the atomic claimed configuration snapshot. See
+[acquisition provenance contract and PostgreSQL verification](novarock-attempt-provenance.md).
+Historical attempts are not backfilled and remain ineligible for future reviewed publication.

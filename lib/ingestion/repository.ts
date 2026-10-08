@@ -2,11 +2,14 @@ import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { INGESTION_SCHEMA_VERSION, type IngestionResult } from "./types.ts";
 
+import { readAcquisitionProvenance, type AcquisitionProvenance } from "./provenance.ts";
+
 export const INGESTION_POLICY_VERSION = "2026-08-29";
 export const MAX_EVIDENCE_EXCERPT = 2_000;
 
 type Client = PrismaClient | Prisma.TransactionClient;
 type AttemptInput = {
+  acquisitionProvenance?: AcquisitionProvenance;
   runId: string; festivalSlug: string; requestedUrl: string; finalUrl?: string;
   httpStatus?: number; durationMs: number; retryCount?: number; error?: string;
   startedAt: Date; endedAt: Date; result?: IngestionResult;
@@ -18,10 +21,13 @@ export async function createIngestionRun(db: Client, input: { trigger: "SCHEDULE
 
 export async function persistAttempt(db: PrismaClient, input: AttemptInput) {
   return db.$transaction(async (tx) => {
+    const provenance = input.acquisitionProvenance;
+    if (provenance && (!readAcquisitionProvenance(provenance) || provenance.configuration.festivalSlug !== input.festivalSlug || provenance.configuration.url !== input.requestedUrl)) throw new Error("Invalid attempt acquisition provenance");
     const result = input.result;
     const status = !result ? "FAILED" : result.reviewReasons.length ? "REVIEW" : result.publishable ? "PUBLISHABLE" : "UNCHANGED";
     const previous = await tx.ingestionAttempt.findFirst({ where: { festivalSlug: input.festivalSlug }, orderBy: { endedAt: "desc" }, select: { id: true } });
     const attempt = await tx.ingestionAttempt.create({ data: {
+      acquisitionProvenance: provenance as unknown as Prisma.InputJsonValue | undefined,
       runId: input.runId, festivalSlug: input.festivalSlug, requestedUrl: input.requestedUrl,
       finalUrl: input.finalUrl, httpStatus: input.httpStatus, durationMs: input.durationMs,
       retryCount: input.retryCount ?? 0, error: input.error, parserVersions: { extractor: INGESTION_SCHEMA_VERSION },

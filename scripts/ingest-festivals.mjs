@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { listConfiguredSources } from "../lib/sources/repository.ts";
+import { listConfiguredSources, mapSource } from "../lib/sources/repository.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 import { fetchSource } from "../lib/ingestion/fetch.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
@@ -11,6 +11,7 @@ import { db } from "../lib/db.ts";
 import { publishIngestionResult } from "../lib/catalog/publication.ts";
 import { readCatalog } from "../lib/catalog/repository.ts";
 import { claimDueSources, completeSourceLease, releaseOwnedSourceLease, startSourceLeaseRenewal } from "../lib/ingestion/lease.ts";
+import { captureAcquisitionProvenance } from "../lib/ingestion/provenance.ts";
 import { randomUUID } from "node:crypto";
 import { createIngestionRun, finishIngestionRun, ingestionQueries, persistAttempt } from "../lib/ingestion/repository.ts";
 
@@ -58,6 +59,7 @@ async function recoverSourceLease(lease, outcome) {
 }
 
 let sourceLease = null;
+let acquisitionProvenance;
 let leaseRenewal = null;
 let run = null;
 if (dbDue) {
@@ -74,14 +76,12 @@ if (dbDue) {
     await db.$disconnect();
     process.exit(0);
   }
-  sourceLease = { ...claims[0], owner };
+  sourceLease = { id: claims[0].id, updatedAt: claims[0].updatedAt, owner };
   try {
     leaseRenewal = startSourceLeaseRenewal(db, sourceLease);
-    // Resolve after claim to avoid parsing a stale pre-claim configuration.
-    const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceLease.id } });
-    if (row.updatedAt.getTime() !== sourceLease.updatedAt.getTime()) throw new Error("Claimed source was edited after claim");
-    selected = (await listConfiguredSources(db, row.festivalSlug)).filter((source) => source.id === row.id);
-    if (selected.length !== 1) throw new Error("Claimed source is not configured");
+    // Use the exact atomic claim snapshot for fetching and persistence.
+    selected = [mapSource(claims[0])];
+    acquisitionProvenance = captureAcquisitionProvenance(claims[0]);
     run = await createIngestionRun(db, { trigger: process.env.GITHUB_EVENT_NAME === "schedule" ? "SCHEDULE" : "MANUAL", sourceCommit: process.env.GITHUB_SHA || "local", totalSources: selected.length });
   } catch (error) {
     console.error("db_due_failure_stage=source_setup");
@@ -128,7 +128,7 @@ for (const source of selected) {
     const attempts = Number(error?.attempts) || 1;
     if (run) {
       failureStage = "attempt_persistence";
-      await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, httpStatus: Number(error?.httpStatus) || undefined, durationMs: Date.now() - startedAt.getTime(), retryCount: attempts - 1, startedAt, endedAt: new Date(), error: error instanceof Error ? error.message : String(error) });
+      await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, acquisitionProvenance, finalUrl: response?.url || undefined, httpStatus: Number(error?.httpStatus) || undefined, durationMs: Date.now() - startedAt.getTime(), retryCount: attempts - 1, startedAt, endedAt: new Date(), error: error instanceof Error ? error.message : String(error) });
       failureOutcome = "post_attempt_error";
     }
     failureStage = "result_recording";
@@ -158,7 +158,7 @@ for (const source of selected) {
   const status = result.reviewReasons.length ? "review" : result.publishable ? "publishable" : "unchanged";
   const artifact = { status, source: { ...source, httpStatus: response?.status ?? null, finalUrl: response?.url ?? source.url }, result };
   failureStage = "attempt_persistence";
-  const attempt = run ? await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, finalUrl: response?.url ?? source.url, httpStatus: response?.status ?? null, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), result }) : null;
+  const attempt = run ? await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url, acquisitionProvenance, finalUrl: response?.url ?? source.url, httpStatus: response?.status ?? null, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), result }) : null;
   if (attempt) failureOutcome = "post_attempt_error";
   failureStage = "artifact_write";
   await writeFile(path.join(outputDirectory, `${source.festivalSlug}.json`), `${JSON.stringify(artifact, null, 2)}\n`);

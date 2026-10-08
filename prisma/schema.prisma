@@ -470,6 +470,8 @@ model FestivalSource {
   lastError          String?
   lastAttemptAt      DateTime?
   lastSuccessAt      DateTime?
+  configurationGeneration Int @default(1)
+  leaseVersion       Int       @default(0)
   leaseOwner         String?
   leaseExpiresAt     DateTime?
   httpEtag           String?
@@ -743,6 +745,7 @@ model IngestionAttempt {
   durationMs     Int
   retryCount     Int                    @default(0)
   error          String?
+  acquisitionProvenance Json?
   parserVersions Json
   status         IngestionAttemptStatus
   startedAt      DateTime

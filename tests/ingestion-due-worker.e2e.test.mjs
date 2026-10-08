@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { once } from "node:events";
+import { readAcquisitionProvenance } from "../lib/ingestion/provenance.ts";
 import { claimDueSources } from "../lib/ingestion/lease.ts";
 import { drainIngestionNotificationOutbox } from "../lib/ingestion/notification-outbox.ts";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
@@ -70,6 +71,13 @@ test("opt-in worker acknowledges exactly one due source and leaves non-due runs 
   assert.equal(summary.status, "COMPLETED");
   assert.equal(summary.attempted, 1);
   assert.equal(summary.published, 0);
+  const attempt = await ingestionQueriesForTest();
+  const provenance = readAcquisitionProvenance(attempt.acquisitionProvenance);
+  assert.ok(provenance);
+  assert.equal(provenance.configuration.sourceId, sourceId);
+  assert.equal(provenance.configuration.parserKey, "manual_review");
+  assert.equal(provenance.configuration.url, attempt.requestedUrl);
+  assert.equal(attempt.finalUrl, attempt.requestedUrl);
   const completed = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
   assert.equal(completed.leaseOwner, null);
   assert.equal(completed.consecutiveFailures, 0);
@@ -469,3 +477,7 @@ test("in-flight source edit or reclaim rejects publication and unchanged lease c
     }
   }
 });
+
+async function ingestionQueriesForTest() {
+  return db.ingestionAttempt.findFirstOrThrow({ where: { festivalSlug: slug }, orderBy: { endedAt: "desc" } });
+}

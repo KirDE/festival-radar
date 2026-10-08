@@ -1,4 +1,6 @@
-import type { PrismaClient } from "@prisma/client";
+import type { FestivalSource, PrismaClient } from "@prisma/client";
+
+export type ClaimedSource = FestivalSource & { edition: { festivalId: string; year: number; recordState: string } | null };
 
 type ClaimOptions = { owner: string; now: Date; limit: number; ttlMs: number };
 type LeaseIdentity = { id: string; owner: string; updatedAt: Date };
@@ -14,13 +16,13 @@ function validateNow(now: Date) {
 }
 
 /** One atomic PostgreSQL statement: no worker may claim the same source while another holds its row lock. */
-export async function claimDueSources(db: PrismaClient, { owner, now, limit, ttlMs }: ClaimOptions): Promise<Array<{ id: string; updatedAt: Date }>> {
+export async function claimDueSources(db: PrismaClient, { owner, now, limit, ttlMs }: ClaimOptions): Promise<ClaimedSource[]> {
   validateOwner(owner);
   validateNow(now);
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error("Invalid ingestion batch size");
   if (!Number.isInteger(ttlMs) || ttlMs < 30_000 || ttlMs > 30 * 60_000) throw new Error("Invalid ingestion lease duration");
   const expires = new Date(now.getTime() + ttlMs);
-  const rows = await db.$queryRaw<Array<{ id: string; updatedAt: Date }>>`
+  const rows = await db.$queryRaw<ClaimedSource[]>`
     WITH due AS (
       SELECT id FROM "FestivalSource"
       WHERE enabled = true AND "configurationBackfilledAt" IS NOT NULL
@@ -32,11 +34,13 @@ export async function claimDueSources(db: PrismaClient, { owner, now, limit, ttl
       FOR UPDATE SKIP LOCKED LIMIT ${limit}
     )
     UPDATE "FestivalSource" AS source
-    SET "leaseOwner" = ${owner},
+    SET "leaseOwner" = ${owner}, "leaseVersion" = source."leaseVersion" + 1,
         "leaseExpiresAt" = (${expires}::timestamptz AT TIME ZONE 'UTC'),
         "updatedAt" = (${now}::timestamptz AT TIME ZONE 'UTC')
     FROM due WHERE source.id = due.id
-    RETURNING source.id, source."updatedAt"
+    RETURNING source.*,
+      (SELECT jsonb_build_object('festivalId', edition."festivalId", 'year', edition.year, 'recordState', edition."recordState")
+       FROM "FestivalEdition" edition WHERE edition.id = source."editionId") AS edition
   `;
   return rows;
 }
