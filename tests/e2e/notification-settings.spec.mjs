@@ -86,6 +86,7 @@ test("operation feedback follows the selected German and Russian language", asyn
   await page.locator(".languagePicker select").selectOption("de");
   await expect(page).toHaveURL(/\/en\/notifications\/$/);
   await expect(page.getByRole("heading", { name: "Benachrichtigungen", exact: true }).first()).toBeVisible();
+  await expect(page.locator(".notificationPage .eyebrow")).toHaveText("KONTO");
   await page.locator(".notificationForm select").nth(1).selectOption("ARTIST_ADDED");
   await page.locator(".notificationForm .primaryButton").click();
   await expect(page.getByRole("status")).toHaveText("Gespeichert.");
@@ -93,6 +94,7 @@ test("operation feedback follows the selected German and Russian language", asyn
   await page.locator(".languagePicker select").selectOption("ru");
   await expect(page).toHaveURL(/\/en\/notifications\/$/);
   await expect(page.getByRole("heading", { name: "Настройки уведомлений", exact: true }).first()).toBeVisible();
+  await expect(page.locator(".notificationPage .eyebrow")).toHaveText("АККАУНТ");
   await page.locator(".notificationForm select").nth(1).selectOption("ARTIST_ADDED");
   await page.locator(".notificationForm .primaryButton").click();
   await expect(page.getByRole("status")).toHaveText("Сохранено.");
