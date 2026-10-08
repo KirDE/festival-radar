@@ -38,6 +38,11 @@ jobs:
       - run: npm ci
       - run: npm run prisma:generate
       - run: npx prisma migrate deploy
+      # Both seal suites retain immutable rows: use fresh disposable CI schemas.
+      - run: node --import tsx tests/novarock-content-seal.e2e.test.ts
+      - run: npx prisma migrate reset --force
+      - run: node --import tsx tests/novarock-content-seal-concurrency.e2e.test.ts
+      - run: npx prisma migrate reset --force
       - run: npm run test:logo-assets
       - run: npm run test:playlist-queue
       - run: npm run test:sources

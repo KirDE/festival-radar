@@ -86,8 +86,10 @@ The disposable DB must be discarded; tests do not delete immutable history.
   PostgreSQL 16 database and ran the corrected E2E: 1/1 passed, including
   lifecycle-only transitions, rollback, immutable content, newer attempts and
   TRUNCATE rejection. The first version also passed 1/1 on a separate disposable
-  DB. Concurrent seal/child-row writes and serialization races still need
-  dedicated coverage beyond these focused tests. No production DB was used.
+  DB. Dedicated concurrent seal/child-row and serialization coverage is now
+  supplied in `tests/novarock-content-seal-concurrency.e2e.test.ts` and passed
+  16/16 including the parent test on a fresh migrated disposable localhost
+  PostgreSQL 16 database. No production DB was used.
 
 ## Verification and controller commands
 
@@ -95,8 +97,15 @@ Local Prisma validate (using a dummy localhost URL, no connection), generate and
 `npm run typecheck` passed. Nine seal unit tests passed; provenance (4), Nova parser
 (7), policy (3), ingestion publication (2), review queue (19 passed/1 sandbox
 skip), and Rockharz parser (12) regressions passed. No production database was
-accessed. Linked Git metadata lies outside the writable root; leave this diff
-uncommitted for controller review.
+accessed. The concurrency follow-up passed typecheck (including Prisma generate)
+and all nine seal unit tests locally. The controller provisioned a separate
+localhost PostgreSQL 16 container, migrated a new empty test database and ran
+the concurrency suite successfully (16/16). An initial test run failed solely
+because Prisma bound a PID query parameter as bigint instead of PostgreSQL int;
+the test query now casts both PIDs explicitly. The passing run used another
+fresh empty migrated database, with no production connection. The Codex sandbox
+could not stage via its read-only linked-worktree Git metadata, so the controller
+committed the scoped diff.
 
 ```sh
 # Validation uses this URL only for schema loading and never connects.
@@ -130,3 +139,60 @@ node --import tsx tests/ingestion-provenance.e2e.test.ts
 This migration is a prerequisite under review, not a publication approval. The
 snapshot contract excludes lifecycle metadata; older provisional snapshots that
 contain it fail closed. Never rewrite persisted seals or backfill approval.
+
+## Deterministic concurrency follow-up
+
+Run the new concurrency suite on its **own fresh empty migrated disposable
+localhost DB**, separately from the sequential E2E above (append-only fixtures
+are intentionally retained). The local-disposable URL guard runs before Prisma
+connects. The suite rejects existing ingestion attempts, runs or seals.
+
+```sh
+# Set DATABASE_URL to the NEW disposable localhost test/integration database.
+npx prisma migrate deploy
+node --import tsx tests/novarock-content-seal-concurrency.e2e.test.ts
+```
+
+There are 15 sequential race subtests plus the parent test:
+
+- Evidence and diff INSERT, UPDATE and DELETE, each in both orderings (12).
+  Seal-first pauses the actual application after seal INSERT while its
+  transaction/locks remain open. A competing Serializable writer takes a
+  pre-seal snapshot, attempts the mutation and is observed blocked by the seal's
+  backend through `pg_blocking_pids`. Releasing the seal must commit one valid
+  seal and reject the stale writer with an immutable-content or serialization
+  error. All candidate/evidence/diff rows must remain unchanged and verification
+  must return authority NONE.
+  Writer-first pauses after the child mutation has acquired the candidate lock.
+  The actual sealer reads its pre-commit snapshot, then is observed blocked by
+  that writer. Once the writer commits, the stale sealer must propagate a
+  serialization error and persist no seal. Only the unsealed mutation may commit.
+- Mixed lifecycle/content UPDATE in both orderings (2). The single statement
+  changes synthetic untrusted actor text together with normalized and persisted
+  warnings. It cannot camouflage content changes after sealing. Losing writes
+  roll back the entire statement; a winning pre-seal writer invalidates the
+  competing stale sealer.
+- Explicit serialization failure and fresh retry (1). After the application's
+  first candidate read, a separate transaction changes only synthetic actor
+  metadata. The candidate FOR UPDATE must fail on the stale Serializable
+  snapshot, with no seal and PENDING unchanged. Only an explicit new application
+  transaction may then seal the unchanged content, still with authority NONE.
+
+Test-only proxies pause real Prisma calls; they do not substitute table doubles,
+change transaction options or reproduce the sealer in test code. The suite checks
+both the application-supplied Serializable option and PostgreSQL's actual
+`SHOW transaction_isolation`. Only Prisma P2034 or raw-query P2010 with SQLSTATE
+40001 qualifies as serialization failure; deadlocks, timeouts and unrelated
+errors do not satisfy that assertion. Barrier and lock-observation deadlines are
+five seconds, transactions ten seconds, subtests fifteen seconds. Lock polling
+waits on an observed database condition, never a fixed scheduling delay. Finally
+blocks release barriers, await both transaction outcomes and disconnect.
+
+Global publication and Spotify refresh counts must stay unchanged. This suite
+creates no approval decision, catalogue publication or provider activity. The
+existing migration/runtime implementation is unchanged: no fail-open bug was
+demonstrated by the 15 PostgreSQL-validated race scenarios (16/16 including
+parent). Coverage is limited to
+Serializable competing writers and the specified application lock order; this
+is not acceptance of other transaction isolation levels, reparenting races,
+source/catalogue freshness or review authorization.
