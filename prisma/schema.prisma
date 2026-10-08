@@ -782,6 +782,7 @@ model IngestionCandidate {
   createdAt        DateTime             @default(now())
   run              IngestionRun         @relation(fields: [runId], references: [id], onDelete: Restrict)
   attempt          IngestionAttempt     @relation(fields: [attemptId], references: [id], onDelete: Restrict)
+  novaContentSeal  NovaRockContentSeal?
   evidence         IngestionEvidence[]
   diffs            IngestionDiff[]
 
@@ -895,4 +896,15 @@ model OperationalState {
   leaseOwner     String?
   leaseExpiresAt DateTime?
   updatedAt      DateTime @updatedAt
+}
+
+// Integrity prerequisite only. This record conveys no reviewer/publication authority.
+model NovaRockContentSeal {
+  id            String @id @default(cuid())
+  candidateId   String @unique
+  version       Int
+  contentDigest String
+  snapshot      Json
+  createdAt     DateTime @default(now())
+  candidate     IngestionCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
 }
