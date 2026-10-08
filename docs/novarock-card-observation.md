@@ -46,22 +46,27 @@ ordered tuples `{caption, officialUrl, day, billing, position}`, 4 HEADLINER the
 ordered captions must exactly match the sealed normalized headliner/support bill.
 URLs must be exact HTTPS `www.novarock.at/artist/<slug>/` with no credentials,
 ports, query or fragment. Slugs remain evidence strings; no internal artist IDs
-are looked up, inferred or returned. Different valid URLs or day assignments
-with identical counts can verify: the prior seal has no such omitted facts to
-compare. A fresh document hash changes accordingly; this is not identity approval.
+are looked up, inferred or returned. A changed valid official artist URL can
+still verify because the seal has no per-card URL facts to compare. Day assignment must match the observed ordered
+44-position vector, not merely four counts; this pins one read-only snapshot
+without authenticating its source. None of these checks is identity approval.
 
 The independent grammar imports neither the ingestion adapter nor provider code.
 It requires the 2027 title, canonical and OG identity, one visible main/header/
 section/grid, exactly 44 closed cards, unique captions and URLs and the pinned
 caption/image/meta shape. It rejects malformed nesting, duplicate attributes,
-hidden/styled containers, unknown entities, duplicate identity metadata, sidebar
-copies and incomplete documents. It is intentionally narrower than the existing
-adapter: body navigation or unrelated content, scripts, style, noscript and
-opaque templates fail closed. This conservative profile accepts the compact
-review fixture. It has **not** been validated against the original live document;
-no claim of live-page compatibility is made. Do not strip or rewrite a live
-capture into this profile and call its hash the original document hash. A future
-trusted observer needs a separately reviewed full-page markup profile.
+hidden or executable ancestry, unsafe inline styles, unknown entities,
+duplicate identity metadata, card/grid copies outside the single visible 2027
+block, and incomplete documents. The inspected original page wrappers and opaque
+rawtext are accepted only when every entire opaque element matches its pinned
+SHA-256 fingerprint. Unknown or duplicated blocks fail closed. Fingerprints are
+syntax allowances for this snapshot, NOT network provenance, browser behavior or
+review of JavaScript/CSS semantics; legitimate dynamic changes may reject.
+Offline tests include compact and clearly labeled synthetic full-page fixtures.
+The controller separately supplied the *unmodified* 216,722-byte original capture:
+44 cards with SHA-256 bc00681acd4b8251fa1f35fd4613209ccc9481c48fef207d1484c32804fc4853
+and authority NONE. No raw capture is committed. Never strip or rewrite a live
+response and claim its resulting hash is of the original document.
 
 `verifyNovaRockCardObservation(db, exactBinding, bytes)` accepts only exact
 seal/candidate/content-digest keys. Its bounded 10-second Serializable transaction
@@ -98,11 +103,11 @@ for them. Capturing once must never authorize publication.
 ## Validation and remaining acquisition gate
 
 Local: normal `npm run typecheck` with
-`XDG_CACHE_HOME=/tmp/novarock-card-prisma-cache` (local Prisma generation), 24 new
+`XDG_CACHE_HOME=/tmp/novarock-card-prisma-cache` (local Prisma generation), 27
 verifier tests, 9 seal tests, 19 draft tests, 7 Nova parser tests, 4 provenance
 tests, 3 policy tests and 2 publication tests passed. Tests use only checked-in
-fixture bytes and perform no HTTP requests. The fixture is a compact transcription:
-its hash is intentionally NOT the README's original 216,722-byte capture hash.
+fixture bytes and perform no HTTP requests. The compact and synthetic full-page
+fixtures are NOT the original official capture and have different hashes.
 
 The new `tests/novarock-card-observation.e2e.test.ts` uses real Prisma/PostgreSQL.
 The existing local-disposable URL guard runs before connecting. Exact synthetic
@@ -117,8 +122,9 @@ are synthetic test setup only. Fixture seals are retained; discard the database.
 
 **Real PostgreSQL E2E passed independently:** the controller used a newly created
 postgres:16-alpine container on localhost with isolated database `novacard_test`.
-All 24 migrations applied and the new E2E passed 9/9, including Serializable
-source/edition races, drift, replay and unchanged publication/refresh counts.
+All 24 migrations applied and the new E2E passed 9/9 twice, including after
+the full-page grammar change, with Serializable source/edition races, drift,
+replay and unchanged publication/refresh counts. Both owned containers removed.
 The disposable URL guard also refused an unset DATABASE_URL. No production
 credentials or database were used. To repeat on a fresh isolated database:
 
@@ -127,8 +133,7 @@ npx prisma migrate deploy
 node --import tsx tests/novarock-card-observation.e2e.test.ts
 ```
 
-The DB gate cannot establish independent network acquisition or live-page
-compatibility. The controller must review the final diff before any stacked PR;
-no merge, deploy or production action is justified by this helper. Codex sandbox
-staging was denied by its read-only linked Git metadata; controller staging is
-separate.
+The DB gate and successful read of existing raw bytes cannot establish trusted
+independent network acquisition, HTTP provenance, deployed-parser attestation
+or authenticated artist mappings. This is a draft stacked PR: no merge, deploy
+or production action is justified by this helper.

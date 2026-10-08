@@ -7,6 +7,43 @@ import { novaContentFixture } from "./support/novarock-content-fixture.ts";
 
 const html = readFileSync(new URL("./fixtures/official-markup/novarock-lineup-2027.html", import.meta.url), "utf8");
 const verify = (document = html, snapshot: unknown = novaContentFixture().snapshot) => verifyNovaRockCardDocument(Buffer.from(document), snapshot);
+// Synthesized wrapper fixture: it is not the original official capture.
+const fullPage = readFileSync(new URL("./fixtures/official-markup/novarock-lineup-2027-full-synthetic.html", import.meta.url), "utf8");
+test("synthetic full-page wrappers retain exact card order and raw-byte hash", () => {
+  const compact = verify();
+  const full = verify(fullPage);
+  assert.deepEqual(full.cards, compact.cards);
+  assert.equal(full.authority, "NONE");
+  assert.equal(full.rawDocumentSha256, createHash("sha256").update(Buffer.from(fullPage)).digest("hex"));
+});
+test("global copied/hidden cards, ambiguous identity and unsafe ancestry reject", () => {
+  const card = fullPage.match(/<li class="artistCard[^]*?<\/li>/)![0];
+  for (const altered of [
+    fullPage.replace("<footer>", `<footer>${card}`),
+    fullPage.replace("<footer>", '<div hidden>' + card + '</div><footer>'),
+    fullPage.replace("<footer>", '<div class="eventCollection__items"></div><footer>'),
+    fullPage.replace('<main class=', '<main style="display:none" class='),
+    fullPage.replace('<div id="view">', '<div id="view" aria-hidden="true">'),
+    fullPage.replace('<div id="view">', '<div id="view" onclick="hideCards()">'),
+    fullPage.replace('<div id="view">', '<div id="view" class="visually-hidden">'),
+    fullPage.replace('<main class="lineupArchive"', '<main class="lineupArchive visually-hidden"'),
+    fullPage.replace('</head>', '<meta name="og:title" content="Nova Rock 2027"></head>'),
+    fullPage.replace('</head>', '<script>artistCard 2027-06-09</script></head>'),
+    fullPage.replace('</head>', '<script>console.log(1)</script></head>'),
+    fullPage.replace('</head>', '<style>li{display:none}</style></head>'),
+    fullPage.replace('<!-- Synthetic full-page wrapper test; NOT an official capture. -->', '<!-- artistCard copied here -->'),
+    fullPage.replace('</div></div></body>', '</div></body>'),
+  ]) assert.throws(() => verify(altered));
+});
+
+test("compensating per-card day swap rejects despite identical totals", () => {
+  const swapped = fullPage.replace(/<li class="artistCard[^]*?<\/li>/g, (card) =>
+    card.includes("/artist/die-toten-hosen/") ? card.replace("2027-06-09", "2027-06-10") :
+    card.includes("/artist/the-smashing-pumpkins/") ? card.replace("2027-06-10", "2027-06-09") : card);
+  assert.notEqual(swapped, fullPage);
+  assert.throws(() => verify(swapped), /ordered day mutation/);
+});
+
 test("independent full-card verifier returns all 44 tuples, full byte hash and NONE", () => {
   const result = verify();
   assert.equal(result.authority, "NONE");
