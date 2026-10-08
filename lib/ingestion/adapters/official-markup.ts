@@ -1,4 +1,5 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
+import { novarock } from "./novarock.ts";
 import { copenhell } from "./copenhell.ts";
 import { rockharz } from "./rockharz.ts";
 import { rockstadt } from "./rockstadt.ts";
@@ -398,6 +399,7 @@ function leyendas(html: string): AdapterResult | undefined {
 
 const adapters: Record<string, (html: string, source: FestivalSource) => AdapterResult | undefined> = {
   "2000trees": trees,
+  "nova-rock": novarock,
   copenhell,
   rockstadt,
   rockharz,
