@@ -6,6 +6,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import { editionStatusLabel } from "../lib/edition-status.ts";
+import { FestivalEditionContent } from "../components/PublicCatalogPages.tsx";
+import { LanguageProvider } from "../components/LanguageProvider.tsx";
 
 function makeEdition(overrides = {}) {
   return {
@@ -28,10 +30,9 @@ function loadPage(editions) {
   const exports = {};
   const dependencies = {
     "react/jsx-runtime": require("react/jsx-runtime"),
-    "next/link": ({ children, ...props }) => createElement("a", props, children),
     "next/navigation": { notFound() { throw new Error("NEXT_NOT_FOUND"); } },
     "@/lib/catalog/repository": { getCatalog: async () => ({ editions }) },
-    "@/lib/edition-status": { editionStatusLabel },
+    "@/components/PublicCatalogPages": { FestivalEditionContent },
   };
   new Function("require", "exports", outputText)((id) => {
     assert.ok(Object.hasOwn(dependencies, id), `Unexpected route dependency: ${id}`);
@@ -41,9 +42,10 @@ function loadPage(editions) {
   return exports.default;
 }
 
-async function renderEdition(item, editions = [item]) {
+async function renderEdition(item, editions = [item], language = "en") {
   const page = loadPage(editions);
-  return renderToStaticMarkup(await page({ params: Promise.resolve({ slug: item.slug, year: String(item.editionYear) }) }));
+  const body = await page({ params: Promise.resolve({ slug: item.slug, year: String(item.editionYear) }) });
+  return renderToStaticMarkup(createElement(LanguageProvider, { initialLanguage: language }, body));
 }
 
 test("stale TBA completeness derives only a partial record from published facts", () => {
@@ -88,7 +90,7 @@ test("canonical Rockharz route renders known dates and all 30 artists with a par
   const before = structuredClone(item);
   const html = await renderEdition(item, [makeEdition(), makeEdition({ ...item, editionYear: 2026, completeness: "complete" }), item]);
   assert.match(html, /<h1>Rockharz 2027<\/h1>/);
-  assert.match(html, /<p class="detailDate">2027-07-07 — 2027-07-10<\/p>/);
+  assert.match(html, /<p class="detailDate">Jul 7, 2027 — Jul 10, 2027<\/p>/);
   assert.match(html, /<span class="status partial">partial record<\/span>/);
   const grid = html.match(/<div class="lineupGrid">(.*?)<\/div>/)[1];
   assert.equal((grid.match(/<span>/g) ?? []).length, 30);
@@ -122,6 +124,23 @@ test("canonical route preserves partial facts and explicit completeness for othe
     const html = await renderEdition(makeEdition({ completeness, status: "confirmed" }));
     assert.ok(html.includes(`<span class="status confirmed">${completeness} record</span>`));
   }
+});
+
+test("edition route keeps partial facts and localized badges in DE and RU", async () => {
+  const item = makeEdition({ startDate: "2027-07-07", endDate: "2027-07-10", headliners: ["AMON AMARTH"] });
+  const before = structuredClone(item);
+  for (const [language, badge, locale] of [
+    ["de", "unvollständiger Datensatz", "de-DE"],
+    ["ru", "частичная запись", "ru-RU"],
+  ]) {
+    const html = await renderEdition(item, [item], language);
+    assert.ok(html.includes('<span class="status tba">' + badge + '</span>'));
+    const date = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date("2027-07-07T12:00:00Z"));
+    assert.ok(html.includes(date));
+    assert.ok(html.includes('<span>AMON AMARTH</span>'));
+    assert.doesNotMatch(html, /partial record|Official dates and lineup TBA/);
+  }
+  assert.deepEqual(item, before);
 });
 
 test("canonical route still rejects a missing edition", async () => {
