@@ -37,7 +37,7 @@ function responseLength(response: IncomingMessage): number | undefined {
       throw new Error("malformed header");
     }
     const key = name.toLowerCase();
-    headers.set(key, [...(headers.get(key) ?? []), value.trim()]);
+    headers.set(key, [...(headers.get(key) ?? []), value.replace(/^[ 	]+|[ 	]+$/g, "")]);
   }
   const singleton = (key: string, required = false) => {
     const values = headers.get(key);
@@ -46,7 +46,7 @@ function responseLength(response: IncomingMessage): number | undefined {
     return values?.[0];
   };
   const type = singleton("content-type", true)!;
-  if (!/^text\/html\s*;\s*charset\s*=\s*(?:utf-8|"utf-8")$/i.test(type)) throw new Error("expected HTML UTF-8");
+  if (!/^text\/html[ 	]*;[ 	]*charset[ 	]*=[ 	]*(?:utf-8|"utf-8")$/i.test(type)) throw new Error("expected HTML UTF-8");
   const encoding = singleton("content-encoding");
   if (encoding !== undefined && encoding.toLowerCase() !== "identity") throw new Error("expected identity encoding");
   if (singleton("location") !== undefined) throw new Error("redirect location refused");

@@ -91,7 +91,9 @@ test("redirects, status failures, and missing/duplicate/malformed relevant heade
     cases.push([`duplicate ${name}`, (r) => { const i = r.rawHeaders.indexOf(name); r.rawHeaders.push(name.toLowerCase(), r.rawHeaders[i + 1]); }]);
   }
   for (const type of ["", "text/html", "text/plain; charset=utf-8", "application/xhtml+xml; charset=utf-8",
-    "text/html; charset=latin1", "text/html; charset=utf-8; charset=utf-8", "text/html; charset=utf-8, text/html; charset=utf-8"]) {
+    "text/html; charset=latin1", "text/html; charset=utf-8; charset=utf-8", "text/html; charset=utf-8, text/html; charset=utf-8",
+    "text/html; charset=utf-8\u00a0", "\u00a0text/html; charset=utf-8", "text/html;\u00a0charset=utf-8",
+    "text/html; charset=\u00a0utf-8", "text/html; charset=utf-8\u2000", "text/html;\fcharset=utf-8"]) {
     cases.push([`type ${type}`, (r) => { r.rawHeaders[1] = type; }]);
   }
   cases.push(["duplicate Content-Encoding", (r) => { r.rawHeaders.push("content-encoding", "identity"); }]);
