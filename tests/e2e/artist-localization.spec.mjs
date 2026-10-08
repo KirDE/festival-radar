@@ -15,6 +15,12 @@ for (const [language, labels] of Object.entries(locales)) {
       await expect(page.locator(".planningSection h2")).toHaveText(language === "de" ? "Kalender & Karte" : "Календарь и карта");
       await expect(page.locator(".timetableEmpty strong")).toHaveText(language === "de" ? "Bühnenplan" : "Расписание сцен");
       await expect(page.locator(".localActions option").first()).toHaveText(language === "de" ? "Teilnahme wählen" : "Укажите участие");
+      await expect(page.locator(".localActions option")).toHaveText(language === "de"
+        ? ["Teilnahme wählen", "Dabei", "Vielleicht", "Nicht dabei"]
+        : ["Укажите участие", "Пойду", "Возможно", "Не пойду"]);
+      await page.locator(".localActions .favoriteButton").click();
+      await expect(page.locator(".localActions .favoriteButton")).toHaveText(language === "de" ? "★ Gespeichert" : "★ Сохранено");
+      await expect(page.locator(".localActions a[href*=planner]")).toHaveText(language === "de" ? "Meinen Plan öffnen →" : "Открыть мой план →");
     }
     await page.locator(`a[href="/artists/sample-artist/"]`).first().click();
     await expect(page).toHaveURL(/\/artists\/sample-artist\/$/);
