@@ -21,5 +21,5 @@ export default async function FestivalPage({ params }: { params: Promise<{ slug:
   if (!item) notFound();
   const event = festivalMusicEvent(item);
   const artistSlugs = Object.fromEntries(artists.map(({ name, slug }) => [name, slug]));
-  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(event).replace(/</g, "\\u003c") }}/><FestivalDetail item={item} festivals={festivals} artistSlugs={artistSlugs} playlist={playlists[item.slug]}/></>;
+  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(event).replace(/</g, "\\u003c") }}/><FestivalDetail item={item} festivals={festivals} artistSlugs={artistSlugs} artistPopularity={Object.fromEntries(artists.map((artist) => [artist.name, artist.spotifyStats?.popularity ?? null]))} playlist={playlists[item.slug]}/></>;
 }

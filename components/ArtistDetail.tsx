@@ -13,7 +13,7 @@ export function ArtistDetail({
   artist: ArtistProfile;
   appearances: Festival[];
 }) {
-  const { language, t } = useLanguage();
+  const { language, locale, t } = useLanguage();
   const festivalWord =
     appearances.length === 1 ? t("europeanFestival") : t("europeanFestivals");
   const sentence =
@@ -41,6 +41,14 @@ export function ArtistDetail({
           )}
         </div>
       </div>
+      <section className="artistStats" aria-label="Spotify">
+        <p><strong>{t("spotifyPopularityIndex")}:</strong> {artist.spotifyStats?.popularity ?? t("statsUnknown")}</p>
+        <p><strong>{t("spotifyFollowers")}:</strong> {artist.spotifyStats?.followers == null ? t("statsUnknown") : new Intl.NumberFormat(locale).format(artist.spotifyStats.followers)}</p>
+        {artist.spotifyStats && <small>
+          <a href={`https://open.spotify.com/artist/${artist.spotifyStats.artistId}`} target="_blank" rel="noreferrer">Spotify ↗</a>
+          {" · "}{t("checked")} <time dateTime={artist.spotifyStats.checkedAt}>{new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(artist.spotifyStats.checkedAt))}</time>
+        </small>}
+      </section>
       <div className="artistActions">
         {artist.links.filter((link) => link.verified).map((link) => (
           <a
@@ -116,6 +124,9 @@ export function ArtistDetail({
               </code>
             ),
         )}
+        {artist.spotifyStats && <a href={artist.spotifyStats.sourceUrl} target="_blank" rel="noreferrer">
+          {t("spotifyPopularityIndex")} / {t("spotifyFollowers")}: Spotify Web API · {t("checked")} {artist.spotifyStats.checkedAt}
+        </a>}
         {artist.provenance.map((item, index) => (
           <a
             href={item.url}

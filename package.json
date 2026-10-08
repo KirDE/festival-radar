@@ -19,7 +19,7 @@
     "test:artist-enrichment": "node --experimental-strip-types --test tests/artist-enrichment-publication.test.mjs tests/artist-enrichment.test.mjs",
     "test:artist-enrichment-db": "node --experimental-strip-types --test tests/artist-enrichment-publication.e2e.test.mjs",
     "resolve:artists": "node scripts/resolve-artist-identities.mjs",
-    "test:data": "node --import tsx --test $(find tests -maxdepth 1 -name '*.test.mjs' ! -name '*.e2e.test.mjs' -print) && node --experimental-strip-types --test tests/selection-playlist.test.ts && node --import tsx --test tests/domain-boundary.test.ts tests/source-configuration.test.ts tests/playlist-queue.test.ts && npm run test:logo-serving",
+    "test:data": "node --import tsx --test $(find tests -maxdepth 1 -name '*.test.mjs' ! -name '*.e2e.test.mjs' -print) && node --experimental-strip-types --test tests/selection-playlist.test.ts tests/artist-lineup-sorts.test.ts && node --import tsx --test tests/domain-boundary.test.ts tests/source-configuration.test.ts tests/playlist-queue.test.ts && npm run test:logo-serving",
     "test:routes": "node scripts/test-locale-routes.mjs",
     "test:ingestion-db": "node --test tests/ingestion-repository.e2e.test.mjs",
     "notifications:drain-db-due": "node scripts/drain-ingestion-notifications.mjs --db-due",
