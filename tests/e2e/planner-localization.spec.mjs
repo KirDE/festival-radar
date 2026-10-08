@@ -13,7 +13,7 @@ for (const [locale, copy] of Object.entries(locales)) {
     await expect(page).toHaveURL(new RegExp(`/${locale}/planner/$`));
     await expect(page.getByRole("heading", { level: 1, name: copy.title })).toBeVisible();
     await expect(page.getByRole("navigation").getByText(copy.notifications, { exact: true })).toBeVisible();
-    await expect(page.getByRole("navigation").getByRole("link", { name: locale === "en" ? "My plan" : locale === "de" ? "Mein Plan" : "Мой план" })).toHaveAttribute("href", `/${locale}/planner/`);
+    await expect(page.getByRole("navigation").getByRole("link", { name: locale === "en" ? "My plan" : locale === "de" ? "Mein Plan" : "Мой план" })).toHaveAttribute("href", "/planner/");
     await expect(page.getByRole("heading", { level: 2, name: copy.calendar })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: copy.map })).toBeVisible();
     await expect(page.getByRole("button", { name: copy.previous })).toBeVisible();
