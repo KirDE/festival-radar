@@ -219,7 +219,10 @@ export function rockharz(html: string, source: FestivalSource) {
     const sentence = "AMON AMARTH sind Headliner beim ROCKHARZ 2027!";
     const billing = paragraphs?.filter((p) => /\bheadliner\b/i.test(plain(p.content)));
     if (billing?.length !== 1 || plain(billing[0].content) !== sentence || /<[^>]*>/.test(billing[0].content)) return undefined;
-    return { editionYear: 2027, headliners: ["AMON AMARTH"], excerpt: `HEADLINER-ALARM!; ${published}; ${sentence}` };
+    // Confirmed edition-specific billing establishes an announced, partial
+    // lineup; it does not establish that the full lineup has been announced.
+    return { editionYear: 2027, headliners: ["AMON AMARTH"], status: "partial" as const,
+      excerpt: `HEADLINER-ALARM!; ${published}; ${sentence}` };
   }
   const content = post(doc.body, "post-82346", "DAS ROCKHARZ 2027 IST AUSVERKAUFT!");
   const sentence = "Es ist vollbracht! Alle zur Verfügung stehenden Festivaltickets für das ROCKHARZ 2027 sind vergriffen!";
