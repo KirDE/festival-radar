@@ -31,6 +31,30 @@ test("[no-db] prefixed switch preserves query/hash and preference survives reloa
   await expect(page.locator(".languagePicker select")).toHaveValue("ru");
 });
 
+test("[no-db] brand and submission navigation stay bare after a language choice", async ({ page }) => {
+  await page.route("**/api/**", (route) => route.fulfill({ status: 401, contentType: "application/json", body: "{}" }));
+  await page.goto("/de/submit/?source=header#main-content");
+  await switchWithoutNavigation(page, "ru");
+  await expect(page.locator("a.brand")).toHaveAttribute("href", "/");
+  await expect(page.locator("header nav a").first()).toHaveAttribute("href", "/");
+  await expect(page.locator("header nav a").nth(1)).toHaveAttribute("href", "/planner/");
+  await expect(page.locator("footer > a")).toHaveAttribute("href", "/submit/");
+  await page.locator("footer > a").click();
+  await expect(page).toHaveURL(/\/submit\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Предложить фестиваль");
+  await expect(page.getByRole("button", { name: "Отправить редакции" })).toBeVisible();
+  await page.locator(".submissionForm [name=name]").fill("Example Festival");
+  await page.locator(".submissionForm [name=officialUrl]").fill("https://example.test/");
+  await page.locator(".submissionForm [name=year]").fill("2027");
+  await page.getByRole("button", { name: "Отправить редакции" }).click();
+  await expect(page.locator(".submissionForm [role=status]")).toContainText("Не удалось отправить.");
+  await page.getByRole("button", { name: "Аккаунт" }).click();
+  await expect(page.getByRole("tab", { name: "Войти" })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/de\/submit\/\?source=header#main-content$/);
+  await expect(page.locator(".languagePicker select")).toHaveValue("ru");
+});
+
 test("[no-db] fresh prefixed links honor their locale and bare HTML reads the preference cookie", async ({ page }) => {
   await page.route("**/api/**", (route) => route.fulfill({status:401,contentType:"application/json",body:"{}"}));
   await page.goto("/de/submit/");
@@ -69,7 +93,7 @@ test("prefixed planner switching preserves the plan, query and hash on reload an
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang","de");
   await page.getByRole("navigation").getByRole("link",{name:"Benachrichtigungen",exact:true}).click();
-  await expect(page).toHaveURL(/\/de\/notifications\/$/);
+  await expect(page).toHaveURL(/\/notifications\/$/);
   await expect(page.locator("html")).toHaveAttribute("lang","de");
 });
 

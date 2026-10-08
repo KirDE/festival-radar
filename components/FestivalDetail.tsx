@@ -28,7 +28,7 @@ export function FestivalDetail({
   playlist?: PlaylistStatus;
   artistPopularity?: Readonly<Record<string, number | null>>;
 }) {
-  const { language, locale, t } = useLanguage();
+  const { locale, t } = useLanguage();
   const [lineupSort, setLineupSort] = useState<LineupSort>("official");
   const sortedLineup = sortFestivalLineup(item, lineupSort, locale, artistPopularity);
   const planner = useLocalPlanner();
@@ -51,7 +51,7 @@ export function FestivalDetail({
   const hasArtists = hasAnnouncedLineup(item);
   return (
     <div className="detailPage">
-      <Link className="back" href={`/${language}/`}>
+      <Link className="back" href="/">
         ← {t("allFestivals")}
       </Link>
       <section className="detailHero">
@@ -73,7 +73,7 @@ export function FestivalDetail({
       <section className="localActions">
         <FavoriteButton kind="festival" value={item.slug} />
         <select
-          aria-label={`Attendance for ${item.name}`}
+          aria-label={t("attendanceFor", { festival: item.name })}
           value={planner.attendance[item.slug] || ""}
           onChange={(event) =>
             planner.setAttendance(
@@ -82,12 +82,12 @@ export function FestivalDetail({
             )
           }
         >
-          <option value="">Set attendance</option>
-          <option value="going">Going</option>
-          <option value="maybe">Maybe</option>
-          <option value="not-going">Not going</option>
+          <option value="">{t("setAttendance")}</option>
+          <option value="going">{t("going")}</option>
+          <option value="maybe">{t("maybe")}</option>
+          <option value="not-going">{t("notGoing")}</option>
         </select>
-        <Link href={`/${language}/planner/`}>Open my plan →</Link>
+        <Link href="/planner/">{t("openPlan")}</Link>
       </section>
       <div className="actionGrid">
         <a href={item.officialUrl} target="_blank" rel="noreferrer">
@@ -147,7 +147,7 @@ export function FestivalDetail({
             <h3>{t("headliners")}</h3>
             <div className="headlinerGrid">
               {item.headliners.map((artist) => (
-                <Link href={`/${language}/artists/${artistSlugs[artist]}/`} key={artist}>
+                <Link href={`/artists/${artistSlugs[artist]}/`} key={artist}>
                   {artist}
                   <span>{t("viewArtist")}</span>
                 </Link>
@@ -175,7 +175,7 @@ export function FestivalDetail({
             </label>
             <div className="lineupGrid">
               {sortedLineup.map((artist) => (
-                <Link href={`/${language}/artists/${artistSlugs[artist]}/`} key={artist}>
+                <Link href={`/artists/${artistSlugs[artist]}/`} key={artist}>
                   {artist}
                 </Link>
               ))}

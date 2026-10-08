@@ -41,7 +41,7 @@ export function AccountMenu() {
         body: JSON.stringify({ email: data.get("email"), password: data.get("password") }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || t.failed);
+      if (!response.ok) throw new Error(t.failed);
       setUser(result.user); setOpen(false);
       window.dispatchEvent(new CustomEvent("festival-radar-authenticated"));
     } catch (reason) { setError(reason instanceof Error ? reason.message : t.failed); }
@@ -58,7 +58,7 @@ export function AccountMenu() {
         body: JSON.stringify(mode === "register" ? { email } : {}),
       });
       const optionsResult = await optionsResponse.json();
-      if (!optionsResponse.ok) throw new Error(optionsResult.error || t.failed);
+      if (!optionsResponse.ok) throw new Error(t.failed);
       const credential = mode === "register"
         ? await startRegistration({ optionsJSON: optionsResult.options })
         : await startAuthentication({ optionsJSON: optionsResult.options });
@@ -68,7 +68,7 @@ export function AccountMenu() {
         body: JSON.stringify(credential),
       });
       const verificationResult = await verificationResponse.json();
-      if (!verificationResponse.ok) throw new Error(verificationResult.error || t.failed);
+      if (!verificationResponse.ok) throw new Error(t.failed);
       setUser(verificationResult.user); setOpen(false);
       window.dispatchEvent(new CustomEvent("festival-radar-authenticated"));
     } catch (reason) {

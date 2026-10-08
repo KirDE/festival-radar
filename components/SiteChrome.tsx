@@ -5,17 +5,17 @@ import { useLanguage, type Language } from "./LanguageProvider";
 import { AccountMenu } from "./AccountMenu";
 
 export function SiteHeader() {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   return (
     <header className="siteHeader">
-      <Link className="brand" href={`/${language}/`}>
+      <Link className="brand" href="/">
         <span className="brandMark">FR</span>
         <span>Festival Radar</span>
       </Link>
       <nav>
-        <Link href={`/${language}/`}>{t("festivals")}</Link>
-        <Link href={`/${language}/planner/`}>{t("myPlan")}</Link>
-        <Link href={`/${language}/notifications/`}>{t("notifications")}</Link>
+        <Link href="/">{t("festivals")}</Link>
+        <Link href="/planner/">{t("myPlan")}</Link>
+        <Link href="/notifications/">{t("notifications")}</Link>
         <a href="https://github.com/KirDE/festival-radar">{t("aboutData")}</a>
       </nav>
       <AccountMenu />
@@ -27,9 +27,9 @@ export function SiteFooter() {
   const { language, setLanguage, t } = useLanguage();
   return (
     <footer>
-      <span>Festival Radar · Europe 2027</span>
+      <span>Festival Radar · {t("region")}</span>
       <span>{t("footerNote")} · {t("privacy")}</span>
-      <Link href={`/${language}/submit/`}>{t("submitFestival")}</Link>
+      <Link href="/submit/">{t("submitFestival")}</Link>
       <label className="languagePicker">
         <span>{t("language")}</span>
         <select

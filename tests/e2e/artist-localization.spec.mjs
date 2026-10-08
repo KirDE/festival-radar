@@ -10,8 +10,14 @@ for (const [language, labels] of Object.entries(locales)) {
   test(`${language} artist routes survive navigation and direct reload`, async ({ page }) => {
     await page.goto(`/${language}/festivals/synthetic-fest/`);
     await expect(page.locator("html")).toHaveAttribute("lang", language);
-    await page.locator(`a[href="/${language}/artists/sample-artist/"]`).first().click();
-    await expect(page).toHaveURL(new RegExp(`/${language}/artists/sample-artist/$`));
+    await expect(page.locator("a.brand")).toHaveAttribute("href", "/");
+    if (language !== "en") {
+      await expect(page.locator(".planningSection h2")).toHaveText(language === "de" ? "Kalender & Karte" : "Календарь и карта");
+      await expect(page.locator(".timetableEmpty strong")).toHaveText(language === "de" ? "Bühnenplan" : "Расписание сцен");
+      await expect(page.locator(".localActions option").first()).toHaveText(language === "de" ? "Teilnahme wählen" : "Укажите участие");
+    }
+    await page.locator(`a[href="/artists/sample-artist/"]`).first().click();
+    await expect(page).toHaveURL(/\/artists\/sample-artist\/$/);
     await expect(page.getByText(labels.recentSetlists, { exact: true })).toBeVisible();
 
     await page.reload();
