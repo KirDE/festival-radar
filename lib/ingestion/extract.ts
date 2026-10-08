@@ -4,7 +4,7 @@ import { extractOfficialMarkupCandidate } from "./adapters/official-markup.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "./types.ts";
 import { INGESTION_SCHEMA_VERSION } from "./types.ts";
 
-const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city", "headliners", "lineup", "ticketsUrl", "status"];
+const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city", "headliners", "lineup", "ticketsUrl", "status", "ticketStatus"];
 
 export function extractFestivalCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const candidates = source.strategies.flatMap((strategy) => {
