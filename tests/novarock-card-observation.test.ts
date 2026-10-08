@@ -36,6 +36,27 @@ test("global copied/hidden cards, ambiguous identity and unsafe ancestry reject"
   ]) assert.throws(() => verify(altered));
 });
 
+test("popover on main, viewport or final card fails closed", () => {
+  const lastCard = fullPage.lastIndexOf('<li class="artistCard');
+  assert.ok(lastCard > 0);
+  const cardOpenEnd = fullPage.indexOf('>', lastCard);
+  for (const altered of [
+    fullPage.replace('<main class=', '<main popover="auto" class='),
+    fullPage.replace('<div id="viewport">', '<div id="viewport" popover="auto">'),
+    fullPage.slice(0, cardOpenEnd) + ' popover="manual"' + fullPage.slice(cardOpenEnd),
+  ]) assert.throws(() => verify(altered), /hidden or executable attribute/);
+});
+test("canonical rel tokens and duplicates are checked document-wide", () => {
+  const altered = [
+    fullPage.replace('</head>', '<link rel="canonical alternate" href="https://www.novarock.at/lineup/2026/"></head>'),
+    fullPage.replace('</head>', '<link rel=" alternate CANONICAL  " href="https://www.novarock.at/lineup/2026/"></head>'),
+    fullPage.replace('<footer>', '<link rel="CANONICAL" href="https://www.novarock.at/lineup/2026/"><footer>'),
+  ];
+  for (const document of altered) assert.throws(() => verify(document), /canonical identity/);
+  const caseOnly = fullPage.replace('rel="canonical"', 'rel="  CaNoNiCaL  "');
+  assert.deepEqual(verify(caseOnly).cards, verify(fullPage).cards);
+});
+
 test("compensating per-card day swap rejects despite identical totals", () => {
   const swapped = fullPage.replace(/<li class="artistCard[^]*?<\/li>/g, (card) =>
     card.includes("/artist/die-toten-hosen/") ? card.replace("2027-06-09", "2027-06-10") :

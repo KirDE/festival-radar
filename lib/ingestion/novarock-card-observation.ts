@@ -90,7 +90,7 @@ function documentTree(html: string): Element {
       if (Object.hasOwn(attrs, key)) fail("duplicate attribute");
       attrs[key] = decode(a[2] ?? a[3] ?? "");
     }
-    if (Object.keys(attrs).some((key) => ["hidden", "inert"].includes(key) || /^on[a-z]+$/.test(key)) ||
+    if (Object.keys(attrs).some((key) => ["hidden", "inert", "popover"].includes(key) || /^on[a-z]+$/.test(key)) ||
         attrs["aria-hidden"] !== undefined && attrs["aria-hidden"] !== "false") fail("hidden or executable attribute");
     // Allow only inert presentational properties actually present in the page.
     if (attrs.style !== undefined && (!/^(?:(?:color|background-color|border-color|margin-top|margin-bottom):(?:#[a-f0-9]{6}|0|transparent);?)+$/i.test(attrs.style) &&
@@ -137,13 +137,18 @@ export function verifyNovaRockCardDocument(bytes: Uint8Array, sealedContent: unk
   if (head.tag !== "head" || head.text.trim()) fail("head shape");
   const titles = head.children.filter((n) => n.tag === "title");
   if (titles.length !== 1 || titles[0].children.length || decode(titles[0].text) !== "Line-Up 2027 - Nova Rock Festival") fail("document title");
-  const canonical = head.children.filter((n) => n.tag === "link" && n.attrs.rel === "canonical");
-  if (canonical.length !== 1 || canonical[0].attrs.href !== CANONICAL) fail("canonical identity");
+  // HTML rel is a case-insensitive, whitespace-separated token list.
+  // A second canonical token anywhere in the document is ambiguous.
+  const hasCanonicalRel = (n: Element) => n.tag === "link" &&
+    (n.attrs.rel ?? "").split(/\s+/).some((token) => token.toLowerCase() === "canonical");
+  const canonical = nodes(doc).filter(hasCanonicalRel);
+  if (canonical.length !== 1 || canonical[0] !== head.children.find(hasCanonicalRel) ||
+      canonical[0].attrs.rel?.toLowerCase() !== "canonical" || canonical[0].attrs.href !== CANONICAL) fail("canonical identity");
   for (const [key, value] of Object.entries({ "og:url": CANONICAL, "og:title": "Nova Rock 2027", "og:type": "article" })) {
     const metas = head.children.filter((n) => n.tag === "meta" && (n.attrs.name === key || n.attrs.property === key));
     if (metas.length !== 1 || metas[0].attrs.content !== value) fail("OG identity");
   }
-  if (nodes(doc).filter((n) => n.tag === "title" || n.tag === "link" && n.attrs.rel === "canonical" ||
+  if (nodes(doc).filter((n) => n.tag === "title" || hasCanonicalRel(n) ||
       n.tag === "meta" && ["og:url", "og:title", "og:type"].includes(n.attrs.name ?? n.attrs.property ?? "")).length !== 5) fail("duplicate document identity");
   if (body.tag !== "body" || body.text.trim()) fail("body shape");
   // Only div viewport/view wrappers may contain the unique main. Other page

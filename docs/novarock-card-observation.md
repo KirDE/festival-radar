@@ -55,8 +55,8 @@ The independent grammar imports neither the ingestion adapter nor provider code.
 It requires the 2027 title, canonical and OG identity, one visible main/header/
 section/grid, exactly 44 closed cards, unique captions and URLs and the pinned
 caption/image/meta shape. It rejects malformed nesting, duplicate attributes,
-hidden or executable ancestry, unsafe inline styles, unknown entities,
-duplicate identity metadata, card/grid copies outside the single visible 2027
+hidden, popover or executable ancestry, unsafe inline styles, unknown entities,
+case-insensitive canonical-token duplicates, card/grid copies outside the 2027
 block, and incomplete documents. The inspected original page wrappers and opaque
 rawtext are accepted only when every entire opaque element matches its pinned
 SHA-256 fingerprint. Unknown or duplicated blocks fail closed. Fingerprints are
@@ -103,7 +103,7 @@ for them. Capturing once must never authorize publication.
 ## Validation and remaining acquisition gate
 
 Local: normal `npm run typecheck` with
-`XDG_CACHE_HOME=/tmp/novarock-card-prisma-cache` (local Prisma generation), 27
+`XDG_CACHE_HOME=/tmp/novarock-card-prisma-cache` (local Prisma generation), 29
 verifier tests, 9 seal tests, 19 draft tests, 7 Nova parser tests, 4 provenance
 tests, 3 policy tests and 2 publication tests passed. Tests use only checked-in
 fixture bytes and perform no HTTP requests. The compact and synthetic full-page
@@ -122,9 +122,10 @@ are synthetic test setup only. Fixture seals are retained; discard the database.
 
 **Real PostgreSQL E2E passed independently:** the controller used a newly created
 postgres:16-alpine container on localhost with isolated database `novacard_test`.
-All 24 migrations applied and the new E2E passed 9/9 twice, including after
-the full-page grammar change, with Serializable source/edition races, drift,
-replay and unchanged publication/refresh counts. Both owned containers removed.
+All 24 migrations applied and the new E2E passed 9/9 on fresh databases
+including after the full-page grammar and popover/canonical guards, with
+Serializable source/edition races, drift, replay and unchanged publication/
+refresh counts. All owned test containers were removed.
 The disposable URL guard also refused an unset DATABASE_URL. No production
 credentials or database were used. To repeat on a fresh isolated database:
 
