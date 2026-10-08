@@ -55,6 +55,24 @@ test("[no-db] brand and submission navigation stay bare after a language choice"
   await expect(page.locator(".languagePicker select")).toHaveValue("ru");
 });
 
+for (const [routeLanguage, selectedLanguage, planLabel] of [["de", "ru", "Мой план"], ["ru", "de", "Mein Plan"]]) {
+  test("brand click from /" + routeLanguage + "/ detail keeps the selected " + selectedLanguage + " language on bare routes", async ({ page }) => {
+    await page.goto("/" + routeLanguage + "/festivals/synthetic-fest/");
+    const origin = new URL(page.url()).origin;
+    await switchWithoutNavigation(page, selectedLanguage);
+    await page.locator("a.brand").click();
+    await expect(page).toHaveURL(origin + "/");
+    await expect(page.locator("html")).toHaveAttribute("lang", selectedLanguage);
+    await expect(page.locator(".languagePicker select")).toHaveValue(selectedLanguage);
+    await page.getByRole("navigation").getByRole("link", { name: planLabel, exact: true }).click();
+    await expect(page).toHaveURL(origin + "/planner/");
+    await expect(page.locator("html")).toHaveAttribute("lang", selectedLanguage);
+    await page.reload();
+    await expect(page.locator(".languagePicker select")).toHaveValue(selectedLanguage);
+    await expect(page.locator("html")).toHaveAttribute("lang", selectedLanguage);
+  });
+}
+
 test("[no-db] fresh prefixed links honor their locale and bare HTML reads the preference cookie", async ({ page }) => {
   await page.route("**/api/**", (route) => route.fulfill({status:401,contentType:"application/json",body:"{}"}));
   await page.goto("/de/submit/");
