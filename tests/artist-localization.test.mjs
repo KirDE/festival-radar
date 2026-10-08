@@ -20,13 +20,14 @@ test("artist enrichment labels are complete when switching every supported langu
   }
 });
 
-test("artist routes and links preserve every supported locale", () => {
+test("artist deep links remain localized while UI navigation uses bare paths", () => {
   assert.doesNotMatch(provider, /window\.location\.(assign|replace)/);
   assert.match(providerRoute, /export const dynamic = "force-dynamic"/);
   assert.match(providerRoute, /export const dynamicParams = true/);
   assert.doesNotMatch(providerRoute, /generateStaticParams/);
   assert.match(providerRoute, /canonical: `\/\$\{lang\}\/artists\/\$\{artist\.slug\}\//);
-  assert.match(artistDetail, /href=\{`\/\$\{language\}\//);
+  assert.match(artistDetail, /href="\/"/);
+  assert.match(artistDetail, /href=\{`\/festivals\/\$\{festival\.slug\}/);
 });
 
 test("artist enrichment UI renders all labels through LanguageProvider", () => {

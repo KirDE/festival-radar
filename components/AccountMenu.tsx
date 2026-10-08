@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { useLanguage } from "./LanguageProvider";
+import { authErrorMessage } from "@/lib/auth-error-copy";
 
 type User = { id: string; email: string };
 type Mode = "login" | "register";
@@ -41,24 +42,24 @@ export function AccountMenu() {
         body: JSON.stringify({ email: data.get("email"), password: data.get("password") }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || t.failed);
+      if (!response.ok) { setError(authErrorMessage(language, result.error, t.failed)); return; }
       setUser(result.user); setOpen(false);
       window.dispatchEvent(new CustomEvent("festival-radar-authenticated"));
-    } catch (reason) { setError(reason instanceof Error ? reason.message : t.failed); }
+    } catch { setError(t.failed); }
     finally { setBusy(false); }
   }
 
   async function usePasskey() {
     setBusy(true); setError("");
     try {
-      if (mode === "register" && !email.trim()) throw new Error(t.emailRequired);
+      if (mode === "register" && !email.trim()) { setError(t.emailRequired); return; }
       const optionsResponse = await fetch(`/api/auth/passkey/${mode}/options`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(mode === "register" ? { email } : {}),
       });
       const optionsResult = await optionsResponse.json();
-      if (!optionsResponse.ok) throw new Error(optionsResult.error || t.failed);
+      if (!optionsResponse.ok) { setError(authErrorMessage(language, optionsResult.error, t.failed)); return; }
       const credential = mode === "register"
         ? await startRegistration({ optionsJSON: optionsResult.options })
         : await startAuthentication({ optionsJSON: optionsResult.options });
@@ -68,13 +69,13 @@ export function AccountMenu() {
         body: JSON.stringify(credential),
       });
       const verificationResult = await verificationResponse.json();
-      if (!verificationResponse.ok) throw new Error(verificationResult.error || t.failed);
+      if (!verificationResponse.ok) { setError(authErrorMessage(language, verificationResult.error, t.failed)); return; }
       setUser(verificationResult.user); setOpen(false);
       window.dispatchEvent(new CustomEvent("festival-radar-authenticated"));
     } catch (reason) {
       setError(reason instanceof DOMException && reason.name === "NotAllowedError"
         ? t.cancelled
-        : reason instanceof Error ? reason.message : t.failed);
+        : t.failed);
     } finally { setBusy(false); }
   }
 
@@ -84,7 +85,7 @@ export function AccountMenu() {
       const response = await fetch("/api/auth/logout", { method: "POST" });
       if (!response.ok) throw new Error(t.failed);
       setUser(null); setMode("login"); setOpen(false);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : t.failed); }
+    } catch { setError(t.failed); }
     finally { setBusy(false); }
   }
 

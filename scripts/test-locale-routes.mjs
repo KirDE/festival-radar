@@ -37,9 +37,9 @@ try {
     assert.ok(html.includes(visible), `${lang} visible copy is missing`);
     assert.ok(html.includes(`rel="canonical" href="https://festivals.kir-it.de/${lang}/"`));
     for (const alternate of ["en", "de", "ru"]) assert.ok(html.includes(`hrefLang="${alternate}" href="https://festivals.kir-it.de/${alternate}/"`));
-    assert.ok(html.includes(`href="/${lang}/"`), `${lang} navigation does not preserve locale`);
-    assert.ok(html.includes(`href="/${lang}/planner/"`), `${lang} planner link does not preserve locale`);
-    assert.ok(html.includes(`href="/${lang}/submit/"`), `${lang} submission link does not preserve locale`);
+    assert.ok(html.includes(`class="brand" href="/"`), `${lang} brand must link to the bare root`);
+    assert.ok(html.includes(`href="/planner/"`), `${lang} planner link should not add a locale prefix`);
+    assert.ok(html.includes(`href="/submit/"`), `${lang} submission link should not add a locale prefix`);
 
     const submission = await fetch(`${origin}/${lang}/submit/`);
     assert.equal(submission.status, 200);
@@ -52,7 +52,7 @@ try {
     assert.ok(plannerHtml.includes(plannerExpected[lang].heading), `${lang} planner heading is not localized`);
     assert.ok(plannerHtml.includes(plannerExpected[lang].notifications), `${lang} notification navigation is not localized`);
     assert.ok(plannerHtml.includes(plannerExpected[lang].calendar), `${lang} planner calendar is not localized`);
-    assert.ok(plannerHtml.includes(`href="/${lang}/planner/"`), `${lang} planner navigation does not preserve locale`);
+    assert.ok(plannerHtml.includes(`href="/planner/"`), `${lang} planner navigation should use a bare route`);
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const notifications = await fetch(`${origin}/${lang}/notifications/`);
@@ -60,7 +60,7 @@ try {
       const notificationsHtml = await notifications.text();
       assert.match(notificationsHtml, new RegExp(`<html lang="${lang}"`));
       assert.ok(notificationsHtml.includes(notificationsExpected[lang]), `${lang} notification heading is not localized`);
-      assert.ok(notificationsHtml.includes(`href="/${lang}/notifications/"`), `${lang} notification navigation does not preserve locale`);
+      assert.ok(notificationsHtml.includes(`href="/notifications/"`), `${lang} notification navigation should use a bare route`);
       assert.ok(notificationsHtml.includes(`rel="canonical" href="https://festivals.kir-it.de/${lang}/notifications/"`), `${lang} notification canonical URL is missing`);
     }
 
@@ -69,7 +69,7 @@ try {
     const enrichedHtml = await enrichedArtist.text();
     assert.match(enrichedHtml, new RegExp(`<html lang="${lang}"`));
     assert.ok(enrichedHtml.includes({ en: "Recent setlists", de: "Aktuelle Setlists", ru: "Недавние сетлисты" }[lang]));
-    assert.ok(enrichedHtml.includes(`href="/${lang}/"`));
+    assert.ok(enrichedHtml.includes(`class="brand" href="/"`));
 
     const partialArtist = await fetch(`${origin}/${lang}/artists/second-artist/`);
     assert.equal(partialArtist.status, 200);
@@ -79,7 +79,7 @@ try {
     assert.equal(festival.status, 200);
     const festivalHtml = await festival.text();
     assert.match(festivalHtml, new RegExp(`<html lang="${lang}"`));
-    assert.ok(festivalHtml.includes(`href="/${lang}/artists/sample-artist/"`));
+    assert.ok(festivalHtml.includes(`href="/artists/sample-artist/"`));
 
     const manifest = await fetch(`${origin}/${lang}/manifest.webmanifest`);
     assert.equal(manifest.status, 200);

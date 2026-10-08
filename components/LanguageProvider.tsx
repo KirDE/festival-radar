@@ -35,6 +35,8 @@ export const adminTranslations = {
 const translations = {
   en: {
     lineupSort: "Sort lineup", lineupOfficial: "Official source order", lineupAlphabetical: "Alphabetical", lineupChronological: "First scheduled performance", lineupPopularity: "Spotify popularity (highest first)", spotifyPopularityIndex: "Spotify popularity index (0–100)", spotifyFollowers: "Spotify followers", statsUnknown: "Unknown",
+    save: "☆ Save", saved: "★ Saved", attendanceFor: "Attendance for {festival}", setAttendance: "Set attendance", going: "Going", maybe: "Maybe", notGoing: "Not going", openPlan: "Open my plan →",
+    region: "Europe 2027",
     festivals: "Festivals", notifications: "Notifications", aboutData: "About data", footerNote: "Always confirm dates and tickets with the official festival.", language: "Language",
     season: "THE 2027 EUROPEAN SEASON", heroFirst: "Find your next", heroSecond: "loud weekend.", heroText: "Dates, lineups, tickets, playlists and setlists for Europe’s essential rock and metal festivals.", withActs: "with announced acts", countries: "countries",
     search: "Festival, artist or city", allCountries: "All countries", lineupAnnounced: "Lineup announced", lastReview: "Last dataset review · 28 Aug 2026", noMatches: "No matching festivals. Try a different artist or country.",
@@ -49,6 +51,8 @@ const translations = {
   },
   de: {
     lineupSort: "Line-up sortieren", lineupOfficial: "Offizielle Reihenfolge", lineupAlphabetical: "Alphabetisch", lineupChronological: "Erster geplanter Auftritt", lineupPopularity: "Spotify-Popularität (absteigend)", spotifyPopularityIndex: "Spotify-Popularitätsindex (0–100)", spotifyFollowers: "Spotify-Follower", statsUnknown: "Unbekannt",
+    save: "☆ Speichern", saved: "★ Gespeichert", attendanceFor: "Teilnahme an {festival}", setAttendance: "Teilnahme wählen", going: "Dabei", maybe: "Vielleicht", notGoing: "Nicht dabei", openPlan: "Meinen Plan öffnen →",
+    region: "Europa 2027",
     festivals: "Festivals", notifications: "Benachrichtigungen", aboutData: "Über die Daten", footerNote: "Termine und Tickets immer auf der offiziellen Festival-Seite prüfen.", language: "Sprache",
     season: "DIE EUROPÄISCHE SAISON 2027", heroFirst: "Finde dein nächstes", heroSecond: "lautes Wochenende.", heroText: "Termine, Line-ups, Tickets, Playlists und Setlists der wichtigsten Rock- und Metal-Festivals Europas.", withActs: "mit angekündigten Acts", countries: "Länder",
     search: "Festival, Künstler oder Stadt", allCountries: "Alle Länder", lineupAnnounced: "Line-up angekündigt", lastReview: "Letzte Datenprüfung · 28. Aug. 2026", noMatches: "Keine passenden Festivals. Versuche einen anderen Künstler oder ein anderes Land.",
@@ -63,6 +67,8 @@ const translations = {
   },
   ru: {
     lineupSort: "Сортировка лайнапа", lineupOfficial: "Официальный порядок", lineupAlphabetical: "По алфавиту", lineupChronological: "Первое выступление по расписанию", lineupPopularity: "Популярность Spotify (по убыванию)", spotifyPopularityIndex: "Индекс популярности Spotify (0–100)", spotifyFollowers: "Подписчики Spotify", statsUnknown: "Неизвестно",
+    save: "☆ Сохранить", saved: "★ Сохранено", attendanceFor: "Посещение фестиваля {festival}", setAttendance: "Укажите участие", going: "Пойду", maybe: "Возможно", notGoing: "Не пойду", openPlan: "Открыть мой план →",
+    region: "Европа 2027",
     festivals: "Фестивали", notifications: "Уведомления", aboutData: "О данных", footerNote: "Всегда проверяйте даты и билеты на официальном сайте фестиваля.", language: "Язык",
     season: "ЕВРОПЕЙСКИЙ СЕЗОН 2027", heroFirst: "Найди свои следующие", heroSecond: "громкие выходные.", heroText: "Даты, лайнапы, билеты, плейлисты и сетлисты главных рок- и метал-фестивалей Европы.", withActs: "с объявленными участниками", countries: "стран",
     search: "Фестиваль, артист или город", allCountries: "Все страны", lineupAnnounced: "Лайнап объявлен", lastReview: "Последняя проверка · 28 авг. 2026", noMatches: "Ничего не найдено. Попробуйте другого артиста или страну.",
@@ -79,15 +85,6 @@ const translations = {
 
 export function translate(language: Language, key: TranslationKey, values: TranslationValues = {}) {
   return Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), translations[language][key] as string);
-}
-
-export function languagePath(pathname: string, language: Language) {
-  const normalized = pathname.startsWith("/") ? pathname : `/${pathname}`;
-  const localized = normalized.match(/^\/(?:en|de|ru)(\/.*|$)/)?.[1];
-  if (localized !== undefined) return `/${language}${localized || "/"}`;
-  if (normalized === "/") return `/${language}/`;
-  if (/^\/(?:artists|festivals)\/[^/]+\/?$/.test(normalized)) return `/${language}${normalized.endsWith("/") ? normalized : `${normalized}/`}`;
-  return `/${language}/`;
 }
 
 const localeMap: Record<Language, string> = { en: "en-US", de: "de-DE", ru: "ru-RU" };

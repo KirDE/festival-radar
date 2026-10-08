@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useLanguage } from "./LanguageProvider";
 import { parsePlannerState, serializePlannerState } from "@/lib/planner-storage";
 export type Attendance = "going" | "maybe" | "not-going";
 export type PlannerState = {
@@ -106,6 +107,7 @@ export function FavoriteButton({
   value: string;
 }) {
   const p = useLocalPlanner();
+  const { t } = useLanguage();
   const selected = (
     kind === "festival" ? p.favoriteFestivals : p.favoriteArtists
   ).includes(value);
@@ -118,7 +120,7 @@ export function FavoriteButton({
         kind === "festival" ? p.toggleFestival(value) : p.toggleArtist(value)
       }
     >
-      {selected ? "★ Saved" : "☆ Save"}
+      {t(selected ? "saved" : "save")}
     </button>
   );
 }
