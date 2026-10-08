@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:rockharz-update": "node --import tsx --test tests/rockharz-2027-update.test.ts",
+    "test:rockharz-update-db": "node --import tsx --test tests/rockharz-2027-update.e2e.test.ts",
     "dev": "next dev",
     "prisma:generate": "prisma generate",
     "postinstall": "npm run prisma:generate",

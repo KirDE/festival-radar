@@ -1,0 +1,37 @@
+name: One-shot guarded UPDATE existing Rockharz 2027
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Inspect first; activate once; readback resolves a lost response"
+        required: true
+        type: choice
+        options: [inspect, activate, readback]
+        default: inspect
+      activation:
+        description: "Exact phrase UPDATE_EXISTING_ROCKHARZ_2027 (updates an existing edition)"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: festival-radar-production
+  cancel-in-progress: false
+jobs:
+  update:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.activation == 'UPDATE_EXISTING_ROCKHARZ_2027'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Inspect, explicitly update, verify committed audit and readback
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          ROCKHARZ_2027_UPDATE_TOKEN: ${{ secrets.ROCKHARZ_2027_UPDATE_TOKEN }}
+          ROCKHARZ_ACTIVATION: ${{ inputs.activation }}
+          ROCKHARZ_OPERATION: ${{ inputs.operation }}
+        run: node --experimental-strip-types scripts/rockharz-2027-update.mjs

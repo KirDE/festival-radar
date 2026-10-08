@@ -38,6 +38,8 @@ jobs:
       - run: npm ci
       - run: npm run prisma:generate
       - run: npx prisma migrate deploy
+      - run: npm run test:rockharz-update
+      - run: npm run test:rockharz-update-db
       - run: npm run test:logo-assets
       - run: npm run test:playlist-queue
       - run: npm run test:sources
