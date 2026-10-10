@@ -10,7 +10,7 @@ import { bloodstock } from "./bloodstock.ts";
 import { impericon } from "./impericon.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; ticketsUrl?: string; excerpt: string; lineupSourceUrl?: string; warning?: string };
+type AdapterResult = { artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; ticketsUrl?: string; ticketsExcerpt?: string; excerpt: string; lineupSourceUrl?: string; warning?: string };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
@@ -453,7 +453,9 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     const value = result[field];
     if (!value || (Array.isArray(value) && value.length === 0)) continue;
     Object.assign(candidate, { [field]: value });
-    candidate.evidence.push({ field: field as FieldEvidence["field"], sourceUrl: field === "lineup" ? result.lineupSourceUrl ?? source.url : source.url, observedAt: fetchedAt, excerpt: result.excerpt.slice(0, 500) });
+    const ticketEvidence = (field === "ticketsUrl" || field === "ticketStatus") && result.ticketsExcerpt;
+    const sourceUrl = ticketEvidence ? result.ticketsUrl! : field === "lineup" ? result.lineupSourceUrl ?? source.url : source.url;
+    candidate.evidence.push({ field: field as FieldEvidence["field"], sourceUrl, observedAt: fetchedAt, excerpt: (ticketEvidence || result.excerpt).slice(0, 500) });
   }
   // These edition-bound announcements are valuable review evidence, but their
   // lineup changes would enqueue automatic provider playlist creation. Keep

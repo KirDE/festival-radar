@@ -26,7 +26,10 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     lineup: candidate.lineup?.filter(name => !reviewedHeadliners.has(name.toLocaleLowerCase())),
     warnings } : candidate;
   const changes = diffFestival(current, effective);
-  const reviewReasons = new Set(warnings);
+  // Nova Rock's provider gate protects actual artist/billing changes, not
+  // unchanged verified cards or independent ticket metadata refreshes.
+  const unchangedNovaLineup = candidate.festivalSlug === "nova-rock" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
+  const reviewReasons = new Set(warnings.filter(warning => !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
   // Known, unchanged Dynamo facts are successful quiet checks. New performers
   // still need agent review: their publication would enqueue provider work.
   if (current.slug === "dynamo-metal-fest" && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))

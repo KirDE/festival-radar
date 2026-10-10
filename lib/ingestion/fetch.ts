@@ -1,5 +1,7 @@
+import { isFrequencySource, frequencyTicketLink, frequencyDocuments } from "./adapters/frequency.ts";
 import { isLeedsSource } from "./adapters/leeds.ts";
 import { isReadingSource } from "./adapters/reading.ts";
+import { novarockDocuments, novarockTicketsUrl } from "./adapters/novarock.ts";
 import type { FestivalSource } from "./types.ts";
 import { discoverDynamoBands, isDynamoAnnouncement } from "./adapters/dynamo.ts";
 
@@ -48,6 +50,16 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   const initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && isFrequencySource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern && new URL(source.url).pathname === "/") {
+    if (initial.response.url && new URL(initial.response.url).origin !== "https://www.frequency.at") throw Object.assign(new Error("Frequency homepage redirected away from its official origin"), { attempts: initial.attempts });
+    const home = await initial.response.text();
+    if (!frequencyTicketLink(home)) return { response: new Response(home, { status: 200, headers: initial.response.headers }), attempts: initial.attempts };
+    const tickets = await fetchWithRetry("https://www.frequency.at/tickets/");
+    const attempts = initial.attempts + tickets.attempts;
+    if (!tickets.response.ok) return { response: tickets.response, attempts };
+    if (tickets.response.url && !/^https:\/\/www\.frequency\.at\/tickets\/?$/.test(tickets.response.url)) throw Object.assign(new Error("Frequency ticket page redirected away from its official landing page"), { attempts });
+    return { response: new Response(frequencyDocuments(home, await tickets.response.text()), { status: 200, headers: { "content-type": "application/json" } }), attempts };
+  }
   if (initial.response.ok && isLeedsSource(source) && !source.fetchUrl && initial.response.url && new URL(initial.response.url).origin !== "https://www.leedsfestival.com") throw Object.assign(new Error("Leeds source redirected away from its trusted origin"), { attempts: initial.attempts });
   // Leeds's homepage carries the current festival span but only a sales CTA.
   // Read the same-origin linked live ticket products to establish availability.
@@ -88,6 +100,11 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     } catch (error) {
       throw Object.assign(error instanceof Error ? error : new Error(String(error)), { attempts });
     }
+  }
+  if (source.festivalSlug === "nova-rock" && source.strategies.includes("official_markup") && source.url === "https://www.novarock.at/lineup/" && !source.fetchUrl && !source.followLinkPattern && initial.response.ok) {
+    const tickets = await fetchWithRetry(novarockTicketsUrl);
+    if (!tickets.response.ok) return { response: tickets.response, attempts: initial.attempts + tickets.attempts };
+    return { response: new Response(novarockDocuments(await initial.response.text(), await tickets.response.text()), { headers: { "content-type": "application/json" } }), attempts: initial.attempts + tickets.attempts };
   }
   if (!source.followLinkPattern || !initial.response.ok) return initial;
 

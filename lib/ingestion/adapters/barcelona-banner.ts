@@ -39,7 +39,7 @@ export function applyBarcelonaBanner(html: string, source: FestivalSource, candi
   add("startDate", iso(days[0]), dates[0].excerpt);
   add("endDate", iso(days.at(-1)!), dates[0].excerpt);
   const sales = headings.filter(h => h.role === "3");
-  if (sales.length === 1 && /^(?:tickets? ya a la venta|tickets? (?:are )?(?:now )?on sale|entrades ja a la venda)$/i.test(sales[0].text)) {
+  if (sales.length === 1 && /^(?:tickets? ya a la venta|tickets? (?:are )?(?:now on sale|on sale(?: now)?)|entrades ja a la venda)$/i.test(sales[0].text)) {
     add("ticketStatus", "available", sales[0].excerpt);
   }
 }
