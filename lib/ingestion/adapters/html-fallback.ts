@@ -1,11 +1,13 @@
 import { extractPolandrockCandidate, isPolandrockSource } from "./polandrock.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
+import { extractSummerBreezeCandidate } from "./summer-breeze.ts";
 import { extractEurockeennesCandidate } from "./eurockeennes.ts";
 import { applyBarcelonaBanner } from "./barcelona-banner.ts";
 import { extractOfficialMarkupCandidate } from "./official-markup.ts";
 import { extractResurrectionCandidate } from "./resurrection.ts";
 import { extractSwedenRockCandidate } from "./sweden-rock.ts";
+import { extractAlcatrazCandidate } from "./alcatraz.ts";
 import { validateGenericLineup } from "../lineup-quality.ts";
 
 type SupportedField = FieldEvidence["field"];
@@ -105,6 +107,7 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
 
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   if (isPolandrockSource(source)) return extractPolandrockCandidate(html, source, fetchedAt);
+  if (source.festivalSlug === "summer-breeze") return extractSummerBreezeCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "eurockeennes") return extractEurockeennesCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "sweden-rock") return extractSwedenRockCandidate(html, source, fetchedAt);
   // Existing DB-owned generic Rock Werchter sources can consume the verified
@@ -116,6 +119,7 @@ export function extractHtmlFallbackCandidate(html: string, source: FestivalSourc
   if (source.festivalSlug === "resurrection-fest" && new URL(source.url).hostname === "www.resurrectionfest.es") {
     return extractResurrectionCandidate(html, source, fetchedAt);
   }
+  if (source.festivalSlug === "alcatraz") return extractAlcatrazCandidate(html, source, fetchedAt);
   const candidate: FestivalCandidate = {
     schemaVersion: INGESTION_SCHEMA_VERSION,
     festivalSlug: source.festivalSlug,
