@@ -6,12 +6,15 @@ import { requireLocalDisposableDatabase } from './support/disposable-db.ts';
 import { claimDueSources, completeSourceLease, markDeprecatedSources } from '../lib/ingestion/lease.ts';
 requireLocalDisposableDatabase(process.env.DATABASE_URL);
 test('real DB stepped retry, exact 21-day deprecation between weekly probes, successful unchanged recovery', async () => {
- const db = new PrismaClient();
- // Earlier integration steps leave enabled source fixtures in this disposable
- // DB. Global due selection must exercise THIS case, not lease an unrelated row.
- const previouslyEnabled = await db.festivalSource.findMany({where:{enabled:true},select:{id:true}});
- await db.festivalSource.updateMany({where:{id:{in:previouslyEnabled.map(row=>row.id)}},data:{enabled:false}});
- const slug='failure-policy-'+randomUUID(); const now=new Date();
+ const client = new PrismaClient();
+ const rollback = new Error('rollback failure-policy fixture');
+ try {
+  await client.$transaction(async transaction => {
+   // The preceding CI suites leave enabled due sources behind. Scope the
+   // global scheduler to this fixture, and roll everything back afterward.
+   const db = transaction as unknown as PrismaClient;
+   await db.festivalSource.updateMany({data:{enabled:false}});
+   const slug='failure-policy-'+randomUUID(); const now=new Date();
  const f=await db.festival.create({data:{slug,name:'Synthetic retry',country:'Test',countryCode:'DE',officialUrl:'https://example.test',genres:[],editions:{create:{year:2027,status:'TBA',ticketStatus:'UNKNOWN',recordState:'CURRENT',completeness:'TBA',sourceUpdatedAt:now}}}});
  const e=await db.festivalEdition.findFirstOrThrow({where:{festivalId:f.id}});
  const s=await db.festivalSource.create({data:{festivalSlug:slug,festivalId:f.id,editionId:e.id,editionYear:2027,url:'https://example.test',enabled:true,strategies:['manual_review'],parserKey:'manual_review',refreshPolicy:'daily',cadenceSeconds:86400,configurationBackfilledAt:now}});
@@ -39,5 +42,9 @@ test('real DB stepped retry, exact 21-day deprecation between weekly probes, suc
   const owner=randomUUID();const due=new Date(deadline.getTime()+86400000);const [claim]=await claimDueSources(db,{owner,now:due,limit:1,ttlMs:60000});
   assert.equal(await completeSourceLease(db,{...claim,owner,now:due,outcome:'success'}),true);
   const recovered=await db.festivalSource.findUniqueOrThrow({where:{id:s.id}});assert.equal(recovered.deprecatedAt,null);assert.equal(recovered.failureStartedAt,null);assert.equal(recovered.consecutiveFailures,0);
- } finally {await db.festivalSource.delete({where:{id:s.id}});await db.festival.delete({where:{id:f.id}});await db.festivalSource.updateMany({where:{id:{in:previouslyEnabled.map(row=>row.id)}},data:{enabled:true}});await db.$disconnect();}
+ } finally {await db.festivalSource.delete({where:{id:s.id}});await db.festival.delete({where:{id:f.id}});}
+   throw rollback;
+  }, {timeout:30000});
+ } catch (error) {if(error!==rollback) throw error;}
+ finally {await client.$disconnect();}
 });
