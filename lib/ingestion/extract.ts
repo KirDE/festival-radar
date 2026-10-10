@@ -24,6 +24,7 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     observedEditionYears: [],
   };
   for (const candidate of candidates) {
+    if (candidate.artistListMode) merged.artistListMode = candidate.artistListMode;
     for (const field of supportedFields) {
       if (merged[field] === undefined && candidate[field] !== undefined) Object.assign(merged, { [field]: candidate[field] });
     }
@@ -44,5 +45,10 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
   merged.evidence = merged.evidence.filter(({ field }, index, values) => values.findIndex((evidence) => evidence.field === field) === index);
   merged.observedEditionYears = [...new Set(merged.observedEditionYears)];
   merged.warnings = [...new Set(merged.warnings)];
+  // The JSON-LD format is optional for the verified Rock Werchter homepage.
+  // Keep every actual parse/edition warning, and no-field cases still review.
+  if (source.festivalSlug === "rock-werchter" && merged.artistListMode === "additive" && merged.startDate && merged.endDate) {
+    merged.warnings = merged.warnings.filter(warning => warning !== "No JSON-LD Event was found");
+  }
   return merged;
 }
