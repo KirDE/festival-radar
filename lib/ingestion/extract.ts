@@ -1,3 +1,4 @@
+import { extractRockInRomaCandidate } from "./adapters/rock-in-roma.ts";
 import { extractLeedsCandidate } from "./adapters/leeds.ts";
 import { isFullForceArchivedEdition } from "./adapters/full-force-archive.ts";
 import { extractReadingCandidate } from "./adapters/reading.ts";
@@ -13,6 +14,8 @@ const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city
 
 export function extractFestivalCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   if (source.strategies.includes("html_fallback")) {
+    const roma = extractRockInRomaCandidate(html, source, fetchedAt);
+    if (roma) return roma;
     const leeds = extractLeedsCandidate(html, source, fetchedAt);
     if (leeds) return leeds;
   }
