@@ -1,3 +1,4 @@
+import { extractBrutalAssaultCandidate } from "./brutal-assault.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 import { validateGenericLineup } from "../lineup-quality.ts";
@@ -97,6 +98,8 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
 }
 
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  const brutalAssault = extractBrutalAssaultCandidate(html, source, fetchedAt);
+  if (brutalAssault) return brutalAssault;
   const candidate: FestivalCandidate = {
     schemaVersion: INGESTION_SCHEMA_VERSION,
     festivalSlug: source.festivalSlug,

@@ -1,3 +1,4 @@
+import { handlesBrutalAssault, fetchBrutalAssaultDocuments } from "./adapters/brutal-assault.ts";
 import type { FestivalSource } from "./types.ts";
 
 export type FetchAttempt = { response: Response; attempts: number };
@@ -45,6 +46,7 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   const initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && handlesBrutalAssault(source)) return fetchBrutalAssaultDocuments(source, initial, fetchWithRetry);
   if (!source.followLinkPattern || !initial.response.ok) return initial;
 
   const html = await initial.response.text();
