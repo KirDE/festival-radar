@@ -59,7 +59,7 @@ function tree(html: string): Node | undefined {
   return root;
 }
 
-export function novarock(html: string, source: FestivalSource) {
+function novarockCards(html: string, source: FestivalSource) {
   if (source.url !== url || source.editionYear !== 2027 ||
       (source.fetchUrl !== undefined && source.fetchUrl !== url) || source.followLinkPattern !== undefined) return undefined;
   const clean = html.replace(/<!--[\s\S]*?-->/g, "");
@@ -139,7 +139,9 @@ export function novarock(html: string, source: FestivalSource) {
     const names = contents.filter((n) => hasClass(n, "artistCard__title"));
     if (names.length !== 1 || names[0].tag !== "h2" || names[0].children.length ||
         contents.filter((n) => ["a", "li", "h1", "h2", "h3"].includes(n.tag)).length !== 1 || anchor.text.trim()) return undefined;
-    const name = decode(names[0].text);
+    // Official /artist/static-x/ biography explicitly identifies this act as Static-X.
+    const visibleName = decode(names[0].text);
+    const name = href === "https://www.novarock.at/artist/static-x/" && visibleName === "Static X" ? "Static-X" : visibleName;
     if (!name || name.length > 100 || !/^[\p{L}\p{N}][\p{L}\p{N}\p{M} &'’.,:!+?()/\-]*$/u.test(name) || /[<>\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\ufffd]/u.test(name) ||
         /&[a-z#\d]+;/i.test(name) || /\b(?:19|20)\d{2}\b/.test(name) || seen.has(name.toLowerCase())) return undefined;
     seen.add(name.toLowerCase()); hrefs.add(href); observedDays.add(day);
@@ -150,4 +152,65 @@ export function novarock(html: string, source: FestivalSource) {
   return { editionYear: 2027, startDate: days[0], endDate: days[3], headliners, lineup,
     excerpt: `Line-Up 2027; canonical ${canonical}; ${cards.length} closed official cards; data-filter-day ${days.join(", ")}; ${firstEvidence}`,
     warning: "Agent review required before lineup-triggered provider activity" };
+}
+
+
+export const novarockTicketsUrl = "https://www.novarock.at/tickets/";
+export function novarockDocuments(lineup: string, tickets: string): string {
+  return JSON.stringify({ format: "novarock-documents-v1", lineup, tickets });
+}
+
+function ticketOffer(html: string, year: number) {
+  const clean = html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+  const canonicalLinks = [...clean.matchAll(/<link\b[^>]*>/gi)].map(m => attrs(m[0])).filter(a => a?.rel === "canonical");
+  if (canonicalLinks.length !== 1 || canonicalLinks[0]?.href !== novarockTicketsUrl) return undefined;
+  // Each product has nested offer <li>s. Bound by the next product, not the
+  // first </li>, so a VIP/caravan sellout can never affect the standard pass.
+  const mainBlocks = [...clean.matchAll(/<main\b[^>]*>[\s\S]*?<\/main>/gi)];
+  if (mainBlocks.length !== 1) return undefined;
+  const main = mainBlocks[0][0];
+  const products = [...main.matchAll(/<li\b[^>]*class=["'][^"']*\bticketCard\b[^"']*["'][^>]*>/gi)];
+  const matches = products.map((m, i) => main.slice(m.index, products[i + 1]?.index ?? main.length))
+    .filter(block => [...block.matchAll(/<h3\b[^>]*class=["'][^"']*ticketCard__title[^"']*["'][^>]*>([^<>]*)<\/h3>/gi)]
+      .some(m => decode(m[1]) === `Festivalpass ${year}`));
+  if (matches.length !== 1) return undefined;
+  const productAttrs = attrs(matches[0].match(/^<li\b[^>]*>/i)![0]);
+  if (!productAttrs || ["hidden", "inert"].some(key => Object.hasOwn(productAttrs, key)) || productAttrs["aria-hidden"] === "true" || /display\s*:\s*none|visibility\s*:\s*hidden/i.test(productAttrs.style ?? "")) return undefined;
+  const titles = [...matches[0].matchAll(/<h3\b[^>]*class=["'][^"']*ticketCard__title[^"']*["'][^>]*>([^<>]*)<\/h3>/gi)];
+  if (titles.length !== 1 || decode(titles[0][1]) !== `Festivalpass ${year}`) return undefined;
+  const offers = [...matches[0].matchAll(/<li\b[^>]*class=["'][^"']*\bticketCard__offer\b[^"']*["'][^>]*>[\s\S]*?<\/li>/gi)]
+    .map(m => tree(m[0])?.children[0]).filter(n => n && descendants(n).some(c => c.tag === "h4" && hasClass(c, "ticketCard__offerTitle") && !c.children.length && decode(c.text) === "Festivalpass"));
+  if (offers.length !== 1) return undefined;
+  const offer = offers[0]!, nodes = descendants(offer);
+  const links = nodes.filter(n => n.tag === "a");
+  const available = hasClass(offer, "is:available"), soldOut = hasClass(offer, "is:sold_out");
+  const price = nodes.find(n => hasClass(n, "ticketCard__offerInfoPrice"));
+  const value = price && descendants(price).find(n => n.tag === "strong");
+  const purchase = links.length === 1 ? links[0] : undefined;
+  let trusted = false;
+  try {
+    const target = new URL(purchase?.a.href ?? "");
+    trusted = target.protocol === "https:" && target.hostname === "www.oeticket.com" && !target.username && !target.password && !target.port && new RegExp(`^/noapp/event/nova-rock-${year}-[^/]+/`).test(target.pathname);
+  } catch { /* No purchase target. */ }
+  if (available && !soldOut && value && /^\d+(?:[.,]\d{2})?$/.test(decode(value.text)) && Number(decode(value.text).replace(",", ".")) > 0 && trusted && decode(purchase!.text) === "Jetzt kaufen") {
+    return { ticketsUrl: novarockTicketsUrl, ticketStatus: "available" as const, ticketsExcerpt: `Festivalpass ${year}; Festivalpass EUR ${decode(value.text)}; Jetzt kaufen; ${purchase!.a.href}` };
+  }
+  if (soldOut && !available && !links.length && nodes.some(n => hasClass(n, "ticketCard__offerInfoNotice") && decode(n.text) === "Sold Out!")) {
+    return { ticketsUrl: novarockTicketsUrl, ticketStatus: "unavailable" as const, ticketsExcerpt: `Festivalpass ${year}; Festivalpass Sold Out!` };
+  }
+  return undefined;
+}
+
+export function novarock(document: string, source: FestivalSource) {
+  let html = document, tickets: string | undefined;
+  if (document.startsWith("{")) {
+    try {
+      const envelope = JSON.parse(document);
+      if (envelope.format !== "novarock-documents-v1" || typeof envelope.lineup !== "string" || typeof envelope.tickets !== "string") return undefined;
+      html = envelope.lineup; tickets = envelope.tickets;
+    } catch { return undefined; }
+  }
+  const result = novarockCards(html, source);
+  if (!result) return undefined;
+  return { ...result, ...(tickets ? ticketOffer(tickets, result.editionYear) : {}) };
 }
