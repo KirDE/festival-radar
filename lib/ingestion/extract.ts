@@ -31,7 +31,16 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     merged.observedEditionYears.push(...candidate.observedEditionYears);
     merged.warnings.push(...candidate.warnings);
   }
-  const hasEvidence = new Set(merged.evidence.map(({ field }) => field));
+  // Strategies are alternatives: an absent optional format is not a review
+  // failure once another strategy supplied supported field evidence. Keep
+  // all semantic warnings (edition drift, cancellations, lineup quality).
+  const missingFormatWarnings = new Set([
+    "No JSON-LD Event was found",
+    "HTML fallback did not find explicitly marked festival fields",
+  ]);
+  if (merged.evidence.length > 0) {
+    merged.warnings = merged.warnings.filter((warning) => !missingFormatWarnings.has(warning));
+  }
   merged.evidence = merged.evidence.filter(({ field }, index, values) => values.findIndex((evidence) => evidence.field === field) === index);
   merged.observedEditionYears = [...new Set(merged.observedEditionYears)];
   merged.warnings = [...new Set(merged.warnings)];
