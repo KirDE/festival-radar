@@ -26,7 +26,10 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     lineup: candidate.lineup?.filter(name => !reviewedHeadliners.has(name.toLocaleLowerCase())),
     warnings } : candidate;
   const changes = diffFestival(current, effective);
-  const reviewReasons = new Set(warnings);
+  // Nova Rock's provider gate protects actual artist/billing changes, not
+  // unchanged verified cards or independent ticket metadata refreshes.
+  const unchangedNovaLineup = candidate.festivalSlug === "nova-rock" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
+  const reviewReasons = new Set(warnings.filter(warning => !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
   if (candidate.festivalSlug !== current.slug) reviewReasons.add("Candidate slug does not match the current festival");
   const catalogueYear = current.editionYear ?? (current.startDate ? Number(current.startDate.slice(0, 4)) : undefined);
   const mismatchedYears = catalogueYear ? candidate.observedEditionYears.filter((year) => year !== catalogueYear) : [];
