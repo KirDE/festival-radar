@@ -133,7 +133,11 @@ async function main() {
   let result;
   if (command === "watch") {
     const previous = options.state
-      ? JSON.parse(Buffer.from(options.state, "base64").toString("utf8"))
+      ? JSON.parse(
+          options.state.startsWith("{")
+            ? options.state
+            : Buffer.from(options.state, "base64").toString("utf8"),
+        )
       : {};
     let observation;
     try {
