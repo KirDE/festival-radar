@@ -9,7 +9,7 @@ import { bloodstock } from "./bloodstock.ts";
 import { impericon } from "./impericon.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; excerpt: string; warning?: string };
+type AdapterResult = { artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; ticketsUrl?: string; excerpt: string; warning?: string };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
@@ -443,7 +443,7 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
   if (result.warning) candidate.warnings.push(result.warning);
   if (result.editionYear) candidate.observedEditionYears.push(result.editionYear);
   if (result.startDate) candidate.observedEditionYears.push(Number(result.startDate.slice(0, 4)));
-  for (const field of ["startDate", "endDate", "city", "headliners", "lineup", "status", "ticketStatus"] as const) {
+  for (const field of ["startDate", "endDate", "city", "headliners", "lineup", "status", "ticketStatus", "ticketsUrl"] as const) {
     const value = result[field];
     if (!value || (Array.isArray(value) && value.length === 0)) continue;
     Object.assign(candidate, { [field]: value });
