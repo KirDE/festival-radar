@@ -1,3 +1,4 @@
+import { extractLeedsCandidate } from "./adapters/leeds.ts";
 import { isFullForceArchivedEdition } from "./adapters/full-force-archive.ts";
 import { extractReadingCandidate } from "./adapters/reading.ts";
 import { extractHtmlFallbackCandidate } from "./adapters/html-fallback.ts";
@@ -14,6 +15,10 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
   // Its trusted fallback owns this existing source, not generic Event guesses.
   if (source.festivalSlug === "alcatraz" && source.strategies.includes("html_fallback"))
     return extractHtmlFallbackCandidate(html, source, fetchedAt);
+  if (source.strategies.includes("html_fallback")) {
+    const leeds = extractLeedsCandidate(html, source, fetchedAt);
+    if (leeds) return leeds;
+  }
   // A successful probe of an explicitly archived edition is a no-op, not a
   // fresh ticket proposal or another agent review. A current JSON-LD Event
   // takes precedence when the publisher has not yet refreshed its page title.
