@@ -1,5 +1,6 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
+import { extractAlcatrazCandidate } from "./alcatraz.ts";
 import { validateGenericLineup } from "../lineup-quality.ts";
 
 type SupportedField = FieldEvidence["field"];
@@ -97,6 +98,7 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
 }
 
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  if (source.festivalSlug === "alcatraz") return extractAlcatrazCandidate(html, source, fetchedAt);
   const candidate: FestivalCandidate = {
     schemaVersion: INGESTION_SCHEMA_VERSION,
     festivalSlug: source.festivalSlug,
