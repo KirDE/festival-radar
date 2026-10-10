@@ -7,11 +7,12 @@ function scalarChange(changes: FestivalChange[], field: "startDate" | "endDate" 
   changes.push({ kind, field, before, after, reviewRequired: (field === "startDate" || field === "endDate") && before !== undefined });
 }
 
-function listChanges(changes: FestivalChange[], field: "lineup" | "headliners", before: string[], after: string[] | undefined) {
+function listChanges(changes: FestivalChange[], field: "lineup" | "headliners", before: string[], after: string[] | undefined, additionsOnly = false) {
   if (!after) return;
   const oldNames = new Map(before.map((name) => [name.toLocaleLowerCase(), name]));
   const newNames = new Map(after.map((name) => [name.toLocaleLowerCase(), name]));
   for (const [key, name] of newNames) if (!oldNames.has(key)) changes.push({ kind: field === "headliners" ? "headliner_added" : "artist_added", field, after: name, reviewRequired: false });
+  if (additionsOnly) return;
   for (const [key, name] of oldNames) if (!newNames.has(key)) changes.push({ kind: field === "headliners" ? "headliner_removed" : "artist_removed", field, before: name, reviewRequired: true, reason: "Removals require confirmation" });
 }
 
@@ -30,9 +31,11 @@ export function diffFestival(current: Festival, candidate: FestivalCandidate): F
   scalarChange(changes, "endDate", current.endDate, candidate.endDate);
   scalarChange(changes, "city", current.city, candidate.city);
   scalarChange(changes, "ticketsUrl", current.ticketsUrl, candidate.ticketsUrl);
-  scalarChange(changes, "status", current.status, candidate.status);
+  scalarChange(changes, "status", current.status, candidate.lineupScope === "announcement" && current.status === "confirmed" ? undefined : candidate.status);
   listChanges(changes, "headliners", current.headliners, candidate.headliners);
-  listChanges(changes, "lineup", current.lineup, candidate.lineup);
+  const announcement = candidate.lineupScope === "announcement";
+  const headliners = new Set(current.headliners.map(name => name.toLocaleLowerCase()));
+  listChanges(changes, "lineup", current.lineup, announcement ? candidate.lineup?.filter(name => !headliners.has(name.toLocaleLowerCase())) : candidate.lineup, announcement);
   operationalChanges(changes, current, candidate);
   return changes;
 }
