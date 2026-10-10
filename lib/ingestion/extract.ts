@@ -1,5 +1,6 @@
 import { isFullForceArchivedEdition } from "./adapters/full-force-archive.ts";
 import { extractReadingCandidate } from "./adapters/reading.ts";
+import { isMadCoolArchivedEdition } from "./adapters/mad-cool-archive.ts";
 import { extractHtmlFallbackCandidate } from "./adapters/html-fallback.ts";
 import { extractJsonLdCandidate } from "./adapters/json-ld.ts";
 import { extractOfficialMarkupCandidate } from "./adapters/official-markup.ts";
@@ -29,7 +30,7 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     if (strategy === "json_ld_event") return [extractJsonLdCandidate(html, source, fetchedAt)];
     if (strategy === "html_fallback") return [extractHtmlFallbackCandidate(html, source, fetchedAt)];
     if (strategy === "official_markup") return [extractOfficialMarkupCandidate(html, source, fetchedAt)];
-    if (strategy === "manual_review" && isFullForceArchivedEdition(html, source)) return [{ schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] }];
+    if (strategy === "manual_review" && (isFullForceArchivedEdition(html, source) || isMadCoolArchivedEdition(html, source))) return [{ schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] }];
     if (strategy === "manual_review") return [{ schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [`Manual review only: ${source.manualReviewReason ?? "no trustworthy automated extraction path"}`], observedEditionYears: [] }];
     return [];
   });
