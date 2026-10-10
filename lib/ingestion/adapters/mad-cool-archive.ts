@@ -17,8 +17,9 @@ export function isMadCoolArchivedEdition(html: string, source: FestivalSource): 
     if (url.protocol !== "https:" || url.hostname !== "madcoolfestival.es" || url.pathname !== "/" || url.search || url.username || url.password || source.fetchUrl || source.followLinkPattern) return false;
     const visible = html.replace(/<!--[\s\S]*?-->/g, "").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
     // Include script data and artwork/links: stale recap text cannot hide a
-    // current-edition announcement. A footer year change merely fails closed.
-    if ([...html.matchAll(/20\d{2}/g)].some(([year]) => Number(year) > 2026)) return false;
+    // current-edition announcement. Ignore year-like substrings in the site's
+    // random numeric cache-busters; a real footer year change fails closed.
+    if ([...html.matchAll(/(?<!\d)20\d{2}(?!\d)/g)].some(([year]) => Number(year) > 2026)) return false;
     const hashtags = [...visible.matchAll(/#MadCool(20\d{2})/g)].map((match) => Number(match[1]));
     if (!hashtags.length || hashtags.some((year) => year !== 2026) || source.editionYear <= 2026) return false;
     const marquee = /<h2\b[^>]*class=["'][^"']*\bg--marquee__text\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/i.exec(visible)?.[1];
