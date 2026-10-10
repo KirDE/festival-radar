@@ -2,6 +2,7 @@ import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 import { applyBarcelonaBanner } from "./barcelona-banner.ts";
 import { extractOfficialMarkupCandidate } from "./official-markup.ts";
+import { extractResurrectionCandidate } from "./resurrection.ts";
 import { extractSwedenRockCandidate } from "./sweden-rock.ts";
 import { validateGenericLineup } from "../lineup-quality.ts";
 
@@ -107,6 +108,9 @@ export function extractHtmlFallbackCandidate(html: string, source: FestivalSourc
   if (source.festivalSlug === "rock-werchter") {
     const official = extractOfficialMarkupCandidate(html, source, fetchedAt);
     if (official.evidence.length) return official;
+  }
+  if (source.festivalSlug === "resurrection-fest" && new URL(source.url).hostname === "www.resurrectionfest.es") {
+    return extractResurrectionCandidate(html, source, fetchedAt);
   }
   const candidate: FestivalCandidate = {
     schemaVersion: INGESTION_SCHEMA_VERSION,
