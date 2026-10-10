@@ -145,3 +145,14 @@ probes continue and a successful check automatically clears deprecated.
 The admin diagnostics show failing sources and next check; festival detail/cards
 show deprecated only when all enabled sources for that edition are deprecated.
 A healthy alternative source prevents the festival-wide warning.
+
+### Repair-owned source activation
+
+After the adapter is deployed, `repair_configure` accepts a live repair capability
+(`repairId`, `leaseToken`), the exact active `commit`, and a source-only normal
+`apply` decision with official evidence. It changes only the task's source,
+requires a registered parser/current edition and same-host HTTPS evidence, and
+fences stale configuration and active importer leases. It cannot edit catalog
+facts, enable manual parsers, reset failures/deprecation, or queue playlists.
+A replay of the same configuration is idempotent; the source audit is separate
+from repair completion. Failed/deprecated sources retain their scheduler backoff.

@@ -557,3 +557,48 @@ test('correction atomically creates deduplicated parser repair; leased completio
  assert.equal((await finishParserRepair(db,repairId,claim.leaseToken,result)).status,'completed');
  assert.ok(!(await listParserRepairs(db)).issues.some((j:any)=>j.repairId===receipt.parserRepairId));
 });
+
+
+test("repair-owned protected configuration is fenced, audited, idempotent and provider-free", async () => {
+  const { enqueueParserRepair, claimParserRepair } = await import("../lib/ingestion/parser-repairs.ts");
+  const s = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+  const id = await enqueueParserRepair(db, { sourceId, festivalSlug: s.festivalSlug, year: s.editionYear, issueId: "b".repeat(64), parserKey: s.parserKey, sourceUrl: s.url });
+  const c = await claimParserRepair(db, id);
+  const commit = "c".repeat(40);
+  process.env.DEPLOYED_COMMIT = commit;
+  const url = "https://festival.example.test/current-essentials";
+  const decision = { action: "apply", reason: "Reviewed exact deployed source discovery repair", source: { url, strategies: ["json_ld_event"], refreshPolicy: "weekly" }, evidence: [evidence("source", url)] };
+  const body = { operation: "repair_configure", repairId: id, leaseToken: c.leaseToken, decision, commit };
+  const request = (value: unknown, authorized = true) => POST(new Request("http://localhost/api/ingestion/agent/", { method: "POST", headers: { "content-type": "application/json", ...(authorized ? { authorization: "Bearer " + process.env.IMPORT_AGENT_SECRET } : {}) }, body: JSON.stringify(value) }));
+  assert.equal((await request(body, false)).status, 401);
+  assert.equal((await request({ ...body, leaseToken: randomUUID() })).status, 409);
+  assert.equal((await request({ ...body, commit: "d".repeat(40) })).status, 400);
+  assert.equal((await request({ ...body, decision: { ...decision, facts: { city: "Not permitted" } } })).status, 400);
+  assert.equal((await request({ ...body, decision: { ...decision, source: { ...decision.source, strategies: ["official_markup"] } } })).status, 503);
+  assert.equal((await request({ ...body, decision: { ...decision, source: { ...decision.source, url: "https://evil.example.test/" } } })).status, 400);
+  await db.festivalSource.update({ where: { id: sourceId }, data: { consecutiveFailures: 1, nextRunAt: new Date(Date.now() + 604800000) } });
+  assert.equal((await request(body)).status, 409);
+  await db.festivalSource.update({ where: { id: sourceId }, data: { consecutiveFailures: 0, leaseOwner: randomUUID(), leaseExpiresAt: new Date(Date.now() + 60000) } });
+  assert.equal((await request(body)).status, 409);
+  await db.festivalSource.update({ where: { id: sourceId }, data: { leaseOwner: null, leaseExpiresAt: null, parserKey: "html_fallback", strategies: ["html_fallback"] } });
+  assert.equal((await request(body)).status, 409);
+  await db.festivalSource.update({ where: { id: sourceId }, data: { parserKey: s.parserKey, strategies: s.strategies } });
+  await db.festivalSource.update({ where: { id: sourceId }, data: { deprecatedAt: new Date() } });
+  assert.equal((await request(body)).status, 409);
+  await db.festivalSource.update({ where: { id: sourceId }, data: { deprecatedAt: null } });
+  await db.festivalEdition.update({ where: { id: s.editionId! }, data: { recordState: "ARCHIVED" } });
+  assert.equal((await request(body)).status, 409);
+  await db.festivalEdition.update({ where: { id: s.editionId! }, data: { recordState: "CURRENT" } });
+  const queues = await db.catalogPlaylistRefresh.count();
+  const current = await db.festivalEdition.findUniqueOrThrow({ where: { id: s.editionId! } });
+  assert.equal((await request(body)).status, 200);
+  assert.equal((await request(body)).status, 200);
+  const after = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
+  assert.equal(after.url, url); assert.equal(after.parserKey, "json_ld_event");
+  assert.equal(after.refreshPolicy, "weekly"); assert.equal(after.consecutiveFailures, 0);
+  assert.equal(await db.catalogPlaylistRefresh.count(), queues);
+  assert.deepEqual(await db.festivalEdition.findUniqueOrThrow({ where: { id: s.editionId! } }), current);
+  assert.equal(await db.adminAuditEntry.count({ where: { action: "ingestion.parser.source_configured", metadata: { path: ["repairId"], equals: id } } }), 1);
+  await db.operationalState.update({ where: { key: "parser-repair-" + id }, data: { leaseExpiresAt: new Date(0) } });
+  assert.equal((await request(body)).status, 409);
+});
