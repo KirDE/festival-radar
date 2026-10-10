@@ -1,4 +1,5 @@
 import { extractFrequencyCandidate } from "./adapters/frequency.ts";
+import { extractLeedsCandidate } from "./adapters/leeds.ts";
 import { isFullForceArchivedEdition } from "./adapters/full-force-archive.ts";
 import { extractReadingCandidate } from "./adapters/reading.ts";
 import { extractHtmlFallbackCandidate } from "./adapters/html-fallback.ts";
@@ -14,6 +15,8 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
   if (source.strategies.includes("html_fallback")) {
     const frequency = extractFrequencyCandidate(html, source, fetchedAt);
     if (frequency) return frequency;
+    const leeds = extractLeedsCandidate(html, source, fetchedAt);
+    if (leeds) return leeds;
   }
   // A successful probe of an explicitly archived edition is a no-op, not a
   // fresh ticket proposal or another agent review. A current JSON-LD Event
