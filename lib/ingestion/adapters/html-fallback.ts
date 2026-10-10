@@ -61,7 +61,7 @@ function ticketLink(html: string, sourceUrl: string): { value: string; excerpt: 
   for (const match of html.matchAll(/<a\b[^>]*href\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>([\s\S]*?)<\/a>/gi)) {
     const tagAndText = decode(`${match[0].slice(0, match[0].indexOf(">") + 1)} ${match[3].replace(/<[^>]+>/g, " ")}`).toLowerCase();
     // Agent corrections: merchandise/sponsor/transport shops are not festival tickets.
-    if (/merch|souvenir|sponsor|shuttle|transport|parking|parkplatz/.test(tagAndText)) continue;
+    if (/merch|souvenir|sponsor|shuttle|transport|parking|parkplatz|\btrain\b|car\s+park/.test(tagAndText)) continue;
     if (!/\b(ticket|tickets|karten|billet|billets|entradas)\b/.test(tagAndText)) continue;
     try {
       const url = new URL(decode(match[1] ?? match[2]), sourceUrl);

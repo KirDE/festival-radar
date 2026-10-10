@@ -1,3 +1,4 @@
+import { graspop } from "./graspop.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { rockWerchter } from "./rock-werchter.ts";
 import { novarock } from "./novarock.ts";
@@ -403,6 +404,7 @@ function leyendas(html: string): AdapterResult | undefined {
 const adapters: Record<string, (html: string, source: FestivalSource, fetchedAt: string) => AdapterResult | undefined> = {
   "rock-werchter": rockWerchter,
   "2000trees": trees,
+  graspop,
   "nova-rock": novarock,
   copenhell,
   bloodstock,
