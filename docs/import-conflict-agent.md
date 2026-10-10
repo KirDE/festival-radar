@@ -22,7 +22,9 @@ GET lists at most ten **ready** cases, with an exact catalog/source/attempt snap
 read-only OpenClaw condition watcher runs every minute. Healthy empty inboxes do
 not call a model. Changed ready work wakes the OpenClaw development-controller;
 unchanged unclaimed work is rescued after 15 minutes. API errors wake it at most
-hourly. The former weekly source reviewer is updated in place, not duplicated.
+hourly. Initial HTTP 404 defers quietly until the API is deployed; disappearance
+after the first successful signal is an error. The former weekly source reviewer
+is updated in place, not duplicated.
 
 POST operations:
 

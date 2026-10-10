@@ -46,6 +46,8 @@ export async function callAgent(config, method = "GET", body, mode) {
   }
   const bytes = await response.text();
   if (bytes.length > 2000000) throw new Error("Agent API response too large");
+  if (response.status === 404)
+    throw new Error("Agent API HTTP 404 request failed");
   let value;
   try {
     value = JSON.parse(bytes);
@@ -64,12 +66,19 @@ export async function callAgent(config, method = "GET", body, mode) {
   return value;
 }
 export function watcherDecision(observation, previous = {}, now = Date.now()) {
+  if (observation.missing && !previous.apiSeen)
+    return { fire: false, state: { ...previous, awaitingDeployment: true } };
+  if (observation.missing) observation = { error: true };
   if (observation.error) {
     const fire =
       !previous.error || now - Number(previous.lastFire ?? 0) >= 3600000;
     return {
       fire,
-      state: { error: true, lastFire: fire ? now : previous.lastFire },
+      state: {
+        apiSeen: Boolean(previous.apiSeen),
+        error: true,
+        lastFire: fire ? now : previous.lastFire,
+      },
     };
   }
   if (
@@ -88,6 +97,7 @@ export function watcherDecision(observation, previous = {}, now = Date.now()) {
   return {
     fire,
     state: {
+      apiSeen: true,
       revision: observation.revision,
       error: false,
       lastFire: fire ? now : (previous.lastFire ?? 0),
@@ -143,8 +153,13 @@ async function main() {
     try {
       observation = await callAgent(config, "GET", undefined, "signal");
       result = watcherDecision(observation, previous);
-    } catch {
-      result = watcherDecision({ error: true }, previous);
+    } catch (error) {
+      result = watcherDecision(
+        error.message.includes("HTTP 404")
+          ? { missing: true }
+          : { error: true },
+        previous,
+      );
     }
   } else if (command === "signal")
     result = await callAgent(config, "GET", undefined, "signal");

@@ -98,6 +98,11 @@ test("watcher is quiet while healthy; new work, stranded work and failures wake 
     true,
   );
   assert.throws(() => watcherDecision({ ready: 0 }, {}), /Incomplete/);
+  assert.equal(watcherDecision({ missing: true }, {}, now).fire, false);
+  assert.equal(
+    watcherDecision({ missing: true }, active.state, now).fire,
+    true,
+  );
 });
 test("client refuses plaintext endpoints and world-readable credentials", async () => {
   await assert.rejects(
