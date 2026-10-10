@@ -472,6 +472,8 @@ model FestivalSource {
   cadenceSeconds     Int?
   nextRunAt          DateTime?
   consecutiveFailures Int     @default(0)
+  failureStartedAt   DateTime?
+  deprecatedAt       DateTime?
   lastError          String?
   lastAttemptAt      DateTime?
   lastSuccessAt      DateTime?

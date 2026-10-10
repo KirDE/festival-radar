@@ -34,6 +34,7 @@ export const adminTranslations = {
 
 const translations = {
   en: {
+    sourceDeprecated: "Deprecated source", sourceDeprecatedHelp: "This source has failed for three weeks. Saved festival data may be outdated; weekly checks continue.",
     lineupSort: "Sort lineup", lineupOfficial: "Official source order", lineupAlphabetical: "Alphabetical", lineupChronological: "First scheduled performance", lineupPopularity: "Spotify popularity (highest first)", spotifyPopularityIndex: "Spotify popularity index (0–100)", spotifyFollowers: "Spotify followers", statsUnknown: "Unknown",
     save: "☆ Save", saved: "★ Saved", attendanceFor: "Attendance for {festival}", setAttendance: "Set attendance", going: "Going", maybe: "Maybe", notGoing: "Not going", openPlan: "Open my plan →",
     region: "Europe 2027",
@@ -50,6 +51,7 @@ const translations = {
     compare: "Compare", compareFestival: "Compare {festival}", removeFestivalComparison: "Remove {festival} from comparison", comparisonSelected: "{festival} selected for comparison ({count} of 3)", comparisonRemoved: "{festival} removed from comparison ({count} of 3)", comparisonLimit: "Comparison limit reached. Remove a festival before selecting {festival}.", comparisonInstructions: "Select one or two more festivals to compare planning details.", planningDetail: "Planning detail", dates: "Dates", locationDistance: "Location / distance from {origin}", distanceUnavailable: "distance unavailable", tickets: "Tickets", unavailable: "Unavailable", availabilityNotConfirmed: "Availability not confirmed", lineupOverlap: "Lineup overlap", sharedActs: "{count} shared acts", noLineupOverlap: "No announced lineup overlap yet", noDiscoveryMatches: "Try a wider distance, another origin, or remove a genre filter. Your comparison selections are preserved.",
   },
   de: {
+    sourceDeprecated: "Quelle veraltet (deprecated)", sourceDeprecatedHelp: "Diese Quelle ist seit drei Wochen nicht erreichbar. Gespeicherte Festivaldaten können veraltet sein; wöchentliche Prüfungen laufen weiter.",
     lineupSort: "Line-up sortieren", lineupOfficial: "Offizielle Reihenfolge", lineupAlphabetical: "Alphabetisch", lineupChronological: "Erster geplanter Auftritt", lineupPopularity: "Spotify-Popularität (absteigend)", spotifyPopularityIndex: "Spotify-Popularitätsindex (0–100)", spotifyFollowers: "Spotify-Follower", statsUnknown: "Unbekannt",
     save: "☆ Speichern", saved: "★ Gespeichert", attendanceFor: "Teilnahme an {festival}", setAttendance: "Teilnahme wählen", going: "Dabei", maybe: "Vielleicht", notGoing: "Nicht dabei", openPlan: "Meinen Plan öffnen →",
     region: "Europa 2027",
@@ -66,6 +68,7 @@ const translations = {
     compare: "Vergleichen", compareFestival: "{festival} vergleichen", removeFestivalComparison: "{festival} aus dem Vergleich entfernen", comparisonSelected: "{festival} zum Vergleich ausgewählt ({count} von 3)", comparisonRemoved: "{festival} aus dem Vergleich entfernt ({count} von 3)", comparisonLimit: "Vergleichslimit erreicht. Entferne ein Festival, bevor du {festival} auswählst.", comparisonInstructions: "Wähle ein oder zwei weitere Festivals aus, um Planungsdetails zu vergleichen.", planningDetail: "Planungsdetail", dates: "Termine", locationDistance: "Ort / Entfernung ab {origin}", distanceUnavailable: "Entfernung nicht verfügbar", tickets: "Tickets", unavailable: "Nicht verfügbar", availabilityNotConfirmed: "Verfügbarkeit nicht bestätigt", lineupOverlap: "Überschneidung im Line-up", sharedActs: "{count} gemeinsame Acts", noLineupOverlap: "Noch keine Überschneidung der angekündigten Line-ups", noDiscoveryMatches: "Wähle eine größere Entfernung oder einen anderen Ausgangspunkt oder entferne den Genre-Filter. Deine Vergleichsauswahl bleibt erhalten.",
   },
   ru: {
+    sourceDeprecated: "Источник устарел (deprecated)", sourceDeprecatedHelp: "Источник не обновляется из-за ошибок уже три недели. Сохранённые данные могут устареть; проверки продолжаются раз в неделю.",
     lineupSort: "Сортировка лайнапа", lineupOfficial: "Официальный порядок", lineupAlphabetical: "По алфавиту", lineupChronological: "Первое выступление по расписанию", lineupPopularity: "Популярность Spotify (по убыванию)", spotifyPopularityIndex: "Индекс популярности Spotify (0–100)", spotifyFollowers: "Подписчики Spotify", statsUnknown: "Неизвестно",
     save: "☆ Сохранить", saved: "★ Сохранено", attendanceFor: "Посещение фестиваля {festival}", setAttendance: "Укажите участие", going: "Пойду", maybe: "Возможно", notGoing: "Не пойду", openPlan: "Открыть мой план →",
     region: "Европа 2027",

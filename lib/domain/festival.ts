@@ -24,6 +24,8 @@ export type Festival = {
   officialUrl: string;
   ticketsUrl?: string;
   playlistUrl?: string;
+  sourceDeprecated?: boolean;
+  sourceDeprecatedAt?: string;
   status: "confirmed" | "partial" | "tba";
   editionYear?: number;
   ticketStatus: "available" | "low" | "unavailable" | "unknown";

@@ -48,6 +48,7 @@ test.beforeEach(async () => {
   await db.operationalState.deleteMany({
     where: { key: { startsWith: "ingestion-agent-" } },
   });
+  await db.operationalState.deleteMany({ where: { key: { startsWith: "parser-repair-" } } });
   await seedCatalog(db, catalogSeed);
   const festival = await db.festival.findUniqueOrThrow({
     where: { slug: "synthetic-fest" },
@@ -245,7 +246,7 @@ test("retry backs off; genuine questions are deduplicated without hiding new iss
   assert.ok(r.retryAt);
   assert.equal((await listAgentIssues(db)).ready, 0);
   assert.equal(
-    (await listAgentIssues(db, new Date(Date.now() + 31 * 60000))).ready,
+    (await listAgentIssues(db, new Date(Date.now() + 61 * 60000))).ready,
     1,
   );
   await db.operationalState.update({
@@ -538,4 +539,21 @@ test("HTTP boundary rejects wrong auth, malformed bodies and oversized streams b
   );
   assert.equal(resolved.status, 200);
   assert.equal((await resolved.json()).status, "resolved");
+});
+
+test('correction atomically creates deduplicated parser repair; leased completion/retry receipt is fenced', async () => {
+ const { listParserRepairs, claimParserRepair, finishParserRepair } = await import('../lib/ingestion/parser-repairs.ts');
+ const i=await inspectSource(db,sourceId);const c=await claimAgentIssue(db,sourceId,i!.issueId);
+ const receipt=await resolveCase(c,checked);
+ assert.ok(typeof receipt.parserRepairId === "string");
+ const repairId = receipt.parserRepairId;
+ assert.equal((await resolveCase(c,checked)).parserRepairId,receipt.parserRepairId);
+ const list=await listParserRepairs(db);assert.ok(list.issues.some((j:any)=>j.repairId===receipt.parserRepairId));
+ const claim=await claimParserRepair(db,repairId);
+ await assert.rejects(claimParserRepair(db,repairId),/busy/);
+ await assert.rejects(finishParserRepair(db,repairId,randomUUID(),{status:'retry',reason:'Synthetic stale worker retry'}),/busy/);
+ const result={status:'completed' as const,reason:'Fixture reproduces corrected extraction and release verified',prUrl:'https://github.com/KirDE/festival-radar/pull/999',commit:'a'.repeat(40)};
+ assert.equal((await finishParserRepair(db,repairId,claim.leaseToken,result)).status,'completed');
+ assert.equal((await finishParserRepair(db,repairId,claim.leaseToken,result)).status,'completed');
+ assert.ok(!(await listParserRepairs(db)).issues.some((j:any)=>j.repairId===receipt.parserRepairId));
 });

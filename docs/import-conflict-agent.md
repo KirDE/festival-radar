@@ -40,7 +40,7 @@ headliners and lineup must be supplied together. Evidence includes field, HTTPS
 URL, checkedAt, document SHA256, and a short edition-anchored excerpt. Trusted
 hosts come only from configured source/festival/ticket URLs, never candidate text.
 Only registered parsers may be activated. `dismiss` rejects a superseded/bad
-proposal; `retry` delays 30 minutes with exponential backoff (max 24 hours);
+proposal; `retry` follows the same failure ladder: 1 hour, 6 hours, 1 day, 3 days, then weekly;
 `needs_user` stores a concrete unresolved question and suppresses repeat alerts.
 A manual no-op review is revisited weekly. A genuinely changed source/proposal
 creates a different issue. On a user clarification, use `resume` for that exact
@@ -111,3 +111,37 @@ Acceptance checks: unauthorized API=401, healthy signal complete, real OpenClaw
 watcher execution recorded, case claim → independent verification → receipt/audit,
 stale/replayed/concurrent cases tested, no provider jobs, and verified delivery
 ownership. API deployment alone is **not** an active agent integration.
+
+## Correction → parser repair
+
+Successful correction/dismissal with changed facts, source binding, or a review
+candidate creates one idempotent parser-repair task in the SAME transaction as
+its audit and catalog receipt. The receipt includes `parserRepairId`. This is a
+separate code-fix queue: fixing live data does not mean the parser has been fixed.
+GET `?mode=repairs` lists bounded ready tasks; `repairs-signal` is a quiet watcher
+signal. `repair_claim` takes a repairId and returns a two-hour capability;
+`repair_finish` requires that capability and a result. Completion requires the
+reviewed PR URL and exact commit; retry preserves those references and wakes the
+same owner later. Completion is idempotent, lease-fenced and audited.
+
+The standing OpenClaw parser-repair worker reproduces the correction in an
+edition-anchored fixture, changes the corresponding adapter or shared extractor,
+checks that it now produces the reviewed result without hardcoding an announcement,
+opens/verifies/merges a PR under project policy and verifies deployment before
+closing the task. CI waits are checkpointed with PR/commit and resumed in the same
+worktree. Network-only retries create no parser tasks. Empty queues call no model.
+Use client `--queue repairs` for watch/list/signal; `repair-claim --repair <id>
+--out <private file>` and `repair-finish --claim <private file> --decision <private
+result>` handle the code-fix lifecycle. No Gateway credential is exposed to the site.
+
+## Persistent source failures
+
+Every fenced source failure schedules 1h → 6h → 24h → 72h → 168h, then weekly.
+`failureStartedAt` records the continuous failed-check window. Twenty-one days of
+failures marks `deprecatedAt`, including between weekly attempts via the due tick.
+A valid HTTP check with unchanged data is SUCCESS and resets failures/deprecation;
+no changes in a lineup is not a failure. Catalog facts/bills are retained. Weekly
+probes continue and a successful check automatically clears deprecated.
+The admin diagnostics show failing sources and next check; festival detail/cards
+show deprecated only when all enabled sources for that edition are deprecated.
+A healthy alternative source prevents the festival-wide warning.

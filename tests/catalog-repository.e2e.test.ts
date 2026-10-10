@@ -27,7 +27,7 @@ test.after(async () => { await clearCatalog(); await db.$disconnect(); });
 
 test("database repository preserves the public catalogue projection", async () => {
   const snapshot = await new DatabaseCatalogRepository(db).read();
-  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.festivals)), JSON.parse(JSON.stringify(catalogSeed.festivals)));
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.festivals)), JSON.parse(JSON.stringify(catalogSeed.festivals.map(f => ({ ...f, sourceDeprecated: false })))));
   assert.deepEqual(JSON.parse(JSON.stringify(snapshot.artists)), JSON.parse(JSON.stringify(catalogSeed.artists)));
   assert.deepEqual(JSON.parse(JSON.stringify(snapshot.playlists)), JSON.parse(JSON.stringify(catalogSeed.playlists)));
   assert.equal(snapshot.editions.length, catalogSeed.editions.length);
