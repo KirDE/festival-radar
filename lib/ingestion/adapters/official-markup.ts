@@ -3,10 +3,11 @@ import { novarock } from "./novarock.ts";
 import { copenhell } from "./copenhell.ts";
 import { rockharz } from "./rockharz.ts";
 import { rockstadt } from "./rockstadt.ts";
+import { firenzeRocks } from "./firenze-rocks.ts";
 import { impericon } from "./impericon.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; excerpt: string; warning?: string };
+type AdapterResult = { noAnnouncement?: boolean; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; excerpt: string; warning?: string };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
@@ -399,6 +400,7 @@ function leyendas(html: string): AdapterResult | undefined {
 }
 
 const adapters: Record<string, (html: string, source: FestivalSource) => AdapterResult | undefined> = {
+  "firenze-rocks": firenzeRocks,
   "2000trees": trees,
   "nova-rock": novarock,
   copenhell,
@@ -448,6 +450,6 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
   if ((source.festivalSlug === "copenhell" && result.headliners?.length) ||
       (["dynamo-metal-fest", "rockstadt"].includes(source.festivalSlug) && result.lineup?.length))
     candidate.warnings.push("Agent review required before lineup-triggered provider activity");
-  if (!candidate.evidence.length && !candidate.warnings.length) candidate.warnings.push("Official title confirms the current edition but exposes no supported structured field");
+  if (!result.noAnnouncement && !candidate.evidence.length && !candidate.warnings.length) candidate.warnings.push("Official title confirms the current edition but exposes no supported structured field");
   return candidate;
 }

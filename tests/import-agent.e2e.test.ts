@@ -557,3 +557,47 @@ test('correction atomically creates deduplicated parser repair; leased completio
  assert.equal((await finishParserRepair(db,repairId,claim.leaseToken,result)).status,'completed');
  assert.ok(!(await listParserRepairs(db)).issues.some((j:any)=>j.repairId===receipt.parserRepairId));
 });
+
+test('repair capability activates only its registered deployed adapter, preserves backoff/catalogue/provider state', async () => {
+ const {enqueueParserRepair,claimParserRepair,configureParserRepair}=await import('../lib/ingestion/parser-repairs.ts');
+ const fixture={...catalogSeed,festivals:catalogSeed.festivals.map(f=>({...f,slug:'firenze-rocks'})),editions:catalogSeed.editions.map(e=>({...e,slug:'firenze-rocks'}))};
+ await seedCatalog(db,fixture);
+ const festival=await db.festival.findUniqueOrThrow({where:{slug:'firenze-rocks'}});
+ const edition=await db.festivalEdition.findFirstOrThrow({where:{festivalId:festival.id,recordState:'CURRENT'}});
+ const next=new Date(Date.now()+604800000),failed=new Date(Date.now()-86400000);
+ const s=await db.festivalSource.create({data:{festivalSlug:'firenze-rocks',festivalId:festival.id,editionId:edition.id,editionYear:2027,
+   url:'https://festival.example.test/',strategies:['manual_review'],parserKey:'manual_review',refreshPolicy:'daily',cadenceSeconds:86400,
+   nextRunAt:next,consecutiveFailures:3,failureStartedAt:failed,lastError:'Preserve original failure'}});
+ try {
+   const repairId=await enqueueParserRepair(db,{sourceId:s.id,festivalSlug:'firenze-rocks',year:2027,issueId:'test-activation',parserKey:s.parserKey,sourceUrl:s.url});
+   const claim=await claimParserRepair(db,repairId);
+   const input={repairId,leaseToken:claim.leaseToken as string,expectedParserKey:s.parserKey!,followLinkPattern:null};
+   const beforeEdition=await db.festivalEdition.findUnique({where:{id:edition.id},include:{lineup:true,playlists:true}});
+   const beforeProvider=await db.catalogPlaylistRefresh.count();
+   await assert.rejects(configureParserRepair(db,{...input,leaseToken:randomUUID()}),/busy/);
+   await assert.rejects(configureParserRepair(db,{...input,expectedParserKey:'html_fallback'}),/stale/);
+   await assert.rejects(configureParserRepair(db,{...input,followLinkPattern:'unanchored.*'}),/invalid/);
+   await db.festivalSource.update({where:{id:s.id},data:{url:'https://changed.example.test/'}});
+   await assert.rejects(configureParserRepair(db,input),/stale/);
+   await db.festivalSource.update({where:{id:s.id},data:{url:s.url}});
+   await db.festivalSource.update({where:{id:s.id},data:{leaseOwner:'importer',leaseExpiresAt:new Date(Date.now()+60000)}});
+   await assert.rejects(configureParserRepair(db,input),/busy/);
+   await db.festivalSource.update({where:{id:s.id},data:{leaseOwner:null,leaseExpiresAt:null}});
+   // The bearer-protected route exercises the same fenced transaction.
+   const request=()=>new Request('https://radar.example.test/api/ingestion/agent/',{method:'POST',headers:{authorization:'Bearer '+process.env.IMPORT_AGENT_SECRET,'content-type':'application/json'},body:JSON.stringify({operation:'repair_configure',...input})});
+   assert.equal((await POST(request())).status,200);
+   assert.equal((await POST(request())).status,200); // idempotent under the held capability
+   const after=await db.festivalSource.findUniqueOrThrow({where:{id:s.id}});
+   assert.equal(after.parserKey,'official_markup:firenze-rocks');assert.deepEqual(after.strategies,['official_markup']);
+   assert.equal(after.followLinkPattern,input.followLinkPattern);assert.equal(after.nextRunAt!.toISOString(),next.toISOString());
+   assert.equal(after.consecutiveFailures,3);assert.equal(after.failureStartedAt!.toISOString(),failed.toISOString());assert.equal(after.lastError,s.lastError);
+   assert.deepEqual(await db.festivalEdition.findUnique({where:{id:edition.id},include:{lineup:true,playlists:true}}),beforeEdition);
+   assert.equal(await db.catalogPlaylistRefresh.count(),beforeProvider);
+   assert.equal(await db.adminAuditEntry.count({where:{action:'ingestion.parser.configured',resourceKey:'firenze-rocks',metadata:{path:['repairId'],equals:repairId}}}),1);
+   await db.operationalState.update({where:{key:'parser-repair-'+repairId},data:{leaseExpiresAt:new Date(0)}});
+   await assert.rejects(configureParserRepair(db,input),/busy/);
+   const unknown=await enqueueParserRepair(db,{sourceId,festivalSlug:'synthetic-fest',year:2027,issueId:'test-unregistered',parserKey:'manual_review',sourceUrl:(await db.festivalSource.findUniqueOrThrow({where:{id:sourceId}})).url});
+   const unregistered=await claimParserRepair(db,unknown);
+   await assert.rejects(configureParserRepair(db,{repairId:unknown,leaseToken:unregistered.leaseToken as string,expectedParserKey:'manual_review',followLinkPattern:null}),/invalid/);
+ } finally {await db.festivalSource.delete({where:{id:s.id}});await db.festival.delete({where:{id:festival.id}});}
+});
