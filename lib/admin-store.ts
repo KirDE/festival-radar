@@ -10,15 +10,16 @@ const json = (value: unknown) => value as Prisma.InputJsonValue;
 const kind = (value: string) => AdminResourceKind[value.toUpperCase() as keyof typeof AdminResourceKind];
 
 export async function adminSnapshot() {
-  const [drafts, resources, changes, runs, audit, submissions] = await Promise.all([
+  const [drafts, resources, changes, runs, audit, submissions, sourceHealth] = await Promise.all([
     db.adminDraft.findMany({ orderBy: { updatedAt: "desc" }, take: 100 }),
     db.adminResourceState.findMany({ orderBy: { updatedAt: "desc" }, take: 100 }),
     db.adminChange.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
     db.adminParserRun.findMany({ orderBy: { startedAt: "desc" }, take: 100 }),
     db.adminAuditEntry.findMany({ orderBy: { createdAt: "desc" }, take: 200 }),
     db.festivalSubmission.findMany({ include: { audit: { orderBy: { createdAt: "asc" } } }, orderBy: { submittedAt: "desc" }, take: 100 }),
+    db.festivalSource.findMany({ select: { id: true, festivalSlug: true, consecutiveFailures: true, failureStartedAt: true, deprecatedAt: true, nextRunAt: true }, orderBy: { festivalSlug: "asc" }, take: 1000 }),
   ]);
-  return { drafts, resources, changes, runs, audit, submissions };
+  return { drafts, resources, changes, runs, audit, submissions, sourceHealth };
 }
 
 export async function parserRunLog(id: string) {

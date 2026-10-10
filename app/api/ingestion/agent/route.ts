@@ -11,6 +11,7 @@ import {
   releaseAgentIssue,
   resumeAgentIssue,
 } from "@/lib/ingestion/agent-issues";
+import { listParserRepairs, claimParserRepair, finishParserRepair } from "@/lib/ingestion/parser-repairs";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = {
@@ -20,6 +21,11 @@ const headers = {
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,160}$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const requestSchema = z.discriminatedUnion("operation", [
+  z.object({ operation: z.literal("repair_claim"), repairId: digest }).strict(),
+  z.object({ operation: z.literal("repair_finish"), repairId: digest, leaseToken: z.string().uuid(),
+    result: z.object({ status: z.enum(["completed", "retry"]), reason: z.string().min(10).max(2000),
+      prUrl: z.string().regex(/^https:\/\/github\.com\/KirDE\/festival-radar\/pull\/\d+$/).optional(),
+      commit: z.string().regex(/^[a-f0-9]{40}$/).optional() }).strict() }).strict(),
   z
     .object({
       operation: z.literal("resume"),
@@ -60,9 +66,10 @@ const failure = (cause: unknown) =>
 export async function GET(request: Request) {
   if (!agentAuthorized(request)) return reply({ error: "Unauthorized" }, 401);
   try {
-    const result = await listAgentIssues(db);
+    const mode = new URL(request.url).searchParams.get("mode");
+    const result = mode?.startsWith("repairs") ? await listParserRepairs(db) : await listAgentIssues(db);
     return reply(
-      new URL(request.url).searchParams.get("mode") === "signal"
+      ["signal", "repairs-signal"].includes(mode ?? "")
         ? {
             complete: result.complete,
             ready: result.ready,
@@ -96,6 +103,8 @@ export async function POST(request: Request) {
       JSON.parse(Buffer.concat(chunks).toString("utf8")),
     );
     if (!parsed.success) return reply({ error: "Invalid agent request" }, 400);
+    if (parsed.data.operation === "repair_claim") return reply(await claimParserRepair(db, parsed.data.repairId));
+    if (parsed.data.operation === "repair_finish") return reply(await finishParserRepair(db, parsed.data.repairId, parsed.data.leaseToken, parsed.data.result));
     if (parsed.data.operation === "claim")
       return reply(
         await claimAgentIssue(db, parsed.data.sourceId, parsed.data.issueId),

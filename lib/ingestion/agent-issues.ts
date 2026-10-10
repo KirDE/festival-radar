@@ -3,6 +3,8 @@ import {
   type PrismaClient,
   type Prisma as PrismaTypes,
 } from "@prisma/client";
+import { failureRetryAt } from "./failure-policy.ts";
+import { enqueueParserRepair } from "./parser-repairs.ts";
 import { randomUUID } from "node:crypto";
 import {
   fingerprint,
@@ -62,6 +64,7 @@ export async function inspectSource(db: Database, sourceId: string) {
   });
   if (
     !s?.enabled ||
+    !!s.deprecatedAt ||
     !s.festival ||
     !s.edition ||
     s.edition.festivalId !== s.festivalId ||
@@ -243,6 +246,7 @@ export async function listAgentIssues(db: Database, now = new Date()) {
     // No-op manual reviews are reconsidered weekly, even without parser changes.
     if (p.status === "resolved" && i.kind !== "manual_source") return false;
     if (p.retryAt && new Date(String(p.retryAt)) > now) return false;
+    if (i.kind === "failure" && Number(p.attempts ?? 0) > 0 && i.source.nextRunAt && i.source.nextRunAt > now) return false;
     if (i.source.leaseExpiresAt && i.source.leaseExpiresAt > now) return false;
     return true;
   });
@@ -500,17 +504,14 @@ export async function resolveAgentIssue(
           },
         });
       const attempts = Number(held[0].payload.attempts ?? 0) + 1;
-      const retryFailure =
-        d.action === "apply" && i.kind === "failure" && !d.source;
-      const retryAt =
-        d.action === "retry" || retryFailure
-          ? new Date(
-              now.getTime() +
-                Math.min(1800000 * 2 ** Math.min(attempts - 1, 6), 86400000),
-            ).toISOString()
-          : i.kind === "manual_source" && !d.source
-            ? new Date(now.getTime() + 604800000).toISOString()
-            : null;
+      const retryFailure = d.action === "apply" && i.kind === "failure" && !d.source;
+      const retryAt = d.action === "retry" || retryFailure
+        ? failureRetryAt(Math.max(attempts, i.source.consecutiveFailures || 1), now).toISOString()
+        : i.kind === "manual_source" && !d.source ? new Date(now.getTime() + 604800000).toISOString() : null;
+      const parserRepairId = ["apply", "dismiss"].includes(d.action) && (d.facts || d.source || i.candidate)
+        ? await enqueueParserRepair(tx, { sourceId: i.sourceId, festivalSlug: i.festivalSlug, issueId: i.issueId,
+            parserKey: i.source.parserKey, sourceUrl: i.source.fetchUrl ?? i.source.url, year: i.current.year,
+            reason: d.reason, decision: d, candidate: i.candidate, current: i.current }) : null;
       const status =
         d.action === "needs_user"
           ? "needs_user"
@@ -524,6 +525,7 @@ export async function resolveAgentIssue(
         reason: d.reason,
         question: d.question ?? null,
         publicationId: publication?.id ?? null,
+        parserRepairId,
         providerJobs: 0,
         at: now.toISOString(),
       };

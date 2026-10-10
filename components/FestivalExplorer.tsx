@@ -85,6 +85,7 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
     <div className="resultMeta"><span>{visible.length} {t("festivals")}</span><span>{t("lastReview")}</span></div>
     <div className="festivalGrid">{visible.map((item) => { const isSelected = selected.includes(item.slug); const previewArtists = lineupPreviewArtists(item); const artistCount = announcedArtists(item).length; return <article className="festivalCard" key={item.slug}><button type="button" className={`compareButton ${isSelected ? "active" : ""}`} aria-pressed={isSelected} aria-label={t("compareFestival", { festival: item.name })} onClick={() => toggleSelected(item)} disabled={!isSelected && selected.length >= 3}><span aria-hidden="true">{isSelected ? "✓ " : "+ "}</span>{t("compare")}</button><Link href={`/festivals/${item.slug}/`}>
       <div className="cardTop"><FestivalLogo slug={item.slug} name={item.name}/><span className={`status ${item.status}`}>{t(item.status === "tba" ? "tba" : item.status)}</span></div>
+      {item.sourceDeprecated && <span className="status deprecated">{t("sourceDeprecated")}</span>}
       <div className="date">{formatDates(item, locale, t("datesTba"))} · 2027</div>
       <h2>{item.name}</h2>
       <div className="location">{item.countryCode} · {item.city || displayNames.of(item.countryCode) || item.country}</div>

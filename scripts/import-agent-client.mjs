@@ -120,13 +120,15 @@ async function main() {
         "--issue",
         "--state",
         "--answer",
+        "--queue",
+        "--repair",
       ].includes(flag) ||
       !args.length
     )
       throw new Error("Invalid arguments");
     options[flag.slice(2)] = args.shift();
   }
-  if ((command === "list" || command === "claim") && !options.out)
+  if ((["list", "claim", "repair-claim"].includes(command)) && !options.out)
     throw new Error("Private --out required for case data");
   if (options.out) {
     const parent = await stat(dirname(options.out));
@@ -151,7 +153,7 @@ async function main() {
       : {};
     let observation;
     try {
-      observation = await callAgent(config, "GET", undefined, "signal");
+      observation = await callAgent(config, "GET", undefined, options.queue === "repairs" ? "repairs-signal" : "signal");
       result = watcherDecision(observation, previous);
     } catch (error) {
       result = watcherDecision(
@@ -162,8 +164,10 @@ async function main() {
       );
     }
   } else if (command === "signal")
-    result = await callAgent(config, "GET", undefined, "signal");
-  else if (command === "list") result = await callAgent(config);
+    result = await callAgent(config, "GET", undefined, options.queue === "repairs" ? "repairs-signal" : "signal");
+  else if (command === "list") result = await callAgent(config, "GET", undefined, options.queue === "repairs" ? "repairs" : undefined);
+  else if (command === "repair-claim") result = await callAgent(config, "POST", {operation:"repair_claim",repairId:options.repair});
+  else if (command === "repair-finish") { const claim = await privateJson(options.claim); result = await callAgent(config,"POST",{operation:"repair_finish",repairId:claim.repairId,leaseToken:claim.leaseToken,result:await privateJson(options.decision)}); }
   else if (command === "claim")
     result = await callAgent(config, "POST", {
       operation: "claim",
@@ -203,7 +207,7 @@ async function main() {
         ...(command === "claim" ? { claimed: true } : {}),
       }),
     );
-  } else if (command === "list" || command === "claim")
+  } else if (["list", "claim", "repair-claim"].includes(command))
     throw new Error("Private --out required for case data");
   else console.log(JSON.stringify(result));
 }

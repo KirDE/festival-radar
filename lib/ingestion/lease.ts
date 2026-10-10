@@ -13,12 +13,23 @@ function validateNow(now: Date) {
   if (!(now instanceof Date) || !Number.isFinite(now.getTime())) throw new Error("Invalid ingestion lease time");
 }
 
+/** Deprecate at the deadline even while a weekly retry is not yet due.
+ * Keep weekly probes enabled: a successful check restores the source. */
+export async function markDeprecatedSources(db: PrismaClient, now = new Date()): Promise<number> {
+  validateNow(now);
+  return db.$executeRaw`UPDATE "FestivalSource" SET "deprecatedAt" = (${now}::timestamptz AT TIME ZONE 'UTC'),
+    "updatedAt" = (${now}::timestamptz AT TIME ZONE 'UTC') WHERE enabled = true AND "deprecatedAt" IS NULL
+    AND "consecutiveFailures" > 0 AND "failureStartedAt" <= (${now}::timestamptz AT TIME ZONE 'UTC') - interval '21 days'
+    AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" <= (${now}::timestamptz AT TIME ZONE 'UTC'))`;
+}
+
 /** One atomic PostgreSQL statement: no worker may claim the same source while another holds its row lock. */
 export async function claimDueSources(db: PrismaClient, { owner, now, limit, ttlMs }: ClaimOptions): Promise<Array<{ id: string; updatedAt: Date }>> {
   validateOwner(owner);
   validateNow(now);
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error("Invalid ingestion batch size");
   if (!Number.isInteger(ttlMs) || ttlMs < 30_000 || ttlMs > 30 * 60_000) throw new Error("Invalid ingestion lease duration");
+  await markDeprecatedSources(db, now);
   const expires = new Date(now.getTime() + ttlMs);
   const rows = await db.$queryRaw<Array<{ id: string; updatedAt: Date }>>`
     WITH due AS (
@@ -112,10 +123,14 @@ export async function completeSourceLease(db: PrismaClient, { id, owner, now, up
         "lastAttemptAt" = (${now}::timestamptz AT TIME ZONE 'UTC'),
         "lastSuccessAt" = CASE WHEN ${success} THEN (${now}::timestamptz AT TIME ZONE 'UTC') ELSE "lastSuccessAt" END,
         "lastError" = CASE WHEN ${success} THEN NULL ELSE ${outcome} END,
+        "failureStartedAt" = CASE WHEN ${success} THEN NULL ELSE CASE WHEN "consecutiveFailures" = 0 THEN (${now}::timestamptz AT TIME ZONE 'UTC') ELSE COALESCE("failureStartedAt", (${now}::timestamptz AT TIME ZONE 'UTC')) END END,
+        "deprecatedAt" = CASE WHEN ${success} THEN NULL
+          WHEN (CASE WHEN "consecutiveFailures" = 0 THEN (${now}::timestamptz AT TIME ZONE 'UTC') ELSE COALESCE("failureStartedAt", (${now}::timestamptz AT TIME ZONE 'UTC')) END) <= (${now}::timestamptz AT TIME ZONE 'UTC') - interval '21 days'
+          THEN COALESCE("deprecatedAt", (${now}::timestamptz AT TIME ZONE 'UTC')) ELSE "deprecatedAt" END,
         "consecutiveFailures" = CASE WHEN ${success} THEN 0 ELSE "consecutiveFailures" + 1 END,
         "nextRunAt" = CASE WHEN ${success}
           THEN (${now}::timestamptz AT TIME ZONE 'UTC') + make_interval(secs => "cadenceSeconds")
-          ELSE (${now}::timestamptz AT TIME ZONE 'UTC') + make_interval(secs => LEAST(86400, 300 * power(2, LEAST("consecutiveFailures", 8)))::int)
+          ELSE (${now}::timestamptz AT TIME ZONE 'UTC') + make_interval(secs => CASE "consecutiveFailures" WHEN 0 THEN 3600 WHEN 1 THEN 21600 WHEN 2 THEN 86400 WHEN 3 THEN 259200 ELSE 604800 END)
         END,
         "updatedAt" = (${now}::timestamptz AT TIME ZONE 'UTC')
     WHERE id = ${id} AND "leaseOwner" = ${owner}

@@ -43,6 +43,7 @@ jobs:
       - run: npm run test:sources
       - run: npm run test:catalog-db
       - run: node --import tsx --test tests/import-agent.e2e.test.ts
+      - run: node --import tsx --test tests/source-failure-policy.e2e.test.ts
       - run: npm run test:seed
       - run: node --import tsx --test tests/offline-catalog.e2e.test.ts
       - run: npm run test:logo-serving

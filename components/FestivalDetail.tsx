@@ -68,6 +68,7 @@ export function FestivalDetail({
               : t("datesTba")}
           </p>
           <span className={`status ${item.status}`}>{status}</span>
+          {item.sourceDeprecated && <span className="status deprecated">{t("sourceDeprecated")}</span>}
         </div>
       </section>
       <section className="localActions">
@@ -186,7 +187,7 @@ export function FestivalDetail({
       <PlanningTools item={item} festivals={festivals} />
       <section className="sourceNote">
         <strong>{t("transparency")}</strong>
-        <p>{t("sourceText")}</p>
+        <p>{item.sourceDeprecated ? t("sourceDeprecatedHelp") : t("sourceText")}</p>
         <a href={item.officialUrl} target="_blank" rel="noreferrer">
           {t("primarySource")}
         </a>

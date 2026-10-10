@@ -26,6 +26,7 @@ export class DatabaseCatalogRepository implements CatalogRepository {
       this.client.festivalEdition.findMany({
         include: {
           festival: true,
+          sources: { where: { enabled: true }, select: { deprecatedAt: true } },
           lineup: { include: { artist: true }, orderBy: [{ billing: "asc" }, { position: "asc" }] },
           provenance: { orderBy: [{ field: "asc" }, { checkedAt: "asc" }] },
           timetable: { orderBy: [{ date: "asc" }, { start: "asc" }, { stage: "asc" }] },
@@ -53,6 +54,9 @@ export class DatabaseCatalogRepository implements CatalogRepository {
         startDate: dateOnly(row.startDate), endDate: dateOnly(row.endDate), dateLabel: row.dateLabel ?? undefined,
         headliners, lineup, officialUrl: row.festival.officialUrl, ticketsUrl: row.ticketsUrl ?? undefined,
         status: lower(row.status), editionYear: row.year,
+        sourceDeprecated: !!row.sources?.length && row.sources.every(s => s.deprecatedAt !== null),
+        sourceDeprecatedAt: row.sources?.length && row.sources.every(s => s.deprecatedAt !== null)
+          ? row.sources.map(s => s.deprecatedAt!.toISOString()).sort()[0] : undefined,
         ticketStatus: lower(row.ticketStatus), updatedAt: row.sourceUpdatedAt.toISOString(),
         genres: row.festival.genres,
         coordinates: row.festival.latitude === null || row.festival.longitude === null

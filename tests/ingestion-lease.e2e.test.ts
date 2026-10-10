@@ -52,15 +52,15 @@ test("atomic claim excludes concurrent workers and fenced completion schedules n
   const failed = await first.festivalSource.findUniqueOrThrow({ where: { id } });
   assert.equal(failed.consecutiveFailures, 1);
   assert.equal(failed.lastError, "fetch_error");
-  assert.equal(failed.nextRunAt?.toISOString(), "2027-03-01T00:05:00.000Z");
-  assert.deepEqual(await claimDueSourceIds(second, options(ownerB, new Date("2027-03-01T00:04:59.000Z"))), []);
+  assert.equal(failed.nextRunAt?.toISOString(), "2027-03-01T01:00:00.000Z");
+  assert.deepEqual(await claimDueSourceIds(second, options(ownerB, new Date("2027-03-01T00:59:59.000Z"))), []);
   assert.deepEqual(await claimDueSourceIds(second, options(ownerB, failed.nextRunAt!)), [id]);
   const reclaimed = await second.festivalSource.findUniqueOrThrow({ where: { id } });
   assert.equal(await completeSourceLease(second, { id, owner: ownerB, now: failed.nextRunAt!, updatedAt: reclaimed.updatedAt, outcome: "success" }), true);
   const completed = await second.festivalSource.findUniqueOrThrow({ where: { id } });
   assert.equal(completed.consecutiveFailures, 0);
   assert.equal(completed.lastError, null);
-  assert.equal(completed.nextRunAt?.toISOString(), "2027-03-02T00:05:00.000Z");
+  assert.equal(completed.nextRunAt?.toISOString(), "2027-03-02T01:00:00.000Z");
 });
 
 test("expired lease can be reclaimed but old worker cannot acknowledge", async () => {
@@ -75,7 +75,7 @@ test("expired lease can be reclaimed but old worker cannot acknowledge", async (
   const row = await first.festivalSource.findUniqueOrThrow({ where: { id } });
   assert.equal(row.consecutiveFailures, 1);
   assert.equal(row.lastError, "parser_error");
-  assert.equal(row.nextRunAt?.toISOString(), "2027-03-01T00:06:01.000Z");
+  assert.equal(row.nextRunAt?.toISOString(), "2027-03-01T01:01:01.000Z");
 });
 
 test("operator source edits prevent old worker schedule updates", async () => {
