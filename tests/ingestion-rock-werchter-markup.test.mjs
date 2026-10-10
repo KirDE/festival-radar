@@ -21,11 +21,14 @@ for (const name of ["home", "home-en"]) test(`real ${name} correction: dates, ex
   assert.deepEqual(candidate.observedEditionYears, [2027]);
   assert.deepEqual(candidate.warnings, []);
 });
-test("original generic extraction reproduces missing announcement support without accepting FAQ", () => {
+test("existing production generic source consumes the verified fallback without config changes", () => {
   const candidate = extract(fixture("home-en"), now, { ...source, strategies: ["json_ld_event", "html_fallback"] });
-  assert.equal(candidate.lineup, undefined);
-  assert.equal(candidate.startDate, undefined);
+  assert.deepEqual(candidate.lineup, ["SOMBR"]);
+  assert.deepEqual(candidate.headliners, ["Tame Impala"]);
+  assert.equal(candidate.startDate, "2027-07-01");
+  assert.equal(candidate.ticketStatus, "unavailable");
   assert.equal(candidate.ticketsUrl, undefined);
+  assert.deepEqual(candidate.warnings, []);
 });
 test("later official names are not hardcoded and rotating cards never remove verified artists", () => {
   const html = fixture("home-en").replaceAll("SOMBR", "New Artist").replaceAll("Tame Impala", "Next Headliner");
@@ -69,4 +72,10 @@ test("default full-inventory candidates still require confirmation for removals"
   const result = evaluateCandidate(current, c);
   assert.equal(result.publishable, false);
   assert.ok(result.changes.some(c => c.kind === "artist_removed" && c.reviewRequired));
+});
+
+test("legacy generic source still reviews genuinely unsupported documents", () => {
+  const c = extract("<html>No announcements available</html>", now, { ...source, strategies: ["json_ld_event", "html_fallback"] });
+  assert.deepEqual(c.evidence, []);
+  assert.ok(c.warnings.includes("No JSON-LD Event was found"));
 });
