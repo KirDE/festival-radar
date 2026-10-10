@@ -1,5 +1,6 @@
 import { isReadingSource } from "./adapters/reading.ts";
 import type { FestivalSource } from "./types.ts";
+import { discoverDynamoBands, isDynamoAnnouncement } from "./adapters/dynamo.ts";
 
 export type FetchAttempt = { response: Response; attempts: number };
 export type FetchOptions = {
@@ -58,6 +59,21 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     const tickets = await fetchWithRetry("https://www.readingfestival.com/tickets");
     if (tickets.response.ok && tickets.response.url && !/^https:\/\/www\.readingfestival\.com\/tickets\/?$/.test(tickets.response.url)) throw Object.assign(new Error("Reading ticket page redirected away from its trusted landing page"), { attempts: initial.attempts + tickets.attempts });
     return { response: tickets.response, attempts: initial.attempts + tickets.attempts };
+  }
+  if (initial.response.ok && isDynamoAnnouncement(source)) {
+    let attempts = initial.attempts;
+    try {
+      const body = await discoverDynamoBands(await initial.response.text(), async (url) => {
+        const linked = await fetchWithRetry(url);
+        attempts += linked.attempts;
+        return linked.response;
+      });
+      const headers = new Headers(initial.response.headers);
+      headers.delete("content-length"); headers.delete("content-encoding");
+      return { response: new Response(body, { status: 200, headers }), attempts };
+    } catch (error) {
+      throw Object.assign(error instanceof Error ? error : new Error(String(error)), { attempts });
+    }
   }
   if (!source.followLinkPattern || !initial.response.ok) return initial;
 

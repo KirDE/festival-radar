@@ -1,6 +1,7 @@
 import { graspop } from "./graspop.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { rockWerchter } from "./rock-werchter.ts";
+import { extractDynamoBands } from "./dynamo.ts";
 import { novarock } from "./novarock.ts";
 import { copenhell } from "./copenhell.ts";
 import { rockharz } from "./rockharz.ts";
@@ -9,7 +10,7 @@ import { bloodstock } from "./bloodstock.ts";
 import { impericon } from "./impericon.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; excerpt: string; warning?: string };
+type AdapterResult = { artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; excerpt: string; lineupSourceUrl?: string; warning?: string };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
@@ -298,7 +299,7 @@ function dynamoMetalFest(html: string, source: FestivalSource): AdapterResult | 
   const artistBlock = paragraphs[1].match(/^\s*<strong>([\s\S]*?)<\/strong>\s*$/i)?.[1];
   if (!artistBlock || !/^And this is only the beginning\.$/i.test(decode(paragraphs[2].replace(/<[^>]*>/g, " ")))) return undefined;
   const rawNames = artistBlock.split(/<br\s*\/?\s*>/i);
-  if (rawNames.length !== 9 || rawNames.some((name) => /<[^>]*>/.test(name))) return undefined;
+  if (!rawNames.length || rawNames.length > 80 || rawNames.some((name) => /<[^>]*>/.test(name))) return undefined;
   const lineup: string[] = [];
   for (const raw of rawNames) {
     const label = decode(raw).replace(/[’‘]/g, "'");
@@ -316,8 +317,13 @@ function dynamoMetalFest(html: string, source: FestivalSource): AdapterResult | 
   if (!dates) return undefined;
   const days = dates.slice(1, 4).map(Number);
   if (days[0] < 1 || days[2] > 31 || days[1] !== days[0] + 1 || days[2] !== days[1] + 1) return undefined;
-  return { editionYear: 2027, startDate: "2027-08-" + pad(dates[1]), endDate: "2027-08-" + pad(dates[3]),
-    city: "Eindhoven", lineup, excerpt: statement + " First names: " + rawNames.map(decode).join(", ") };
+  const startDate = "2027-08-" + pad(dates[1]), endDate = "2027-08-" + pad(dates[3]);
+  const discovered = extractDynamoBands(html, startDate, endDate);
+  if (!discovered || lineup.some(name => !discovered.some(found => found.toLowerCase() === name.toLowerCase())))
+    return { editionYear: 2027, startDate, endDate, city: "Eindhoven", excerpt: statement,
+      warning: "Dynamo current artist discovery incomplete; preserve verified partial lineup" };
+  return { editionYear: 2027, startDate, endDate, city: "Eindhoven", lineup: discovered, status: "partial", lineupSourceUrl: "https://dynamo-metalfest.nl/line-up/",
+    excerpt: statement + " Current edition artist cards: " + discovered.join(", ") };
 }
 
 const jeraMonths = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
@@ -447,13 +453,13 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     const value = result[field];
     if (!value || (Array.isArray(value) && value.length === 0)) continue;
     Object.assign(candidate, { [field]: value });
-    candidate.evidence.push({ field: field as FieldEvidence["field"], sourceUrl: source.url, observedAt: fetchedAt, excerpt: result.excerpt.slice(0, 500) });
+    candidate.evidence.push({ field: field as FieldEvidence["field"], sourceUrl: field === "lineup" ? result.lineupSourceUrl ?? source.url : source.url, observedAt: fetchedAt, excerpt: result.excerpt.slice(0, 500) });
   }
   // These edition-bound announcements are valuable review evidence, but their
   // lineup changes would enqueue automatic provider playlist creation. Keep
   // them in the assistant-owned review queue until that separate action is authorized.
   if ((source.festivalSlug === "copenhell" && result.headliners?.length) ||
-      (["dynamo-metal-fest", "rockstadt"].includes(source.festivalSlug) && result.lineup?.length))
+      (source.festivalSlug === "rockstadt" && result.lineup?.length))
     candidate.warnings.push("Agent review required before lineup-triggered provider activity");
   if (!candidate.evidence.length && !candidate.warnings.length) candidate.warnings.push("Official title confirms the current edition but exposes no supported structured field");
   return candidate;
