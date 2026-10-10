@@ -4,6 +4,7 @@ import { novarock } from "./novarock.ts";
 import { copenhell } from "./copenhell.ts";
 import { rockharz } from "./rockharz.ts";
 import { rockstadt } from "./rockstadt.ts";
+import { bloodstock } from "./bloodstock.ts";
 import { impericon } from "./impericon.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
@@ -404,6 +405,7 @@ const adapters: Record<string, (html: string, source: FestivalSource, fetchedAt:
   "2000trees": trees,
   "nova-rock": novarock,
   copenhell,
+  bloodstock,
   rockstadt,
   impericon,
   rockharz,

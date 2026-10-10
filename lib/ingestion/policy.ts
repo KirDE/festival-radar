@@ -4,22 +4,29 @@ import { INGESTION_SCHEMA_VERSION } from "./types.ts";
 import { diffFestival } from "./diff.ts";
 
 export function evaluateCandidate(current: Festival, candidate: FestivalCandidate): IngestionResult {
-  // A first-wave ticket article cannot remove later reviewed artists or change
-  // their billing. Quiet only the known bill, never a newly announced identity.
+  // Additive first-wave pages do not redefine independently reviewed billing.
+  // Scope each reconciliation to its own registered source and edition.
   const rockstadtAnnouncement = current.slug === "rockstadt" && candidate.festivalSlug === current.slug &&
     candidate.sourceUrl === "https://bilete.rockstadtextremefest.ro/bilete-rockstadt-fest-2027-129242/" &&
     current.editionYear === 2027 && candidate.observedEditionYears.length === 1 &&
     candidate.observedEditionYears[0] === 2027 && candidate.artistListMode === "additive" &&
     candidate.evidence.some(item => item.field === "lineup");
-  const known = new Set([...current.headliners, ...current.lineup].map(name => name.toLocaleLowerCase()));
-  const headliners = new Set(current.headliners.map(name => name.toLocaleLowerCase()));
-  const effective = rockstadtAnnouncement ? { ...candidate,
-    status: current.status === "confirmed" ? current.status : candidate.status,
-    lineup: candidate.lineup?.filter(name => !headliners.has(name.toLocaleLowerCase())),
-    warnings: candidate.warnings.filter(warning => !(warning === "Agent review required before lineup-triggered provider activity" &&
-      candidate.lineup?.every(name => known.has(name.toLocaleLowerCase())))) } : candidate;
+  const rockharzGrid = current.slug === "rockharz" && candidate.festivalSlug === current.slug &&
+    candidate.sourceUrl === "https://www.rockharz-festival.com/bands" && current.editionYear === 2027 &&
+    candidate.observedEditionYears.length === 1 && candidate.observedEditionYears[0] === 2027 &&
+    candidate.artistListMode === "additive" && candidate.evidence.some(e => e.field === "lineup");
+  const reviewedNames = new Set([...current.headliners, ...current.lineup].map(name => name.toLocaleLowerCase()));
+  const reviewedHeadliners = new Set(current.headliners.map(name => name.toLocaleLowerCase()));
+  const reconcileBilling = rockstadtAnnouncement || rockharzGrid;
+  const warnings = candidate.warnings.filter(warning => !(candidate.lineup?.every(name => reviewedNames.has(name.toLocaleLowerCase())) &&
+    ((rockstadtAnnouncement && warning === "Agent review required before lineup-triggered provider activity") ||
+     (rockharzGrid && warning.startsWith("New Rockharz captions are provisional and require independent artist review:")))));
+  const effective = reconcileBilling ? { ...candidate,
+    ...(rockstadtAnnouncement && current.status === "confirmed" ? { status: current.status } : {}),
+    lineup: candidate.lineup?.filter(name => !reviewedHeadliners.has(name.toLocaleLowerCase())),
+    warnings } : candidate;
   const changes = diffFestival(current, effective);
-  const reviewReasons = new Set(effective.warnings);
+  const reviewReasons = new Set(warnings);
   if (candidate.festivalSlug !== current.slug) reviewReasons.add("Candidate slug does not match the current festival");
   const catalogueYear = current.editionYear ?? (current.startDate ? Number(current.startDate.slice(0, 4)) : undefined);
   const mismatchedYears = catalogueYear ? candidate.observedEditionYears.filter((year) => year !== catalogueYear) : [];
