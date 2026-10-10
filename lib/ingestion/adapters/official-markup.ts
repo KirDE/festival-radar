@@ -3,6 +3,7 @@ import { novarock } from "./novarock.ts";
 import { copenhell } from "./copenhell.ts";
 import { rockharz } from "./rockharz.ts";
 import { rockstadt } from "./rockstadt.ts";
+import { impericon } from "./impericon.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
 type AdapterResult = { editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; excerpt: string; warning?: string };
@@ -402,6 +403,7 @@ const adapters: Record<string, (html: string, source: FestivalSource) => Adapter
   "nova-rock": novarock,
   copenhell,
   rockstadt,
+  impericon,
   rockharz,
   "dynamo-metal-fest": dynamoMetalFest,
   "greenfield": greenfield,
