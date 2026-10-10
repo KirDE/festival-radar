@@ -17,7 +17,7 @@ cp -a prisma "$stage/app/prisma"
 cp -a lib "$stage/app/"
 cp scripts/ingest-festivals.mjs scripts/drain-ingestion-notifications.mjs scripts/export-ingestion-review-queue.mjs "$stage/app/scripts/"
 cp scripts/db-due-tick.mjs scripts/report-db-due-health.mjs scripts/report-db-due-pilot.mjs "$stage/app/scripts/"
-cp scripts/audit-final-cutover.ts scripts/import-timetable.mjs scripts/enrich-artists.mjs scripts/playlist-dispatch.ts scripts/playlist-cutover.ts scripts/playlist-worker.ts scripts/playlist-lease-guard.ts scripts/resolve-artist-identities.mjs scripts/check-festival-sources.mjs scripts/export-playlist-catalog.mjs scripts/build-playlist-status.mjs "$stage/app/scripts/"
+cp scripts/refresh-spotify-stats.mjs scripts/audit-final-cutover.ts scripts/import-timetable.mjs scripts/enrich-artists.mjs scripts/playlist-dispatch.ts scripts/playlist-cutover.ts scripts/playlist-worker.ts scripts/playlist-lease-guard.ts scripts/resolve-artist-identities.mjs scripts/check-festival-sources.mjs scripts/export-playlist-catalog.mjs scripts/build-playlist-status.mjs "$stage/app/scripts/"
 cp -a scripts/spotify_gmm_2026/. "$stage/app/scripts/spotify_gmm_2026/"
 cp requirements.txt "$stage/app/"
 # The CI builder may run a newer interpreter than the production Python 3.9.

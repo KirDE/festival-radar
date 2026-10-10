@@ -142,3 +142,30 @@ test('mocked Web API fetch uses Get Artist by verified ID, reuses token and stop
   const missing = spotifyArtistFetcher(async () => { assert.fail('missing configuration must not call API'); }, () => ({}));
   await assert.rejects(missing(id), /stats_unavailable/);
 });
+
+test('a single 404 artist does not disable statistics for other artists', async () => {
+  const urls = [];
+  const fetchArtist = spotifyArtistFetcher(async url => {
+    urls.push(url);
+    if (url.endsWith('/api/token')) return Response.json({ access_token: 'synthetic-test-token' });
+    if (url.endsWith(id)) return new Response(null, { status: 404 });
+    return Response.json({ ...response(), id: other });
+  }, () => ({ clientId: 'synthetic', secret: 'synthetic' }));
+  await assert.rejects(fetchArtist(id), /stats_unavailable/);
+  assert.equal((await fetchArtist(other)).id, other);
+  assert.equal(urls.length, 3);
+});
+
+
+test('resolver-backed publication rejects ambiguous, name-only and mismatched live observations', async () => {
+  const { spotifyResolution } = await import('../lib/catalog/spotify-identity-publication.ts');
+  const mb = '11111111-1111-4111-8111-111111111111';
+  const proof = { name: 'Synthetic', status: 'linked', linked: [{ spotify: { id, name: 'Synthetic', url: `https://open.spotify.com/artist/${id}` }, musicBrainz: { id: mb, name: 'Synthetic', url: `https://musicbrainz.org/artist/${mb}`, spotifyUrls: [`https://open.spotify.com/artist/${id}`] } }] };
+  const live = { id, type: 'artist', name: 'Synthetic' };
+  assert.equal(spotifyResolution(proof, 'Synthetic', live).spotifyId, id);
+  for (const mutate of [p => p.status = 'ambiguous', p => p.linked.push(p.linked[0]), p => p.linked[0].musicBrainz.spotifyUrls = [], p => p.linked[0].spotify.name = 'Other band']) {
+    const p = structuredClone(proof); mutate(p); assert.equal(spotifyResolution(p, 'Synthetic', live), null);
+  }
+  assert.equal(spotifyResolution(proof, 'Synthetic', { ...live, name: 'Homonym' }), null);
+  assert.equal(spotifyResolution(proof, 'Synthetic', { ...live, id: other }), null);
+});

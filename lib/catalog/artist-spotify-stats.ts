@@ -32,13 +32,18 @@ export function spotifyArtistFetcher(fetcher: typeof fetch = fetch,
     const response = await fetcher(`https://api.spotify.com/v1/artists/${id}`, {
       headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000), cache: "no-store",
     });
-    if (!response.ok) { if (response.status === 401) token = undefined; throw new Error("spotify_stats_unavailable"); }
+    if (!response.ok) {
+      if (response.status === 401) token = undefined;
+      // A removed/mistyped artist ID affects this artist, not the entire batch.
+      if (response.status === 404) throw new Error("spotify_artist_not_found");
+      throw new Error("spotify_stats_unavailable");
+    }
     return response.json();
   };
   return async (id: string) => {
     if (unavailable) throw new Error("spotify_stats_unavailable");
     try { return await fetchArtist(id); }
-    catch { unavailable = true; throw new Error("spotify_stats_unavailable"); }
+    catch (error) { if ((error as Error).message !== "spotify_artist_not_found") unavailable = true; throw new Error("spotify_stats_unavailable"); }
   };
 }
 

@@ -298,6 +298,7 @@ WantedBy=timers.target
 UNIT
 }
 install_collection_timer artist-identities '*-*-* *:17:00 UTC'
+install_collection_timer spotify-stats '*-*-* *:37:00 UTC'
 install_collection_timer ingestion '*-*-* 03:23:00 UTC'
 install_collection_timer playlists 'Tue,Fri *-*-* 04:17:00 UTC'
 # A new installation stays dormant; validated durable cutover preserves DB mode.
@@ -430,7 +431,7 @@ ln -sfn "$release" "$app_root/current"
 chown -R www-data:www-data "$release" "$shared"
 systemctl daemon-reload
 systemctl enable "$service"
-for collection_job in artist-identities source-monitor; do
+for collection_job in artist-identities source-monitor spotify-stats; do
   systemctl enable --now "$service-collection-$collection_job.timer"
 done
 if [[ "$scheduler_mode" == legacy && "$legacy_timer_was_armed" == true ]]; then
