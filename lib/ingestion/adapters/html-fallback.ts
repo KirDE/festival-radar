@@ -1,5 +1,6 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
+import { applyBarcelonaBanner } from "./barcelona-banner.ts";
 import { extractOfficialMarkupCandidate } from "./official-markup.ts";
 import { extractSwedenRockCandidate } from "./sweden-rock.ts";
 import { validateGenericLineup } from "../lineup-quality.ts";
@@ -132,6 +133,7 @@ export function extractHtmlFallbackCandidate(html: string, source: FestivalSourc
   add("city", city?.value, city?.excerpt);
   add("ticketsUrl", tickets?.value, tickets?.excerpt);
   add("lineup", lineup?.values, lineup?.excerpt);
+  applyBarcelonaBanner(html, source, candidate);
   if (start?.value) candidate.observedEditionYears.push(Number(plainDate(start.value)?.slice(0, 4)));
   if (end?.value) candidate.observedEditionYears.push(Number(plainDate(end.value)?.slice(0, 4)));
   candidate.observedEditionYears = [...new Set(candidate.observedEditionYears.filter(Number.isFinite))];
