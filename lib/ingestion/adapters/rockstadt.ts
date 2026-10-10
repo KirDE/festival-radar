@@ -2,8 +2,6 @@ import type { FestivalSource } from "../types.ts";
 
 const url = "https://bilete.rockstadtextremefest.ro/bilete-rockstadt-fest-2027-129242/";
 const title = "Rockstadt Fest 2027";
-const names = ["Slash featuring Myles Kennedy and The Conspirators", "Overkill", "Mgla", "Venom", "Jinjer", "Towards the Sinister"];
-const rename = "A new name. The same heartbeat. For more than a decade, you've helped build something far bigger than a festival. What started as Rockstadt Extreme Fest has grown into a community recognized far beyond Romania, and today it takes the next natural step. Starting with the 2027 edition, we become Rockstadt Festival. The stages, the crowds, the atmosphere, the feeling of coming home every summer, none of that changes. This is simply the name that carries us into the next chapter.";
 const text = (value: string) => value.replace(/&#0*39;|&apos;/gi, "'").replace(/&amp;/gi, "&").replace(/\s+/g, " ").trim();
 const attr = (tag: string, name: string) => tag.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, "i"))?.slice(1).find((value) => value !== undefined);
 const hasClass = (tag: string, name: string) => attr(tag, "class")?.split(/\s+/).includes(name) ?? false;
@@ -11,12 +9,12 @@ const hasClass = (tag: string, name: string) => attr(tag, "class")?.split(/\s+/)
 // Require a unique, closed div. Nested divs must close before its own closing
 // tag; a truncated details/box cannot borrow an unrelated following block.
 function div(html: string, matches: (tag: string) => boolean): string | undefined {
-  const openings = [...html.matchAll(/<div\b[^>]*>/gi)].filter((match) => matches(match[0]));
+  const openings = [...html.matchAll(/<div\b[^<>]*>/gi)].filter((match) => matches(match[0]));
   if (openings.length !== 1) return undefined;
   const opening = openings[0];
   const start = opening.index! + opening[0].length;
   let depth = 1;
-  for (const tag of html.slice(start).matchAll(/<\/?div\b[^>]*>/gi)) {
+  for (const tag of html.slice(start).matchAll(/<\/?div\b[^<>]*>/gi)) {
     depth += /^<\//.test(tag[0]) ? -1 : 1;
     if (depth === 0) return html.slice(start, start + tag.index!);
   }
@@ -60,7 +58,7 @@ export function rockstadt(html: string, source: FestivalSource) {
     .replace(/<(script|style|nav|header|footer)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
   if (!body) return undefined;
   let depth = 0;
-  for (const tag of body.matchAll(/<\/?div\b[^>]*>/gi)) {
+  for (const tag of body.matchAll(/<\/?div\b[^<>]*>/gi)) {
     depth += /^<\//.test(tag[0]) ? -1 : 1;
     if (depth < 0 || /\/\s*>$/.test(tag[0])) return undefined;
   }
@@ -76,16 +74,39 @@ export function rockstadt(html: string, source: FestivalSource) {
   if (!details) return undefined;
   const description = div(details, (tag) => hasClass(tag, "event-short-desc"));
   if (!description || (box.match(/First confirmed names:/g) ?? []).length !== 1 || (box.match(/\bevent-short-desc\b/g) ?? []).length !== 1) return undefined;
-  // Only the verified bold list is supported. Extra names, nested markup,
-  // duplicate announcements and malformed closing tags all fail closed.
+  // This first-wave article is additive, not a complete billing grid. Extract
+  // its actual names so later additions do not depend on a frozen six-act bill.
   const announcement = description.match(/First confirmed names:\s*<strong>([^<>]+)<\/strong>/);
-  if (!announcement || text(announcement[1]) !== names.join(", ")) return undefined;
+  if (!announcement) return undefined;
+  const names = text(announcement[1]).split(/,\s*/);
+  if (!names.length || names.some(name => !name || name.length > 160 || !/\p{L}/u.test(name)) ||
+      new Set(names.map(name => name.toLocaleLowerCase())).size !== names.length) return undefined;
   const prose = description.replace(announcement[0], "").replace(/<br\s*\/?\s*>/gi, " ");
-  if (/[<>]/.test(prose)) return undefined;
-  // Pin the surrounding announcement prose too: an appended second artist
-  // paragraph must not silently expand this known six-name announcement.
-  if (text(description.slice(0, announcement.index!).replace(/<br\s*\/?\s*>/gi, " ")) !== rename ||
-      text(description.slice(announcement.index! + announcement[0].length).replace(/<br\s*\/?\s*>/gi, " ")) !== "One community. One heart. One new chapter. See you at Rockstadt Festival!") return undefined;
-  return { editionYear: 2027, startDate: "2027-07-26", endDate: "2027-07-30", city: "Ghimbav (Brașov)", lineup: [...names],
-    excerpt: `${title}; 26-30 iulie '27; Ghimbav (Brașov); Starting with the 2027 edition, we become Rockstadt Festival. First confirmed names: ${names.join(", ")}` };
+  if (/[<>]/.test(prose) || /\b(?:cancelled|canceled|withdrawn|full line.?up|complete line.?up|also confirmed)\b/i.test(prose) ||
+      [...prose.matchAll(/\b20\d{2}\b/g)].some(match => match[0] !== String(source.editionYear))) return undefined;
+
+  // An enabled festival-admission tariff in this event's own live order form
+  // proves sales, unlike historical offer JSON-LD, prices or a generic button.
+  const widget = div(box, tag => hasClass(tag, "order-form-widget") && hasClass(tag, "can-book") &&
+    attr(tag, "data-return-url") === url && attr(tag, "data-is-order-form-widget") === "true");
+  const forms = widget ? [...widget.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/gi)] : [];
+  const form = forms.length === 1 && attr(forms[0][1], "data-is-order-form") === "true" &&
+    attr(forms[0][1], "action") === "https://bilete.rockstadtextremefest.ro/widgetOrderForm/bookEvent/" &&
+    attr(forms[0][1], "method")?.toLowerCase() === "post" && attr(forms[0][1], "data-disable-submit") === "0" ? forms[0][2] : undefined;
+  const admission = form ? [...form.matchAll(/<div\b[^<>]*>/gi)].find(match => attr(match[0], "data-is-tariff") === "1" &&
+    /^(?:Abonament\b.*Acces General|TEENS Full Access\b)/i.test(attr(match[0], "data-tariff-name") ?? "") &&
+    Number(attr(match[0], "data-tariff-sell-price")) > 0 && attr(match[0], "data-tariff-sell-currency") === "RON" &&
+    !/\b(?:sold-out|disabled|unavailable)\b/i.test(attr(match[0], "class") ?? ""))?.[0] : undefined;
+  const tariffId = admission && attr(admission, "data-tariff-id");
+  const quantity = form && tariffId && [...form.matchAll(/<input\b[^>]*>/gi)].some(match =>
+    attr(match[0], "data-tariff-id") === tariffId && attr(match[0], "data-is-ticket-nr") === "1" &&
+    Number(attr(match[0], "data-max-nr-tickets")) > 0 && !/\sdisabled(?:\s|=|>)/i.test(match[0]));
+  const submit = form && [...form.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/gi)].some(match =>
+    attr(match[1], "data-is-order-form-submit") === "true" && attr(match[1], "type") === "submit" &&
+    !/\sdisabled(?:\s|=|$)/i.test(match[1]) && text(match[2]) === "Comandă bilete");
+  const sale = Boolean(quantity && submit);
+  return { editionYear: 2027, startDate: "2027-07-26", endDate: "2027-07-30", city: "Ghimbav (Brașov)", lineup: names,
+    artistListMode: "additive" as const, status: "partial" as const,
+    ...(sale ? { ticketsUrl: url, ticketStatus: "available" as const } : {}),
+    excerpt: `${title}; 26-30 iulie '27; Ghimbav (Brașov); First confirmed names: ${names.join(", ")}${sale ? "; live festival admission tariff, selectable quantity; Comandă bilete" : ""}` };
 }
