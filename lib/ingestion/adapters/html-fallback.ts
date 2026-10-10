@@ -1,3 +1,4 @@
+import { extractIdaysCandidate } from "./idays.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 import { applyBarcelonaBanner } from "./barcelona-banner.ts";
@@ -101,6 +102,7 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
 }
 
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  if (source.festivalSlug === "idays") return extractIdaysCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "sweden-rock") return extractSwedenRockCandidate(html, source, fetchedAt);
   // Existing DB-owned generic Rock Werchter sources can consume the verified
   // homepage markup without a configuration edit or resetting source backoff.

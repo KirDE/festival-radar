@@ -1,9 +1,12 @@
+import { IDAYS_ARTIST_REVIEW } from "./adapters/idays.ts";
 import type { Festival } from "../domain/festival.ts";
 import type { FestivalCandidate, IngestionResult } from "./types.ts";
 import { INGESTION_SCHEMA_VERSION } from "./types.ts";
 import { diffFestival } from "./diff.ts";
 
 export function evaluateCandidate(current: Festival, candidate: FestivalCandidate): IngestionResult {
+  // An incomplete I-Days announcement cannot downgrade a verified full bill.
+  if (candidate.festivalSlug === "idays" && candidate.artistListMode === "additive" && candidate.status === "partial" && current.status === "confirmed") candidate = { ...candidate, status: undefined };
   // Additive first-wave pages do not redefine independently reviewed billing.
   // Scope each reconciliation to its own registered source and edition.
   const rockstadtAnnouncement = current.slug === "rockstadt" && candidate.festivalSlug === current.slug &&
@@ -26,7 +29,8 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     lineup: candidate.lineup?.filter(name => !reviewedHeadliners.has(name.toLocaleLowerCase())),
     warnings } : candidate;
   const changes = diffFestival(current, effective);
-  const reviewReasons = new Set(warnings);
+  const unchangedIdays = candidate.festivalSlug === "idays" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
+  const reviewReasons = new Set(warnings.filter(warning => !(unchangedIdays && warning === IDAYS_ARTIST_REVIEW)));
   if (candidate.festivalSlug !== current.slug) reviewReasons.add("Candidate slug does not match the current festival");
   const catalogueYear = current.editionYear ?? (current.startDate ? Number(current.startDate.slice(0, 4)) : undefined);
   const mismatchedYears = catalogueYear ? candidate.observedEditionYears.filter((year) => year !== catalogueYear) : [];
