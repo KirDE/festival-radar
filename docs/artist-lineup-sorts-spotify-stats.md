@@ -12,34 +12,30 @@ followers are stored as nullable BIGINT and projected as a JSON-safe number.
 The single nullable migration adds no default values or backfill. It has not been
 applied to any database by this task.
 
-Stats refresh runs within the existing artist-enrichment worker, under its existing
-OperationalState lease, daily gate and restart checkpoints. It executes for each
-due artist before MusicBrainz work, including artists whose MusicBrainz lookup
-fails. The CLI injects the Spotify refresh into the testable worker. No new timer,
-playlist processing, ingestion policy or identity resolver behavior is introduced.
-Only existing SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET environment configuration
-is used by the lazy client-credentials reader; no credentials were accessed or
-changed during implementation. Tests mock provider responses.
+Stats refresh runs hourly through the `spotify-stats` collection timer, with a
+24-hour gate on each verified artist observation and the shared artist-enrichment
+lease. `scripts/refresh-spotify-stats.mjs` is independent of MusicBrainz completed
+checkpoints, so introduction of stats and later identity resolutions are not
+silently skipped. It retains a durable numeric run summary in OperationalState.
+The original artist-enrichment integration remains available for ad-hoc refreshes.
+Only existing SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET configuration is used.
 
-Identity protection requires a canonical LINKED record, exactly one Spotify
-identity, and a verified Spotify artist link agreeing with that ID without any
-conflicting verified Spotify artist links. Publication rechecks these conditions
-and unique canonical ownership in a serializable lease-fenced transaction after
-the request. It never creates an identity, searches Spotify by name, or publishes
-resolver candidates. The existing identity resolver saves cross-provider evidence
-to OperationalState but does not publish reviewed canonical Spotify identities.
-Artists lacking an existing verified binding therefore remain unknown; accepting
-new candidates still requires the existing identity review process. LINKED alone
-cannot establish which provider was verified. The public repository suppresses
-old observations if their ID no longer agrees with the verified binding.
+Canonical identities may be filled from the resolver's single cross-provider
+match only when both provider names exactly agree, MusicBrainz explicitly links
+the Spotify ID, and a fresh Spotify Get Artist response confirms that ID/name.
+Publication rechecks the persisted resolver evidence, canonical ownership,
+existing identities/verified links, administrative overrides and pending changes
+in a serializable lease-fenced transaction. Conflicts and ambiguous matches are
+not overwritten. Each new verified Spotify link has provenance and an audit entry.
+No name-only match or playlist mutation is accepted.
 
 Spotify's Get Artist documentation marks both popularity and followers deprecated:
 https://developer.spotify.com/documentation/web-api/reference/get-an-artist
 A successful artist response with omitted/null/invalid fields records null for
 those fields. Wrong ID/type, transport errors, forbidden/rate-limited responses,
 missing configuration and temporary API failures retain older metrics and their
-original timestamp. The fetcher stops provider requests for the rest of that worker
-invocation after a failure, then retries on the next due artist-enrichment run.
+original timestamp. An artist-specific 404 does not stop other artists. For authentication, rate-limit
+or transport failures the fetcher stops requests for the rest of that invocation, then retries on the next due artist-enrichment run.
 An observation older than the stored snapshot cannot overwrite it. No name-based
 homonym or inferred zero is accepted. No live provider request was made for tests.
 

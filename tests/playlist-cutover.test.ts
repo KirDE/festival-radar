@@ -33,7 +33,8 @@ test('release preserves old cadence and supported consumers share the same proce
   const installer = await readFile('scripts/deploy/install-release.sh', 'utf8');
   assert.match(installer, /install_collection_timer playlists 'Tue,Fri \*-\*-\* 04:17:00 UTC'/);
   assert.match(installer, /install_collection_timer playlists-db '\*-\*-\* \*:00\/10:00 UTC'/);
-  assert.match(installer, /for collection_job in artist-identities source-monitor; do/);
+  assert.match(installer, /for collection_job in artist-identities source-monitor spotify-stats; do/);
+  assert.match(installer, /install_collection_timer spotify-stats '\*-\*-\* \*:37:00 UTC'/);
   assert.match(installer, /playlist_install_select_mode/);
   assert.match(installer, /playlist_install_apply_mode/);
   const legacy = await readFile('scripts/deploy/run-legacy-playlists.sh', 'utf8');
