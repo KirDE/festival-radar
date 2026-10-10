@@ -1,6 +1,7 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 import { applyBarcelonaBanner } from "./barcelona-banner.ts";
+import { extractOfficialMarkupCandidate } from "./official-markup.ts";
 import { validateGenericLineup } from "../lineup-quality.ts";
 
 type SupportedField = FieldEvidence["field"];
@@ -64,6 +65,7 @@ function ticketLink(html: string, sourceUrl: string): { value: string; excerpt: 
     if (!/\b(ticket|tickets|karten|billet|billets|entradas)\b/.test(tagAndText)) continue;
     try {
       const url = new URL(decode(match[1] ?? match[2]), sourceUrl);
+      if (url.hash || /\b(?:faq|register|registration|newsletter)\b/.test(tagAndText)) continue;
       if (url.protocol === "https:") return { value: url.href, excerpt: match[0].slice(0, 500) };
     } catch {
       continue;
@@ -98,6 +100,12 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
 }
 
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  // Existing DB-owned generic Rock Werchter sources can consume the verified
+  // homepage markup without a configuration edit or resetting source backoff.
+  if (source.festivalSlug === "rock-werchter") {
+    const official = extractOfficialMarkupCandidate(html, source, fetchedAt);
+    if (official.evidence.length) return official;
+  }
   const candidate: FestivalCandidate = {
     schemaVersion: INGESTION_SCHEMA_VERSION,
     festivalSlug: source.festivalSlug,

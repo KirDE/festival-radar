@@ -7,12 +7,12 @@ function scalarChange(changes: FestivalChange[], field: "startDate" | "endDate" 
   changes.push({ kind, field, before, after, reviewRequired: (field === "startDate" || field === "endDate") && before !== undefined });
 }
 
-function listChanges(changes: FestivalChange[], field: "lineup" | "headliners", before: string[], after: string[] | undefined) {
+function listChanges(changes: FestivalChange[], field: "lineup" | "headliners", before: string[], after: string[] | undefined, additive = false) {
   if (!after) return;
   const oldNames = new Map(before.map((name) => [name.toLocaleLowerCase(), name]));
   const newNames = new Map(after.map((name) => [name.toLocaleLowerCase(), name]));
   for (const [key, name] of newNames) if (!oldNames.has(key)) changes.push({ kind: field === "headliners" ? "headliner_added" : "artist_added", field, after: name, reviewRequired: false });
-  for (const [key, name] of oldNames) if (!newNames.has(key)) changes.push({ kind: field === "headliners" ? "headliner_removed" : "artist_removed", field, before: name, reviewRequired: true, reason: "Removals require confirmation" });
+  for (const [key, name] of oldNames) if (!additive && !newNames.has(key)) changes.push({ kind: field === "headliners" ? "headliner_removed" : "artist_removed", field, before: name, reviewRequired: true, reason: "Removals require confirmation" });
 }
 
 function operationalChanges(changes: FestivalChange[], current: Festival, candidate: FestivalCandidate) {
@@ -31,8 +31,8 @@ export function diffFestival(current: Festival, candidate: FestivalCandidate): F
   scalarChange(changes, "city", current.city, candidate.city);
   scalarChange(changes, "ticketsUrl", current.ticketsUrl, candidate.ticketsUrl);
   scalarChange(changes, "status", current.status, candidate.status);
-  listChanges(changes, "headliners", current.headliners, candidate.headliners);
-  listChanges(changes, "lineup", current.lineup, candidate.lineup);
+  listChanges(changes, "headliners", current.headliners, candidate.headliners, candidate.artistListMode === "additive");
+  listChanges(changes, "lineup", current.lineup, candidate.lineup, candidate.artistListMode === "additive");
   operationalChanges(changes, current, candidate);
   return changes;
 }
