@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 import { uniqueNotificationEvents, type PublishedNotificationEvent } from "../ingestion/notification-events.ts";
 import type { IngestionResult } from "../ingestion/types.ts";
+import type { AgentDecision } from "../ingestion/agent-contract.ts";
 
 type Database = PrismaClient | Prisma.TransactionClient;
 type CatalogChange = { field: string; before?: unknown; after?: unknown };
@@ -282,5 +283,166 @@ export async function publishAdminFestivalChange(db: Prisma.TransactionClient, i
     source: CatalogPublicationSource.ADMIN, sourceId, festivalSlug: input.change.resourceKey,
     editionYear: applied.edition.year, actorLabel: input.actorLabel, fields: applied.changedFields,
     evidence: { adminChangeId: input.change.id, sourceEvidence: input.change.sourceEvidence },
+  });
+}
+
+/** Authenticated agent review: caller holds the issue/source lease and has
+ * compared the exact current snapshot. No weakening of the automatic parser
+ * policy, and no provider activity is implied by resolving an import conflict. */
+export async function publishAgentFestivalResolution(
+  db: Prisma.TransactionClient,
+  input: {
+    editionId: string;
+    festivalSlug: string;
+    sourceId: string;
+    reason: string;
+    facts: NonNullable<AgentDecision["facts"]>;
+    evidence: AgentDecision["evidence"];
+    observedAt: Date;
+  },
+) {
+  const replay = await db.catalogPublication.findUnique({
+    where: { sourceId: input.sourceId },
+  });
+  if (replay) return { ...replay, playlistRefreshRequested: false };
+  const edition = await db.festivalEdition.findUniqueOrThrow({
+    where: { id: input.editionId },
+    include: {
+      festival: true,
+      lineup: { include: { artist: true }, orderBy: { position: "asc" } },
+    },
+  });
+  if (
+    edition.festival.slug !== input.festivalSlug ||
+    edition.recordState !== "CURRENT"
+  )
+    throw new Error("Reviewed edition mismatch");
+  const dateStart = input.facts.startDate ?? isoDate(edition.startDate),
+    dateEnd = input.facts.endDate ?? isoDate(edition.endDate);
+  if (
+    (dateStart && Number(dateStart.slice(0, 4)) !== edition.year) ||
+    (dateEnd && Number(dateEnd.slice(0, 4)) !== edition.year) ||
+    (dateStart && dateEnd && dateStart > dateEnd)
+  )
+    throw new Error("Reviewed dates mismatch");
+  const changedFields: string[] = [];
+  if (
+    input.facts.headliners !== undefined &&
+    input.facts.lineup !== undefined
+  ) {
+    const headliners = stringList(input.facts.headliners, "headliners"),
+      lineup = stringList(input.facts.lineup, "lineup");
+    if (
+      new Set([...headliners, ...lineup].map((n) => n.toLocaleLowerCase()))
+        .size !==
+      headliners.length + lineup.length
+    )
+      throw new Error("Ambiguous reviewed billing");
+    const oldHeadliners = edition.lineup
+      .filter((l) => l.billing === "HEADLINER" && l.status === "ANNOUNCED")
+      .map((l) => l.artist.name);
+    const oldLineup = edition.lineup
+      .filter((l) => l.billing === "LINEUP" && l.status === "ANNOUNCED")
+      .map((l) => l.artist.name);
+    if (!same(oldHeadliners, headliners) || !same(oldLineup, lineup)) {
+      const artists = [];
+      for (const name of [...headliners, ...lineup])
+        artists.push(await ensureArtist(db, name, input.observedAt));
+      const cancelled = edition.lineup.filter((l) => l.status === "CANCELLED");
+      if (artists.some((a) => cancelled.some((l) => l.artistId === a.id)))
+        throw new Error("Cancellation requires separate explicit review");
+      // Replace both billing classes together so promotion/demotion cannot
+      // collide with an artist temporarily present in the opposite class.
+      await db.lineupEntry.deleteMany({
+        where: { editionId: edition.id, status: "ANNOUNCED" },
+      });
+      for (const [billing, names, offset] of [
+        ["HEADLINER", headliners, 0],
+        ["LINEUP", lineup, headliners.length],
+      ] as const) {
+        const occupied = new Set(
+          cancelled.filter((l) => l.billing === billing).map((l) => l.position),
+        );
+        let position = 0;
+        for (let n = 0; n < names.length; n++) {
+          while (occupied.has(position)) position++;
+          await db.lineupEntry.create({
+            data: {
+              editionId: edition.id,
+              artistId: artists[offset + n].id,
+              billing,
+              position: position++,
+              status: "ANNOUNCED",
+            },
+          });
+        }
+      }
+      changedFields.push("headliners", "lineup");
+      await db.festivalEdition.update({
+        where: { id: edition.id },
+        data: { sourceUpdatedAt: input.observedAt },
+      });
+    }
+  }
+  const scalar = Object.entries(input.facts)
+    .filter(([field]) => field !== "headliners" && field !== "lineup")
+    .map(([field, after]) => ({ field, after }));
+  if (scalar.length) {
+    const applied = await applyFestivalChanges(db, {
+      festivalSlug: input.festivalSlug,
+      expectedYear: edition.year,
+      changes: scalar,
+      strictBefore: false,
+      observedAt: input.observedAt,
+    });
+    changedFields.push(...applied.changedFields);
+  }
+  if (input.facts.status) {
+    const completeness = {
+      confirmed: "COMPLETE",
+      partial: "PARTIAL",
+      tba: "TBA",
+    } as const;
+    if (edition.completeness !== completeness[input.facts.status]) {
+      await db.festivalEdition.update({
+        where: { id: edition.id },
+        data: { completeness: completeness[input.facts.status] },
+      });
+      changedFields.push("completeness");
+    }
+  }
+  for (const field of [...new Set(changedFields)]) {
+    const evidence = input.evidence.find(
+      (e) =>
+        e.field === field || (field === "completeness" && e.field === "status"),
+    );
+    if (!evidence) throw new Error("Reviewed field has no official evidence");
+    await db.editionProvenance.create({
+      data: {
+        editionId: edition.id,
+        field,
+        url: evidence.url,
+        checkedAt: new Date(evidence.checkedAt),
+        note: evidence.excerpt,
+      },
+    });
+  }
+  return createPublication(db, {
+    source: CatalogPublicationSource.ADMIN,
+    sourceId: input.sourceId,
+    festivalSlug: input.festivalSlug,
+    editionYear: edition.year,
+    actorLabel: "openclaw-import-agent",
+    fields: [...new Set(changedFields)],
+    evidence: {
+      reason: input.reason,
+      officialEvidence: input.evidence,
+      reviewPolicy: "openclaw-import-conflicts-v1",
+    },
+    playlistRefreshDeferral: {
+      policy: "explicit-refresh-only",
+      reason:
+        "Import conflict resolution is not a request to create or refresh provider playlists",
+    },
   });
 }
