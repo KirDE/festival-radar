@@ -31,6 +31,10 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     const reading = extractReadingCandidate(html, source, fetchedAt);
     if (reading) return reading;
   }
+  // Alcatraz mixes the current banner with an archived bill and ticket terms.
+  // Its trusted fallback owns this existing source, not generic Event guesses.
+  if (source.festivalSlug === "alcatraz" && source.strategies.includes("html_fallback"))
+    return extractHtmlFallbackCandidate(html, source, fetchedAt);
   const candidates = source.strategies.flatMap((strategy) => {
     if (strategy === "json_ld_event") return [extractJsonLdCandidate(html, source, fetchedAt)];
     if (strategy === "html_fallback") return [extractHtmlFallbackCandidate(html, source, fetchedAt)];

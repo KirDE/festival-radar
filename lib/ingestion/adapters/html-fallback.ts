@@ -5,6 +5,7 @@ import { applyBarcelonaBanner } from "./barcelona-banner.ts";
 import { extractOfficialMarkupCandidate } from "./official-markup.ts";
 import { extractResurrectionCandidate } from "./resurrection.ts";
 import { extractSwedenRockCandidate } from "./sweden-rock.ts";
+import { extractAlcatrazCandidate } from "./alcatraz.ts";
 import { validateGenericLineup } from "../lineup-quality.ts";
 
 type SupportedField = FieldEvidence["field"];
@@ -114,6 +115,7 @@ export function extractHtmlFallbackCandidate(html: string, source: FestivalSourc
   if (source.festivalSlug === "resurrection-fest" && new URL(source.url).hostname === "www.resurrectionfest.es") {
     return extractResurrectionCandidate(html, source, fetchedAt);
   }
+  if (source.festivalSlug === "alcatraz") return extractAlcatrazCandidate(html, source, fetchedAt);
   const candidate: FestivalCandidate = {
     schemaVersion: INGESTION_SCHEMA_VERSION,
     festivalSlug: source.festivalSlug,
