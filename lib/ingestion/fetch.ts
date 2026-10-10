@@ -1,4 +1,5 @@
 import { handlesBrutalAssault, fetchBrutalAssaultDocuments } from "./adapters/brutal-assault.ts";
+import { isReadingSource } from "./adapters/reading.ts";
 import type { FestivalSource } from "./types.ts";
 
 export type FetchAttempt = { response: Response; attempts: number };
@@ -47,6 +48,19 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
 
   const initial = await fetchWithRetry(source.fetchUrl ?? source.url);
   if (initial.response.ok && handlesBrutalAssault(source)) return fetchBrutalAssaultDocuments(source, initial, fetchWithRetry);
+  if (initial.response.ok && isReadingSource(source) && !source.fetchUrl && initial.response.url && new URL(initial.response.url).origin !== "https://www.readingfestival.com") throw Object.assign(new Error("Reading source redirected away from its trusted origin"), { attempts: initial.attempts });
+  // Reading's homepage carries the current festival span but only a sales CTA.
+  // Read the same-origin linked live ticket products to establish availability.
+  if (initial.response.ok && isReadingSource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern && new URL(source.url).pathname === "/") {
+    const html = await initial.response.text();
+    const linked = [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)].some((match) => {
+      try { const url = new URL(match[1], source.url); return url.origin === "https://www.readingfestival.com" && /^\/tickets\/?$/.test(url.pathname) && !url.search && !url.hash; } catch { return false; }
+    });
+    if (!linked) return { response: new Response(html, { status: initial.response.status, headers: initial.response.headers }), attempts: initial.attempts };
+    const tickets = await fetchWithRetry("https://www.readingfestival.com/tickets");
+    if (tickets.response.ok && tickets.response.url && !/^https:\/\/www\.readingfestival\.com\/tickets\/?$/.test(tickets.response.url)) throw Object.assign(new Error("Reading ticket page redirected away from its trusted landing page"), { attempts: initial.attempts + tickets.attempts });
+    return { response: tickets.response, attempts: initial.attempts + tickets.attempts };
+  }
   if (!source.followLinkPattern || !initial.response.ok) return initial;
 
   const html = await initial.response.text();
