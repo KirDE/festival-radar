@@ -1,3 +1,4 @@
+import { isFrequencySource, frequencyTicketLink, frequencyDocuments } from "./adapters/frequency.ts";
 import type { FestivalSource } from "./types.ts";
 
 export type FetchAttempt = { response: Response; attempts: number };
@@ -45,6 +46,16 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   const initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && isFrequencySource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern && new URL(source.url).pathname === "/") {
+    if (initial.response.url && new URL(initial.response.url).origin !== "https://www.frequency.at") throw Object.assign(new Error("Frequency homepage redirected away from its official origin"), { attempts: initial.attempts });
+    const home = await initial.response.text();
+    if (!frequencyTicketLink(home)) return { response: new Response(home, { status: 200, headers: initial.response.headers }), attempts: initial.attempts };
+    const tickets = await fetchWithRetry("https://www.frequency.at/tickets/");
+    const attempts = initial.attempts + tickets.attempts;
+    if (!tickets.response.ok) return { response: tickets.response, attempts };
+    if (tickets.response.url && !/^https:\/\/www\.frequency\.at\/tickets\/?$/.test(tickets.response.url)) throw Object.assign(new Error("Frequency ticket page redirected away from its official landing page"), { attempts });
+    return { response: new Response(frequencyDocuments(home, await tickets.response.text()), { status: 200, headers: { "content-type": "application/json" } }), attempts };
+  }
   if (!source.followLinkPattern || !initial.response.ok) return initial;
 
   const html = await initial.response.text();

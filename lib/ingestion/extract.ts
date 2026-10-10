@@ -1,3 +1,4 @@
+import { extractFrequencyCandidate } from "./adapters/frequency.ts";
 import { extractHtmlFallbackCandidate } from "./adapters/html-fallback.ts";
 import { extractJsonLdCandidate } from "./adapters/json-ld.ts";
 import { extractOfficialMarkupCandidate } from "./adapters/official-markup.ts";
@@ -7,6 +8,10 @@ import { INGESTION_SCHEMA_VERSION } from "./types.ts";
 const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city", "headliners", "lineup", "ticketsUrl", "status", "ticketStatus"];
 
 export function extractFestivalCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  if (source.strategies.includes("html_fallback")) {
+    const frequency = extractFrequencyCandidate(html, source, fetchedAt);
+    if (frequency) return frequency;
+  }
   const candidates = source.strategies.flatMap((strategy) => {
     if (strategy === "json_ld_event") return [extractJsonLdCandidate(html, source, fetchedAt)];
     if (strategy === "html_fallback") return [extractHtmlFallbackCandidate(html, source, fetchedAt)];
