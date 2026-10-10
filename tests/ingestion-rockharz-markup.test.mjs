@@ -264,3 +264,67 @@ test("baseline artist/ticket sources are publishable; novel names and date/city 
   }
   assert.equal(accesses, 0);
 });
+
+const correctionHtml = await readFile(new URL("./fixtures/official-markup/rockharz-bands-correction-20261010.html", import.meta.url), "utf8");
+const corrected = { ...current, status: "partial", ticketStatus: "unavailable", headliners: ["Amon Amarth"],
+  lineup: [...canonicalArtists, "Beast in Black", "Burning Witches", "Elvenking", "Fear Factory", "Jinjer", "Mixed Up Everything", "Motörizer", "Myrath", "Vulvarine"] };
+
+test("real October nine-act correction is quiet without demoting the verified headliner", () => {
+  const candidate = extract("bands", correctionHtml);
+  assert.equal(candidate.lineup.length, 39);
+  assert.equal(candidate.artistListMode, "additive");
+  const result = evaluateCandidate(corrected, candidate);
+  assert.deepEqual(result.changes, []);
+  assert.deepEqual(result.reviewReasons, []);
+  assert.equal(result.publishable, false);
+  assert.deepEqual(result.candidate.warnings, []);
+  assert.ok(!result.candidate.lineup.some(name => name.toLowerCase() === "amon amarth"));
+  assert.ok(candidate.lineup.includes("AMON AMARTH")); // raw extraction remains available
+});
+
+test("later official captions still review, then become quiet after independent catalogue correction", () => {
+  const html = correctionHtml.replaceAll('title="VULVARINE"', 'title="NEXT OFFICIAL ACT"');
+  const candidate = extract("bands", html);
+  const result = evaluateCandidate(corrected, candidate);
+  assert.equal(result.publishable, false);
+  assert.deepEqual(result.changes.map(c => [c.kind, c.after]), [["artist_added", "NEXT OFFICIAL ACT"]]);
+  assert.match(result.reviewReasons.join(";"), /New Rockharz captions/);
+  const later = evaluateCandidate({ ...corrected, lineup: [...corrected.lineup, "Next Official Act"] }, candidate);
+  assert.deepEqual(later.changes, []); // absent earlier partial captions never remove verified acts
+  assert.deepEqual(later.reviewReasons, []);
+});
+
+test("provisional review exemption never hides semantic warnings or unverified billing", () => {
+  const candidate = extract("bands", correctionHtml);
+  candidate.warnings.push("Cancellation requires independent review");
+  assert.deepEqual(evaluateCandidate(corrected, candidate).reviewReasons, ["Cancellation requires independent review"]);
+  for (const override of [{ artistListMode: undefined }, { sourceUrl: origin + "/" }, { observedEditionYears: [2026] }]) {
+    const result = evaluateCandidate(corrected, { ...candidate, ...override });
+    assert.ok(result.reviewReasons.some(reason => reason.startsWith("New Rockharz captions")));
+  }
+  const withoutReviewedBilling = evaluateCandidate({ ...corrected, headliners: [] }, extract("bands", correctionHtml));
+  assert.ok(withoutReviewedBilling.changes.some(c => c.after === "AMON AMARTH"));
+  assert.ok(withoutReviewedBilling.reviewReasons.length);
+});
+
+test("corrected live grid uses unchanged ingestion path and resets failure health without publication", async () => {
+  const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { runIngestion, readHealthState } = await import("../lib/ingestion/run.ts");
+  const directory = await mkdtemp(join(tmpdir(), "rockharz-feedback-"));
+  try {
+    const stateFile = join(directory, "health.json");
+    await writeFile(stateFile, JSON.stringify({ schemaVersion: 1, sources: { rockharz: { consecutiveFailures: 8, lastAttemptAt: at } } }));
+    const summary = await runIngestion({ sources: [source("bands")], festivals: [corrected], outputDirectory: join(directory, "results"), stateFile,
+      failureThreshold: 3, now: () => new Date(at), fetchOptions: { fetchImpl: async () => new Response(correctionHtml, { status: 200 }), maxAttempts: 1 } });
+    assert.equal(summary.status, "healthy");
+    assert.equal(summary.reviewRequired, 0);
+    assert.equal(summary.publishable, 0);
+    assert.equal(summary.changed, 0);
+    assert.equal(summary.results[0].status, "unchanged");
+    const health = (await readHealthState(stateFile)).sources.rockharz;
+    assert.equal(health.consecutiveFailures, 0);
+    assert.equal(health.lastSuccessfulCheck, new Date(at).toISOString());
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

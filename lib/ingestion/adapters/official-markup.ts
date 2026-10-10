@@ -1,3 +1,4 @@
+import { graspop } from "./graspop.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { rockWerchter } from "./rock-werchter.ts";
 import { novarock } from "./novarock.ts";
@@ -405,6 +406,7 @@ const adapters: Record<string, (html: string, source: FestivalSource, fetchedAt:
   "firenze-rocks": firenzeRocks,
   "rock-werchter": rockWerchter,
   "2000trees": trees,
+  graspop,
   "nova-rock": novarock,
   copenhell,
   bloodstock,
