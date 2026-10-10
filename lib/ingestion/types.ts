@@ -26,6 +26,8 @@ export type FieldEvidence = {
 };
 
 export type FestivalCandidate = Partial<Pick<Festival, "startDate" | "endDate" | "city" | "headliners" | "lineup" | "ticketsUrl" | "ticketStatus" | "status">> & {
+  /** Announcement feeds add artists; absence is not a removal. */
+  artistListMode?: "additive";
   timetable?: { date: string; stage: string; start: string; artist: string }[];
   schemaVersion: typeof INGESTION_SCHEMA_VERSION;
   festivalSlug: string;
