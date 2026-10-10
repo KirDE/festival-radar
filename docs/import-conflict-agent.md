@@ -148,7 +148,7 @@ A healthy alternative source prevents the festival-wide warning.
 
 ### Repair-owned source activation
 
-After the adapter is deployed, `repair_configure` accepts a live repair capability
+After the adapter is deployed, `repair_retarget` accepts a live repair capability
 (`repairId`, `leaseToken`), the exact active `commit`, and a source-only normal
 `apply` decision with official evidence. It changes only the task's source,
 requires a registered parser/current edition and same-host HTTPS evidence, and
@@ -156,3 +156,6 @@ fences stale configuration and active importer leases. It cannot edit catalog
 facts, enable manual parsers, reset failures/deprecation, or queue playlists.
 A replay of the same configuration is idempotent; the source audit is separate
 from repair completion. Failed/deprecated sources retain their scheduler backoff.
+
+`repair_configure` retains its deployed adapter-only activation contract
+(`expectedParserKey`, `followLinkPattern`) and preserves the existing source URL.

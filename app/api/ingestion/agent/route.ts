@@ -11,7 +11,7 @@ import {
   releaseAgentIssue,
   resumeAgentIssue,
 } from "@/lib/ingestion/agent-issues";
-import { listParserRepairs, claimParserRepair, finishParserRepair, configureParserRepairSource } from "@/lib/ingestion/parser-repairs";
+import { listParserRepairs, claimParserRepair, finishParserRepair, configureParserRepair, configureParserRepairSource } from "@/lib/ingestion/parser-repairs";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = {
@@ -21,7 +21,9 @@ const headers = {
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,160}$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const requestSchema = z.discriminatedUnion("operation", [
-  z.object({ operation: z.literal("repair_configure"), repairId: digest, leaseToken: z.string().uuid(), decision: z.unknown(), commit: z.string().regex(/^[a-f0-9]{40}$/) }).strict(),
+  z.object({ operation: z.literal("repair_retarget"), repairId: digest, leaseToken: z.string().uuid(), decision: z.unknown(), commit: z.string().regex(/^[a-f0-9]{40}$/) }).strict(),
+  z.object({ operation: z.literal("repair_configure"), repairId: digest, leaseToken: z.string().uuid(),
+    expectedParserKey: z.string().min(1).max(160), followLinkPattern: z.string().min(1).max(256).nullable() }).strict(),
   z.object({ operation: z.literal("repair_claim"), repairId: digest }).strict(),
   z.object({ operation: z.literal("repair_finish"), repairId: digest, leaseToken: z.string().uuid(),
     result: z.object({ status: z.enum(["completed", "retry"]), reason: z.string().min(10).max(2000),
@@ -104,7 +106,8 @@ export async function POST(request: Request) {
       JSON.parse(Buffer.concat(chunks).toString("utf8")),
     );
     if (!parsed.success) return reply({ error: "Invalid agent request" }, 400);
-    if (parsed.data.operation === "repair_configure") return reply(await configureParserRepairSource(db, parsed.data.repairId, parsed.data.leaseToken, parsed.data.decision, parsed.data.commit));
+    if (parsed.data.operation === "repair_retarget") return reply(await configureParserRepairSource(db, parsed.data.repairId, parsed.data.leaseToken, parsed.data.decision, parsed.data.commit));
+    if (parsed.data.operation === "repair_configure") return reply(await configureParserRepair(db, parsed.data));
     if (parsed.data.operation === "repair_claim") return reply(await claimParserRepair(db, parsed.data.repairId));
     if (parsed.data.operation === "repair_finish") return reply(await finishParserRepair(db, parsed.data.repairId, parsed.data.leaseToken, parsed.data.result));
     if (parsed.data.operation === "claim")

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
-import { fingerprint, ImportAgentError, decisionSchema } from './agent-contract.ts';
+import type { RefreshPolicy } from './types.ts';
 import { mapSource, validateSource } from '../sources/repository.ts';
+import { fingerprint, ImportAgentError, decisionSchema } from './agent-contract.ts';
 const prefix = 'parser-repair-';
 type Database = PrismaClient | Prisma.TransactionClient;
 
@@ -52,6 +53,45 @@ export async function finishParserRepair(db: PrismaClient, id: string, token: st
       resourceKind: 'FESTIVAL', resourceKey: String(old.festivalSlug), afterValue: result } });
     return { status: result.status, repairId: id };
   }, { isolationLevel: 'Serializable', timeout: 30000 });
+}
+
+// Corrections close their original ingestion issue. Activate a newly deployed
+// registered adapter under the repair capability, without reopening that issue
+// or touching catalogue facts, provider jobs, or source failure/backoff state.
+export async function configureParserRepair(db: PrismaClient, input: {
+  repairId: string; leaseToken: string; expectedParserKey: string; followLinkPattern: string | null;
+}) {
+  return db.$transaction(async tx => {
+    const held = await tx.$queryRaw<{payload: Record<string, unknown>; active: boolean}[]>`SELECT payload,
+      ("leaseOwner"=${input.leaseToken} AND "leaseExpiresAt">(clock_timestamp() AT TIME ZONE 'UTC')) active
+      FROM "OperationalState" WHERE key=${prefix+input.repairId} FOR UPDATE`;
+    if (held.length !== 1) throw new ImportAgentError('missing');
+    if (!held[0].active || held[0].payload.status === 'completed') throw new ImportAgentError('busy');
+    const context = held[0].payload;
+    if (typeof context.sourceId !== 'string') throw new ImportAgentError('invalid');
+    const locked = await tx.$queryRaw<{id: string}[]>`SELECT id FROM "FestivalSource" WHERE id=${context.sourceId}
+      AND ("leaseOwner" IS NULL OR "leaseExpiresAt" <= (clock_timestamp() AT TIME ZONE 'UTC')) FOR UPDATE`;
+    if (locked.length !== 1) throw new ImportAgentError('busy');
+    const source = await tx.festivalSource.findUniqueOrThrow({where:{id:context.sourceId},include:{festival:true,edition:true}});
+    if (!source.enabled || source.deprecatedAt || !source.festival || !source.edition || source.edition.recordState !== 'CURRENT'
+      || source.festival.slug !== context.festivalSlug || source.festivalSlug !== context.festivalSlug
+      || (source.fetchUrl ?? source.url) !== context.sourceUrl || source.editionYear !== context.year || source.edition.year !== context.year || source.edition.festivalId !== source.festivalId
+      || context.parserKey !== input.expectedParserKey) throw new ImportAgentError('stale');
+    let parserKey: string;
+    try { parserKey = validateSource({festivalSlug:source.festivalSlug,url:source.url,editionYear:source.editionYear,
+      enabled:source.enabled,refreshPolicy:source.refreshPolicy as RefreshPolicy,strategies:['official_markup'],
+      ...(source.fetchUrl ? {fetchUrl:source.fetchUrl} : {}),...(input.followLinkPattern !== null ? {followLinkPattern:input.followLinkPattern} : {})}); }
+    catch { throw new ImportAgentError('invalid'); }
+    if (source.parserKey === parserKey && source.strategies.join('+') === 'official_markup' && source.followLinkPattern === input.followLinkPattern)
+      return {configured:true,repairId:input.repairId,parserKey};
+    if (source.parserKey !== input.expectedParserKey) throw new ImportAgentError('stale');
+    await tx.festivalSource.update({where:{id:source.id},data:{strategies:['official_markup'],parserKey,
+      followLinkPattern:input.followLinkPattern,manualReviewReason:null,configurationBackfilledAt:new Date(),httpEtag:null,httpLastModified:null}});
+    await tx.adminAuditEntry.create({data:{actorLabel:'OpenClaw parser repair',action:'ingestion.parser.configured',resourceKind:'FESTIVAL',
+      resourceKey:source.festivalSlug,beforeValue:{parserKey:source.parserKey,followLinkPattern:source.followLinkPattern},
+      afterValue:{parserKey,followLinkPattern:input.followLinkPattern},metadata:{repairId:input.repairId,sourceId:source.id}}});
+    return {configured:true,repairId:input.repairId,parserKey};
+  },{isolationLevel:'Serializable',timeout:30000});
 }
 
 // A resolved correction no longer has an agent issue to claim. Configure only
