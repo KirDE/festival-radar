@@ -1,4 +1,5 @@
 import { isFullForceArchivedEdition } from "./adapters/full-force-archive.ts";
+import { extractReadingCandidate } from "./adapters/reading.ts";
 import { extractHtmlFallbackCandidate } from "./adapters/html-fallback.ts";
 import { extractJsonLdCandidate } from "./adapters/json-ld.ts";
 import { extractOfficialMarkupCandidate } from "./adapters/official-markup.ts";
@@ -24,6 +25,10 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
       schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug,
       sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [],
     };
+  }
+  if (source.strategies.includes("html_fallback")) {
+    const reading = extractReadingCandidate(html, source, fetchedAt);
+    if (reading) return reading;
   }
   const candidates = source.strategies.flatMap((strategy) => {
     if (strategy === "json_ld_event") return [extractJsonLdCandidate(html, source, fetchedAt)];
