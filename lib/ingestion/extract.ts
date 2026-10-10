@@ -7,6 +7,11 @@ import { INGESTION_SCHEMA_VERSION } from "./types.ts";
 const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city", "headliners", "lineup", "ticketsUrl", "status", "ticketStatus"];
 
 export function extractFestivalCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  // Summer Breeze's existing HTML source mixes archived news, a navigation filter
+  // and current metadata. Its trusted fallback owns the result; generic Event or
+  // container guesses must not overwrite verified partial artists/billing.
+  if (source.festivalSlug === "summer-breeze" && source.strategies.includes("html_fallback"))
+    return extractHtmlFallbackCandidate(html, source, fetchedAt);
   const candidates = source.strategies.flatMap((strategy) => {
     if (strategy === "json_ld_event") return [extractJsonLdCandidate(html, source, fetchedAt)];
     if (strategy === "html_fallback") return [extractHtmlFallbackCandidate(html, source, fetchedAt)];
