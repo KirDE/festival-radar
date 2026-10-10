@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { extractFestivalCandidate } from '../lib/ingestion/extract.ts';
+import { evaluateCandidate } from '../lib/ingestion/policy.ts';
 import { diffFestival } from '../lib/ingestion/diff.ts';
 import { fetchSource } from '../lib/ingestion/fetch.ts';
 import { frequencyDocuments } from '../lib/ingestion/adapters/frequency.ts';
@@ -73,6 +74,8 @@ test('official document redirect cannot substitute an external ticket page', asy
 
 test('corrected catalog and verified later partial lineup remain unchanged with no provider-triggering additions', async () => {
   const result=parse(frequencyDocuments(await fixture('home'),await fixture('tickets')));
-  const current={id:'frequency',year:2027,name:'Frequency',startDate:'2027-08-19',endDate:'2027-08-21',ticketsUrl:root+'tickets/',ticketStatus:'available',status:'partial',lineup:['Verified Support'],headliners:['Verified Headliner']};
+  const current={id:'frequency',slug:'frequency',editionYear:2027,year:2027,name:'Frequency',startDate:'2027-08-19',endDate:'2027-08-21',ticketsUrl:root+'tickets/',ticketStatus:'available',status:'partial',lineup:['Verified Support'],headliners:['Verified Headliner']};
   assert.deepEqual(diffFestival(current,result),[]);
+  assert.deepEqual(evaluateCandidate(current,result).reviewReasons,[]);
+  assert.equal(evaluateCandidate(current,result).publishable,false);
 });
