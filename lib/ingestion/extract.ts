@@ -52,6 +52,7 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     for (const field of supportedFields) {
       if (merged[field] === undefined && candidate[field] !== undefined) Object.assign(merged, { [field]: candidate[field] });
     }
+    if (candidate.lineupScope && merged.lineup === candidate.lineup) merged.lineupScope = candidate.lineupScope;
     merged.evidence.push(...candidate.evidence.filter(({ field }) => merged[field] !== undefined));
     merged.observedEditionYears.push(...candidate.observedEditionYears);
     merged.warnings.push(...candidate.warnings);

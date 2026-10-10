@@ -30,9 +30,11 @@ export function diffFestival(current: Festival, candidate: FestivalCandidate): F
   scalarChange(changes, "endDate", current.endDate, candidate.endDate);
   scalarChange(changes, "city", current.city, candidate.city);
   scalarChange(changes, "ticketsUrl", current.ticketsUrl, candidate.ticketsUrl);
-  scalarChange(changes, "status", current.status, candidate.status);
+  scalarChange(changes, "status", current.status, candidate.lineupScope === "announcement" && current.status === "confirmed" ? undefined : candidate.status);
   listChanges(changes, "headliners", current.headliners, candidate.headliners, candidate.artistListMode === "additive");
-  listChanges(changes, "lineup", current.lineup, candidate.lineup, candidate.artistListMode === "additive");
+  const announcement = candidate.lineupScope === "announcement";
+  const headliners = new Set(current.headliners.map(name => name.toLocaleLowerCase()));
+  listChanges(changes, "lineup", current.lineup, announcement ? candidate.lineup?.filter(name => !headliners.has(name.toLocaleLowerCase())) : candidate.lineup, announcement || candidate.artistListMode === "additive");
   operationalChanges(changes, current, candidate);
   return changes;
 }

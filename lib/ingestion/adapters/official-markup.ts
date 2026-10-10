@@ -5,11 +5,12 @@ import { novarock } from "./novarock.ts";
 import { copenhell } from "./copenhell.ts";
 import { rockharz } from "./rockharz.ts";
 import { rockstadt } from "./rockstadt.ts";
+import { motocultor } from "./motocultor.ts";
 import { bloodstock } from "./bloodstock.ts";
 import { impericon } from "./impericon.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; ticketsUrl?: string; excerpt: string; warning?: string };
+type AdapterResult = { lineupScope?: "announcement"; artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; ticketsUrl?: string; excerpt: string; warning?: string };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
@@ -410,6 +411,7 @@ const adapters: Record<string, (html: string, source: FestivalSource, fetchedAt:
   bloodstock,
   rockstadt,
   impericon,
+  motocultor,
   rockharz,
   "dynamo-metal-fest": dynamoMetalFest,
   "greenfield": greenfield,
@@ -439,6 +441,7 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     candidate.warnings.push(`Official markup adapter found no trustworthy fields for ${source.festivalSlug}`);
     return candidate;
   }
+  if (result.lineupScope) candidate.lineupScope = result.lineupScope;
   if (result.artistListMode) candidate.artistListMode = result.artistListMode;
   if (result.warning) candidate.warnings.push(result.warning);
   if (result.editionYear) candidate.observedEditionYears.push(result.editionYear);

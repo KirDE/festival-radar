@@ -1,3 +1,4 @@
+import { discoverMotocultorAnnouncement } from "./adapters/motocultor.ts";
 import { isLeedsSource } from "./adapters/leeds.ts";
 import { isReadingSource } from "./adapters/reading.ts";
 import type { FestivalSource } from "./types.ts";
@@ -46,7 +47,22 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     throw new Error("Fetch attempts exhausted without a response");
   };
 
-  const initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (source.festivalSlug === "motocultor" && source.strategies.includes("official_markup") && initial.response.ok) {
+    const url = new URL(source.fetchUrl ?? source.url);
+    if (url.origin === "https://www.motocultor-festival.com" && ["/", "/actualites/"].includes(url.pathname)) {
+      if (url.pathname === "/") {
+        const news = await fetchWithRetry("https://www.motocultor-festival.com/actualites/");
+        initial = { ...news, attempts: initial.attempts + news.attempts };
+        if (!initial.response.ok) return initial;
+      }
+      const linkedUrl = discoverMotocultorAnnouncement(await initial.response.text(), source);
+      if (!linkedUrl) throw Object.assign(new Error("No current-edition Motocultor announcement found"), { attempts: initial.attempts });
+      const linked = await fetchWithRetry(linkedUrl);
+      return { response: linked.response, attempts: initial.attempts + linked.attempts };
+    }
+  }
+
   if (initial.response.ok && isLeedsSource(source) && !source.fetchUrl && initial.response.url && new URL(initial.response.url).origin !== "https://www.leedsfestival.com") throw Object.assign(new Error("Leeds source redirected away from its trusted origin"), { attempts: initial.attempts });
   // Leeds's homepage carries the current festival span but only a sales CTA.
   // Read the same-origin linked live ticket products to establish availability.
