@@ -73,6 +73,8 @@ test.beforeEach(async () => {
   sourceId = source.id;
 });
 test.after(async () => {
+  // A configured source is globally claimable by later CI scheduler suites.
+  await db.festivalSource.deleteMany({ where: { festivalSlug: "synthetic-fest" } });
   await db.$disconnect();
 });
 async function claim() {
