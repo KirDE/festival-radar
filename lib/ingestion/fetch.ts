@@ -1,5 +1,6 @@
 import { isLeedsSource } from "./adapters/leeds.ts";
 import { isReadingSource } from "./adapters/reading.ts";
+import { novarockDocuments, novarockTicketsUrl } from "./adapters/novarock.ts";
 import type { FestivalSource } from "./types.ts";
 
 export type FetchAttempt = { response: Response; attempts: number };
@@ -72,6 +73,11 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     const tickets = await fetchWithRetry("https://www.readingfestival.com/tickets");
     if (tickets.response.ok && tickets.response.url && !/^https:\/\/www\.readingfestival\.com\/tickets\/?$/.test(tickets.response.url)) throw Object.assign(new Error("Reading ticket page redirected away from its trusted landing page"), { attempts: initial.attempts + tickets.attempts });
     return { response: tickets.response, attempts: initial.attempts + tickets.attempts };
+  }
+  if (source.festivalSlug === "nova-rock" && source.strategies.includes("official_markup") && source.url === "https://www.novarock.at/lineup/" && !source.fetchUrl && !source.followLinkPattern && initial.response.ok) {
+    const tickets = await fetchWithRetry(novarockTicketsUrl);
+    if (!tickets.response.ok) return { response: tickets.response, attempts: initial.attempts + tickets.attempts };
+    return { response: new Response(novarockDocuments(await initial.response.text(), await tickets.response.text()), { headers: { "content-type": "application/json" } }), attempts: initial.attempts + tickets.attempts };
   }
   if (!source.followLinkPattern || !initial.response.ok) return initial;
 
