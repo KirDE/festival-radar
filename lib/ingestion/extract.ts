@@ -1,3 +1,4 @@
+import { isFullForceArchivedEdition } from "./adapters/full-force-archive.ts";
 import { extractHtmlFallbackCandidate } from "./adapters/html-fallback.ts";
 import { extractJsonLdCandidate } from "./adapters/json-ld.ts";
 import { extractOfficialMarkupCandidate } from "./adapters/official-markup.ts";
@@ -11,6 +12,7 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     if (strategy === "json_ld_event") return [extractJsonLdCandidate(html, source, fetchedAt)];
     if (strategy === "html_fallback") return [extractHtmlFallbackCandidate(html, source, fetchedAt)];
     if (strategy === "official_markup") return [extractOfficialMarkupCandidate(html, source, fetchedAt)];
+    if (strategy === "manual_review" && isFullForceArchivedEdition(html, source)) return [{ schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] }];
     if (strategy === "manual_review") return [{ schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [`Manual review only: ${source.manualReviewReason ?? "no trustworthy automated extraction path"}`], observedEditionYears: [] }];
     return [];
   });
@@ -24,6 +26,7 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     observedEditionYears: [],
   };
   for (const candidate of candidates) {
+    if (candidate.artistListMode) merged.artistListMode = candidate.artistListMode;
     for (const field of supportedFields) {
       if (merged[field] === undefined && candidate[field] !== undefined) Object.assign(merged, { [field]: candidate[field] });
     }
@@ -31,9 +34,23 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     merged.observedEditionYears.push(...candidate.observedEditionYears);
     merged.warnings.push(...candidate.warnings);
   }
-  const hasEvidence = new Set(merged.evidence.map(({ field }) => field));
+  // Strategies are alternatives: an absent optional format is not a review
+  // failure once another strategy supplied supported field evidence. Keep
+  // all semantic warnings (edition drift, cancellations, lineup quality).
+  const missingFormatWarnings = new Set([
+    "No JSON-LD Event was found",
+    "HTML fallback did not find explicitly marked festival fields",
+  ]);
+  if (merged.evidence.length > 0) {
+    merged.warnings = merged.warnings.filter((warning) => !missingFormatWarnings.has(warning));
+  }
   merged.evidence = merged.evidence.filter(({ field }, index, values) => values.findIndex((evidence) => evidence.field === field) === index);
   merged.observedEditionYears = [...new Set(merged.observedEditionYears)];
   merged.warnings = [...new Set(merged.warnings)];
+  // The JSON-LD format is optional for the verified Rock Werchter homepage.
+  // Keep every actual parse/edition warning, and no-field cases still review.
+  if (source.festivalSlug === "rock-werchter" && merged.artistListMode === "additive" && merged.startDate && merged.endDate) {
+    merged.warnings = merged.warnings.filter(warning => warning !== "No JSON-LD Event was found");
+  }
   return merged;
 }
