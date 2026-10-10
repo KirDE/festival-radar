@@ -7,23 +7,28 @@ import { diffFestival } from "./diff.ts";
 export function evaluateCandidate(current: Festival, candidate: FestivalCandidate): IngestionResult {
   // An incomplete I-Days announcement cannot downgrade a verified full bill.
   if (candidate.festivalSlug === "idays" && candidate.artistListMode === "additive" && candidate.status === "partial" && current.status === "confirmed") candidate = { ...candidate, status: undefined };
-  // The Rockharz "announced so far" grid includes headliners without marking
-  // their billing. Reconcile against independently reviewed catalogue names,
-  // not a fixed bill: known headliners must not be demoted or added twice.
-  // Truly new captions still require artist review before provider activity.
+  // Additive first-wave pages do not redefine independently reviewed billing.
+  // Scope each reconciliation to its own registered source and edition.
+  const rockstadtAnnouncement = current.slug === "rockstadt" && candidate.festivalSlug === current.slug &&
+    candidate.sourceUrl === "https://bilete.rockstadtextremefest.ro/bilete-rockstadt-fest-2027-129242/" &&
+    current.editionYear === 2027 && candidate.observedEditionYears.length === 1 &&
+    candidate.observedEditionYears[0] === 2027 && candidate.artistListMode === "additive" &&
+    candidate.evidence.some(item => item.field === "lineup");
   const rockharzGrid = current.slug === "rockharz" && candidate.festivalSlug === current.slug &&
     candidate.sourceUrl === "https://www.rockharz-festival.com/bands" && current.editionYear === 2027 &&
     candidate.observedEditionYears.length === 1 && candidate.observedEditionYears[0] === 2027 &&
     candidate.artistListMode === "additive" && candidate.evidence.some(e => e.field === "lineup");
   const reviewedNames = new Set([...current.headliners, ...current.lineup].map(name => name.toLocaleLowerCase()));
   const reviewedHeadliners = new Set(current.headliners.map(name => name.toLocaleLowerCase()));
-  const effective = rockharzGrid ? { ...candidate,
-    lineup: candidate.lineup?.filter(name => !reviewedHeadliners.has(name.toLocaleLowerCase())) } : candidate;
+  const reconcileBilling = rockstadtAnnouncement || rockharzGrid;
+  const warnings = candidate.warnings.filter(warning => !(candidate.lineup?.every(name => reviewedNames.has(name.toLocaleLowerCase())) &&
+    ((rockstadtAnnouncement && warning === "Agent review required before lineup-triggered provider activity") ||
+     (rockharzGrid && warning.startsWith("New Rockharz captions are provisional and require independent artist review:")))));
+  const effective = reconcileBilling ? { ...candidate,
+    ...(rockstadtAnnouncement && current.status === "confirmed" ? { status: current.status } : {}),
+    lineup: candidate.lineup?.filter(name => !reviewedHeadliners.has(name.toLocaleLowerCase())),
+    warnings } : candidate;
   const changes = diffFestival(current, effective);
-  const warnings = candidate.warnings.filter(warning => !(rockharzGrid &&
-    warning.startsWith("New Rockharz captions are provisional and require independent artist review:") &&
-    candidate.lineup?.every(name => reviewedNames.has(name.toLocaleLowerCase()))));
-  if (rockharzGrid) effective.warnings = warnings;
   const unchangedIdays = candidate.festivalSlug === "idays" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
   const reviewReasons = new Set(warnings.filter(warning => !(unchangedIdays && warning === IDAYS_ARTIST_REVIEW)));
   if (candidate.festivalSlug !== current.slug) reviewReasons.add("Candidate slug does not match the current festival");
