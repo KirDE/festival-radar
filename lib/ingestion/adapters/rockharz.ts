@@ -157,7 +157,7 @@ function bands(content: string) {
   const additions = names.filter((name) => !baseline.includes(name));
   const canonical = names.map((name) => reviewedAliases[name]?.canonical ?? name);
   if (new Set(canonical.map((name) => name.toLocaleLowerCase())).size !== canonical.length) return undefined;
-  return { editionYear: 2027, lineup: canonical,
+  return { editionYear: 2027, lineup: canonical, artistListMode: "additive" as const,
     excerpt: `${heading}; ${names.length} closed band_item anchor titles; exact reviewed aliases: IGELS VS. SHARK → IGEL VS. SHARK, SETYOURSAILS → SETYØURSAILS, SKALD → SKÁLD; all 29 reviewed baseline captions present: ${names.join(", ")}`,
     ...(additions.length ? { warning: `New Rockharz captions are provisional and require independent artist review: ${additions.join(", ")}` } : {}) };
 }
