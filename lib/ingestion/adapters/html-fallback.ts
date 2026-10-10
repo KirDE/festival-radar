@@ -1,6 +1,7 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 import { extractOfficialMarkupCandidate } from "./official-markup.ts";
+import { extractResurrectionCandidate } from "./resurrection.ts";
 import { validateGenericLineup } from "../lineup-quality.ts";
 
 type SupportedField = FieldEvidence["field"];
@@ -104,6 +105,9 @@ export function extractHtmlFallbackCandidate(html: string, source: FestivalSourc
   if (source.festivalSlug === "rock-werchter") {
     const official = extractOfficialMarkupCandidate(html, source, fetchedAt);
     if (official.evidence.length) return official;
+  }
+  if (source.festivalSlug === "resurrection-fest" && new URL(source.url).hostname === "www.resurrectionfest.es") {
+    return extractResurrectionCandidate(html, source, fetchedAt);
   }
   const candidate: FestivalCandidate = {
     schemaVersion: INGESTION_SCHEMA_VERSION,
