@@ -35,9 +35,12 @@ test("exact ticket article extracts only the six first names, dates, city and 20
   assert.equal(candidate.city, "Ghimbav (Brașov)");
   assert.deepEqual(candidate.lineup, artists);
   assert.equal(candidate.headliners, undefined);
-  assert.equal(candidate.status, undefined); // no claim of complete lineup
+  assert.equal(candidate.status, "partial");
+  assert.equal(candidate.artistListMode, "additive");
+  assert.equal(candidate.ticketStatus, "available");
+  assert.equal(candidate.ticketsUrl, url);
   assert.deepEqual(candidate.observedEditionYears, [2027]);
-  assert.deepEqual(candidate.evidence.map(({ field }) => field), ["startDate", "endDate", "city", "lineup"]);
+  assert.deepEqual(candidate.evidence.map(({ field }) => field), ["startDate", "endDate", "city", "lineup", "status", "ticketStatus", "ticketsUrl"]);
   assert.ok(candidate.evidence.every((item) => item.sourceUrl === url && item.observedAt === at && item.excerpt.includes(announcement.replace(/<\/?strong>/g, ""))));
   assert.deepEqual(candidate.warnings, ["Agent review required before lineup-triggered provider activity"]);
   const result = evaluateCandidate(current, candidate);
@@ -85,18 +88,29 @@ test("optional event metadata corroborates the id, name, dates and venue; malfor
   noEvidence(fixture.replace(metadata, metadata + metadata));
 });
 
-test("old edition, wrong heading, dates, location and rename prose fail closed", () => {
+test("old edition, wrong heading, dates and location fail closed", () => {
   noEvidence(fixture.replaceAll("2027", "2026").replaceAll("'27", "'26").replaceAll("&#039;27", "&#039;26"));
-  for (const [before, after] of [["<h1>Rockstadt Fest 2027</h1>", "<h1>Rockstadt Fest 2026</h1>"], ["26-30 iulie '27", "26-30 iulie '26"], ["26-30 iulie '27", "25-30 iulie '27"], ["26-30 iulie '27", "26-31 iulie '27"], ["26-30 iulie '27", "26-30 august '27"], ["<strong>Rockstadt Fest, Ghimbav (Brașov)</strong>", "<strong>Rockstadt Fest, Râșnov</strong>"], ["Starting with the 2027 edition", "Starting with the 2026 edition"], ["we become Rockstadt Festival.", "we become Rockstadt Extreme Fest."], ["What started as Rockstadt Extreme Fest", "What started as Another Festival"]]) noEvidence(fixture.replace(before, after));
+  for (const [before, after] of [["<h1>Rockstadt Fest 2027</h1>", "<h1>Rockstadt Fest 2026</h1>"], ["26-30 iulie '27", "26-30 iulie '26"], ["26-30 iulie '27", "25-30 iulie '27"], ["26-30 iulie '27", "26-31 iulie '27"], ["26-30 iulie '27", "26-30 august '27"], ["<strong>Rockstadt Fest, Ghimbav (Brașov)</strong>", "<strong>Rockstadt Fest, Râșnov</strong>"], ["Starting with the 2027 edition", "Starting with the 2026 edition"]]) noEvidence(fixture.replace(before, after));
 });
 
-test("missing, additional, duplicate or altered artist identities and announcements fail closed", () => {
-  for (const artist of artists) noEvidence(fixture.replace(artists.join(", "), artists.filter((name) => name !== artist).join(", ")));
-  for (const replacement of [artists.join(", ") + ", Extra Artist", artists.join(", ") + ", Overkill", artists.join(", ").replace("Mgla", "Mgła"), artists.join(", ").replace("Slash featuring Myles Kennedy and The Conspirators", "Slash"), artists.join(", ").replace("Venom", "<em>Venom</em>")]) noEvidence(fixture.replace(artists.join(", "), replacement));
+test("dynamic first-wave names are extracted without hardcoded identities or removals", () => {
+  for (const names of [artists.slice(0, -1), [...artists, "Extra Artist"], ["Mgła", "Venom Inc.", "Slash"], ["Future Artist", "Another Artist"]]) {
+    const candidate = extract(fixture.replace(artists.join(", "), names.join(", ")));
+    assert.deepEqual(candidate.lineup, names);
+    assert.equal(candidate.status, "partial");
+    const result = evaluateCandidate({ ...current, lineup: artists }, candidate);
+    assert.equal(result.changes.some(change => change.kind === "artist_removed"), false);
+    if (names.some(name => !artists.includes(name))) assert.equal(result.publishable, false);
+  }
+  assert.deepEqual(extract(fixture.replace("A new name. The same heartbeat.", "More names to come this autumn.")).lineup, artists);
+});
+
+test("ambiguous, duplicate or malformed announcements fail closed", () => {
+  for (const replacement of [artists.join(", ") + ", Overkill", "", ", Overkill", "1234", artists.join(", ").replace("Venom", "<em>Venom</em>")]) noEvidence(fixture.replace(artists.join(", "), replacement));
   noEvidence(fixture.replace(announcement, announcement + "<br>" + announcement));
   noEvidence(fixture.replace(desc, desc + desc));
-  noEvidence(fixture.replace(announcement, "Extra Artist<br>" + announcement));
   noEvidence(fixture.replace(announcement, announcement + "<br>Also confirmed: Extra Artist"));
+  noEvidence(fixture.replace(announcement, announcement + "<br>Jinjer cancelled"));
 });
 
 test("navigation, JSON-LD, footer and unrelated event boxes cannot supply or expand evidence", () => {
@@ -118,4 +132,50 @@ test("empty, truncated and malformed documents cannot borrow closing tags or pro
   noEvidence(fixture.replace("</body>", "</div></body>"));
   noEvidence(fixture.replace("</body>", "<div></body>"));
   noEvidence(fixture.replace('<div class="read-more" data-read-more="container">', '<div class="read-more" data-read-more="container" />'));
+});
+
+test("real public booking anchors prove sales; disabled, off-host, merch and stale prices do not", () => {
+  for (const [before, after] of [
+    ['class="order-form-widget can-book"', 'class="order-form-widget"'],
+    ['data-disable-submit="0"', 'data-disable-submit="1"'],
+    ['data-max-nr-tickets="20"', 'data-max-nr-tickets="0"'],
+    ['data-is-ticket-nr="1"', 'data-is-ticket-nr="1" disabled="disabled"'],
+    ['data-is-order-form-submit="true"', 'data-is-order-form-submit="true" disabled'],
+    ['data-tariff-name="Abonament - Acces General"', 'data-tariff-name="Transport and Merchandise"'],
+    ['data-tariff-sell-price="848.4"', 'data-tariff-sell-price="0"'],
+    ['action="https://bilete.rockstadtextremefest.ro/widgetOrderForm/bookEvent/"', 'action="https://evil.example/book/"'],
+    [`data-return-url="${url}"`, 'data-return-url="https://bilete.rockstadtextremefest.ro/2026/"'],
+  ]) {
+    const candidate = extract(fixture.replace(before, after));
+    assert.deepEqual(candidate.lineup, artists);
+    assert.equal(candidate.ticketStatus, undefined);
+    assert.equal(candidate.ticketsUrl, undefined);
+  }
+  const noForm = fixture.replace(/<form\b[\s\S]*?<\/form>/, "");
+  assert.equal(extract(noForm.replace('</head>', '<script type="application/ld+json">{"offers":{"availability":"InStock","price":800}}</script></head>')).ticketStatus, undefined);
+  assert.equal(extract(fixture.replace('data-tariff-sell-price="848.4"', 'data-tariff-sell-price="950"')).ticketStatus, "available");
+});
+
+test("corrected checks are quiet, preserve later lineup and billing, while new names still need review", () => {
+  const corrected = { ...current, city: "Ghimbav (Brașov)", startDate: "2027-07-26", endDate: "2027-07-30",
+    status: "partial", ticketsUrl: url, ticketStatus: "available", lineup: [...artists, "Later Reviewed Act"] };
+  const unchanged = evaluateCandidate(corrected, extract(fixture));
+  assert.deepEqual(unchanged.changes, []);
+  assert.deepEqual(unchanged.reviewReasons, []);
+  const billing = evaluateCandidate({ ...corrected, headliners: [artists[0]], lineup: corrected.lineup.slice(1) }, extract(fixture));
+  assert.deepEqual(billing.changes, []);
+  assert.deepEqual(billing.reviewReasons, []);
+  const added = evaluateCandidate(corrected, extract(fixture.replace(artists.join(", "), [...artists, "Future Act"].join(", "))));
+  assert.equal(added.publishable, false);
+  assert.ok(added.reviewReasons.includes("Agent review required before lineup-triggered provider activity"));
+  assert.deepEqual(added.changes.map(change => [change.kind, change.after]), [["artist_added", "Future Act"]]);
+  const complete = evaluateCandidate({ ...corrected, status: "confirmed" }, extract(fixture));
+  assert.deepEqual(complete.changes, []);
+  assert.equal(complete.candidate.status, "confirmed");
+  const semantic = extract(fixture);
+  semantic.warnings.push("Independent provenance conflict");
+  assert.deepEqual(evaluateCandidate(corrected, semantic).reviewReasons, ["Independent provenance conflict"]);
+  const wrongEdition = evaluateCandidate({ ...corrected, editionYear: 2026 }, extract(fixture));
+  assert.equal(wrongEdition.publishable, false);
+  assert.ok(wrongEdition.reviewReasons.length);
 });
