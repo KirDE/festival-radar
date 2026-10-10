@@ -24,6 +24,7 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     observedEditionYears: [],
   };
   for (const candidate of candidates) {
+    if (candidate.artistListMode) merged.artistListMode = candidate.artistListMode;
     for (const field of supportedFields) {
       if (merged[field] === undefined && candidate[field] !== undefined) Object.assign(merged, { [field]: candidate[field] });
     }

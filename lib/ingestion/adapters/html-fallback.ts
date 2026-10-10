@@ -63,6 +63,7 @@ function ticketLink(html: string, sourceUrl: string): { value: string; excerpt: 
     if (!/\b(ticket|tickets|karten|billet|billets|entradas)\b/.test(tagAndText)) continue;
     try {
       const url = new URL(decode(match[1] ?? match[2]), sourceUrl);
+      if (url.hash || /\b(?:faq|register|registration|newsletter)\b/.test(tagAndText)) continue;
       if (url.protocol === "https:") return { value: url.href, excerpt: match[0].slice(0, 500) };
     } catch {
       continue;
