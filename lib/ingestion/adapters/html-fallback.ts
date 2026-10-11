@@ -1,3 +1,4 @@
+import { extractBrutalAssaultCandidate } from "./brutal-assault.ts";
 import { extractMysticCandidate } from "./mystic.ts";
 import { extractIdaysCandidate } from "./idays.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
@@ -108,6 +109,8 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
 }
 
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  const brutalAssault = extractBrutalAssaultCandidate(html, source, fetchedAt);
+  if (brutalAssault) return brutalAssault;
   if (source.festivalSlug === "mystic") return extractMysticCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "masters-of-rock") return extractMastersOfRockCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "idays") return extractIdaysCandidate(html, source, fetchedAt);

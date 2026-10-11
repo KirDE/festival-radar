@@ -1,3 +1,4 @@
+import { handlesBrutalAssault, fetchBrutalAssaultDocuments } from "./adapters/brutal-assault.ts";
 import { isCopenhellCurrentSource, copenhellUrl, copenhellNews, copenhellArtistLinks, copenhellEnvelope, type CopenhellDocument } from "./adapters/copenhell-current.ts";
 import { isRockInRomaSource } from "./adapters/rock-in-roma.ts";
 import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
@@ -56,6 +57,7 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && handlesBrutalAssault(source)) return fetchBrutalAssaultDocuments(source, initial, fetchWithRetry);
   if (initial.response.ok && isInfernoSource(source) && source.strategies.includes("html_fallback") && initial.response.url && !isInfernoResponse(initial.response.url)) throw Object.assign(new Error("Inferno source redirected away from its official homepage"), { attempts: initial.attempts });
   if (source.festivalSlug === "motocultor" && source.strategies.includes("official_markup") && initial.response.ok) {
     const url = new URL(source.fetchUrl ?? source.url);
