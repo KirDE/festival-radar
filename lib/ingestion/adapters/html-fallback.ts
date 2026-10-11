@@ -2,6 +2,7 @@ import { extractBrutalAssaultCandidate } from "./brutal-assault.ts";
 import { extractIdaysCandidate } from "./idays.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
+import { extractMastersOfRockCandidate } from "./masters-of-rock.ts";
 import { extractSummerBreezeCandidate } from "./summer-breeze.ts";
 import { extractEurockeennesCandidate } from "./eurockeennes.ts";
 import { applyBarcelonaBanner } from "./barcelona-banner.ts";
@@ -109,6 +110,7 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const brutalAssault = extractBrutalAssaultCandidate(html, source, fetchedAt);
   if (brutalAssault) return brutalAssault;
+  if (source.festivalSlug === "masters-of-rock") return extractMastersOfRockCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "idays") return extractIdaysCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "summer-breeze") return extractSummerBreezeCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "eurockeennes") return extractEurockeennesCandidate(html, source, fetchedAt);
