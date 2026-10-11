@@ -1,4 +1,5 @@
 import { extractRoadburnCandidate } from "./adapters/roadburn.ts";
+import { extractRockInRomaCandidate } from "./adapters/rock-in-roma.ts";
 import { extractInfernoCandidate } from "./adapters/inferno.ts";
 import { extractFrequencyCandidate } from "./adapters/frequency.ts";
 import { extractPaleoCandidate } from "./adapters/paleo.ts";
@@ -27,6 +28,8 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
   if (source.festivalSlug === "summer-breeze" && source.strategies.includes("html_fallback"))
     return extractHtmlFallbackCandidate(html, source, fetchedAt);
   if (source.strategies.includes("html_fallback")) {
+    const roma = extractRockInRomaCandidate(html, source, fetchedAt);
+    if (roma) return roma;
     const inferno = extractInfernoCandidate(html, source, fetchedAt);
     if (inferno) return inferno;
     const frequency = extractFrequencyCandidate(html, source, fetchedAt);
