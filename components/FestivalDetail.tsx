@@ -95,10 +95,10 @@ export function FestivalDetail({
           <small>{t("official")}</small>
           <strong>{t("festivalWebsite")}</strong>
         </a>
-        {tickets.status === "available" ? (
-          <a href={tickets.href} target="_blank" rel="noreferrer">
-            <small>{t("passes")}</small>
-            <strong>{t(tickets.label)}</strong>
+        {tickets.href ? (
+          <a href={tickets.href} target="_blank" rel="noreferrer" data-ticket-status={tickets.status}>
+            <small>{t(tickets.status === "available" ? "passes" : tickets.label)}</small>
+            <strong>{t(tickets.status === "available" ? tickets.label : "ticketsInfo")}</strong>
           </a>
         ) : (
           <div className="disabled" data-ticket-status={tickets.status}>
