@@ -43,3 +43,18 @@ test('festival and official-host scope prevent generic headings from affecting o
     assert.equal(parse(html, config).startDate, undefined); assert.equal(parse(html, config).ticketStatus, undefined);
   }
 });
+
+test('live English banner postposes now and preserves verified catalogue facts', () => {
+  const live = html.replace('julio', 'july').replace('tickets ya a la venta', 'tickets on sale now').replace('/tickets"', '/en/tickets"');
+  const c = parse(live);
+  assert.equal(c.startDate, '2027-07-01'); assert.equal(c.endDate, '2027-07-04');
+  assert.equal(c.ticketStatus, 'available'); assert.deepEqual(c.warnings, []);
+  const current = { slug: source.festivalSlug, editionYear: 2027, startDate: c.startDate, endDate: c.endDate, ticketsUrl: c.ticketsUrl, ticketStatus: 'available', status: 'partial', headliners: ['Verified headliner'], lineup: ['Verified support'] };
+  const result = evaluateCandidate(current, c); assert.deepEqual(result.changes, []); assert.deepEqual(result.reviewReasons, []);
+  for (const notice of ['Tickets are on sale now', 'Tickets are now on sale', 'Tickets on sale', 'Tickets are on sale']) {
+    assert.equal(parse(live.replace('tickets on sale now', notice)).ticketStatus, 'available');
+  }
+  for (const notice of ['Tickets on sale now soon', 'Tickets on sale now: early bird sold out', 'Tickets on sale tomorrow', 'Tickets not on sale now']) {
+    assert.equal(parse(live.replace('tickets on sale now', notice)).ticketStatus, undefined);
+  }
+});
