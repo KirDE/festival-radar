@@ -1,3 +1,4 @@
+import { isRockInRomaSource } from "./adapters/rock-in-roma.ts";
 import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
 import { discoverMotocultorAnnouncement } from "./adapters/motocultor.ts";
 import { isFrequencySource, frequencyTicketLink, frequencyDocuments } from "./adapters/frequency.ts";
@@ -69,6 +70,20 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     }
   }
 
+  // The home page mixes old concert news with current navigation. Discover
+  // only the linked same-origin lineup for the configured edition.
+  if (initial.response.ok && isRockInRomaSource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern && new URL(source.url).pathname === "/") {
+    if (initial.response.url && new URL(initial.response.url).origin !== "https://rockinroma.com") throw Object.assign(new Error("Rock in Roma homepage redirected away from its trusted origin"), { attempts: initial.attempts });
+    const html = await initial.response.text();
+    const path = `/lineup-${source.editionYear}/`;
+    const linked = [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)].some(match => {
+      try { const url = new URL(match[1], source.url); return url.origin === "https://rockinroma.com" && url.pathname === path && !url.search && !url.hash; } catch { return false; }
+    });
+    if (!linked) return { response: new Response(html, { status: initial.response.status, headers: initial.response.headers }), attempts: initial.attempts };
+    const lineup = await fetchWithRetry(new URL(path, source.url).href);
+    if (lineup.response.ok && lineup.response.url && lineup.response.url !== new URL(path, source.url).href) throw Object.assign(new Error("Rock in Roma lineup redirected away from its trusted edition page"), { attempts: initial.attempts + lineup.attempts });
+    return { response: lineup.response, attempts: initial.attempts + lineup.attempts };
+  }
   if (initial.response.ok && isFrequencySource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern && new URL(source.url).pathname === "/") {
     if (initial.response.url && new URL(initial.response.url).origin !== "https://www.frequency.at") throw Object.assign(new Error("Frequency homepage redirected away from its official origin"), { attempts: initial.attempts });
     const home = await initial.response.text();
