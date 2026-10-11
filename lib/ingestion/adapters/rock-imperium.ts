@@ -20,7 +20,7 @@ function clean(html: string): string {
   return html.replace(/<!--[\s\S]*?-->/g, "").replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
 }
 function text(html: string): string {
-  return html.replace(/<[^>]*>/g, " ").replace(/&amp;|&#38;/gi, "&").replace(/&#\d+;|&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
+  return html.replace(/<[^>]*>/g, " ").replace(/&amp;|&#38;/gi, "&").replace(/&nbsp;/gi, " ").replace(/&#(\d+);/g, (_, n) => { const code = Number(n); return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : " "; }).replace(/&quot;/gi, '"').replace(/&apos;/gi, "'").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
 }
 function title(html: string): string { return text(clean(html).match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? ""); }
 function currentTitle(html: string, year: number): boolean {
@@ -68,6 +68,41 @@ export function findRockImperiumProduct(document: PassDocument, year: number): s
     })));
 }
 
+// The live linked promoter keeps a textual first-wave announcement even when
+// the official homepage bill is image-only. Read sentence subjects, not every
+// name mentioned in history/tribute prose, and never reuse older festival news.
+const announcementMarker = /(?:primera|nueva) (?:ronda|tanda) de confirmaciones|(?:first|new) (?:wave|round) of confirmations/i;
+
+function announcedArtists(document: PassDocument, year: number): string[] | undefined {
+  if (!currentTitle(document.html, year)) return undefined;
+  const html = clean(document.html).replace(/<(nav|header|footer)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+  const paragraphs = [...html.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)].map(m => text(m[1]));
+  const blocks = paragraphs.filter(p => announcementMarker.test(p));
+  const artistParagraphs = paragraphs.filter(p => !/^(?:Ticket information|Información entradas)\s*:/i.test(p));
+  if (blocks.length !== 1 || /cancelación|retirada|no actuar[aá]|sustituye|baja del cartel|cancelled|canceled|withdrawn|will not perform|replaces/i.test(artistParagraphs.join(" "))) return undefined;
+  const block = blocks[0];
+  if ([...block.matchAll(/\b20\d{2}\b/g)].some(([y]) => Number(y) !== year)) return undefined;
+  const names: string[] = [];
+  for (const sentence of block.split(/\.\s+/)) {
+    // Each supported grammar identifies the performing subject explicitly.
+    // Appositions and contextual tribute names must never enter the bill.
+    const name = sentence.match(/^Como gran cabeza de este (?:primer|nuevo) anuncio, (.+?) llegar[aá] a Rock Imperium\b/i)?.[1]
+      ?? sentence.match(/^(.+?) (?:rendir[aá] homenaje|llegar[aá] a Rock Imperium)\b/i)?.[1]
+      ?? sentence.match(/^([^,]+), [^,]+, ofrecer[aá]n?\b/i)?.[1]
+      ?? sentence.match(/^As the (?:major )?headliner of this (?:first|new) announcement, (.+?) will arrive at Rock Imperium\b/i)?.[1]
+      ?? sentence.match(/^(.+?) will (?:pay tribute|arrive at Rock Imperium)\b/i)?.[1]
+      ?? sentence.match(/^([^,]+), (?:worldwide )?standard-bearers of [^,]+$/i)?.[1]
+      ?? sentence.match(/^Completing this (?:first|new) round of confirmations (?:is|are) ([^,]+),/i)?.[1]
+      ?? sentence.match(/^Completa(?:n)? esta (?:primera|nueva) ronda de confirmaciones ([^,]+),/i)?.[1];
+    if (name !== undefined) names.push(name.trim());
+  }
+  if (!names.length || names.length > 50 || names.some(name => name.length > 100 ||
+    !/^[\p{Lu}\d][\p{L}\p{N} &'’$!+().-]*$/u.test(name) ||
+    /^(?:La formación|El festival|The (?:most|band|festival)|Como|Completa|Después|As the|Completing|After)\b/i.test(name) || /\b20\d{2}\b/.test(name)) ||
+    new Set(names.map(name => name.toLocaleLowerCase())).size !== names.length) return undefined;
+  return names;
+}
+
 export function extractRockImperiumCandidate(input: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   let home = input;
   let documents: PassDocument[] = [];
@@ -104,6 +139,17 @@ export function extractRockImperiumCandidate(input: string, source: FestivalSour
   // Keep the independently reviewed official gateway, never stale /en/tickets/.
   add("ticketsUrl", source.url, { url: source.url, html: home }, `Current official ticket gateway links to ${landingUrl}`);
   const landing = documents.find(d => d.url === landingUrl);
+  if (landing && announcementMarker.test(text(clean(landing.html)))) {
+    const names = announcedArtists(landing, source.editionYear);
+    if (names) {
+      candidate.lineup = names;
+      candidate.lineupScope = "announcement";
+      candidate.status = "partial";
+      const excerpt = `Current linked first-wave announcement: ${names.join(", ")}`;
+      for (const field of ["lineup", "status"] as const)
+        candidate.evidence.push({ field, sourceUrl: landing.url, observedAt: fetchedAt, excerpt });
+    } else candidate.warnings.push("Current Rock Imperium announcement is ambiguous or contains cancellation/replacement language");
+  }
   const categoryUrl = landing && findRockImperiumCategory(landing, source.editionYear);
   const category = documents.find(d => d.url === categoryUrl);
   const productUrl = category && findRockImperiumProduct(category, source.editionYear);
@@ -118,6 +164,6 @@ export function extractRockImperiumCandidate(input: string, source: FestivalSour
   } else {
     candidate.warnings.push("Current general-pass purchase is disabled or availability is unclear");
   }
-  // No inferred billing/completeness or replacement lineup from first-round news.
+  // Unranked first-wave subjects are additive; never replace billing or remove absent acts.
   return candidate;
 }
