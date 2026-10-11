@@ -1,3 +1,4 @@
+import { ROADBURN_ARTIST_REVIEW } from "./adapters/roadburn.ts";
 import { IDAYS_ARTIST_REVIEW } from "./adapters/idays.ts";
 import type { Festival } from "../domain/festival.ts";
 import type { FestivalCandidate, IngestionResult } from "./types.ts";
@@ -33,7 +34,9 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
   // Nova Rock's provider gate protects actual artist/billing changes, not
   // unchanged verified cards or independent ticket metadata refreshes.
   const unchangedNovaLineup = candidate.festivalSlug === "nova-rock" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
+  const unchangedRoadburn = candidate.festivalSlug === "roadburn" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
   const reviewReasons = new Set(warnings.filter(warning =>
+    !(unchangedRoadburn && warning === ROADBURN_ARTIST_REVIEW) &&
     !(unchangedIdays && warning === IDAYS_ARTIST_REVIEW) &&
     !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
 

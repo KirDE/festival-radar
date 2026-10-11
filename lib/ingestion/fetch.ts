@@ -1,3 +1,4 @@
+import { isRoadburnSource, roadburnUrl, roadburnLinked, discoverRoadburnAnnouncements, roadburnDocuments, type RoadburnDocument } from "./adapters/roadburn.ts";
 import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
 import { discoverMotocultorAnnouncement } from "./adapters/motocultor.ts";
 import { isFrequencySource, frequencyTicketLink, frequencyDocuments } from "./adapters/frequency.ts";
@@ -53,6 +54,35 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && isRoadburnSource(source) && !source.fetchUrl && !source.followLinkPattern) {
+    if (initial.response.url && initial.response.url !== source.url) throw new Error("Roadburn homepage redirected away from its trusted route");
+    const home = await initial.response.text();
+    let attempts = initial.attempts;
+    const linked = async (url: string) => {
+      const result = await fetchWithRetry(url, "error"); attempts += result.attempts;
+      if (result.response.ok && result.response.url && roadburnUrl(result.response.url) !== url) throw new Error("Roadburn linked document redirected away from its trusted route");
+      return result.response;
+    };
+    const documents: RoadburnDocument[] = [];
+    let listing = home;
+    if (roadburnLinked(home, "/news/")) {
+      const news = await linked("https://roadburn.com/news/");
+      if (!news.ok) return { response: news, attempts };
+      listing = await news.text();
+    }
+    for (const url of discoverRoadburnAnnouncements(listing, source.editionYear)) {
+      const response = await linked(url);
+      if (!response.ok) return { response, attempts };
+      documents.push({ url, html: await response.text() });
+    }
+    let tickets = "";
+    if (roadburnLinked(home, "/tickets/")) {
+      const response = await linked("https://roadburn.com/tickets/");
+      if (!response.ok) return { response, attempts };
+      tickets = await response.text();
+    }
+    return { response: new Response(roadburnDocuments(home, documents, tickets), { headers: { "content-type": "application/json" } }), attempts };
+  }
   if (initial.response.ok && isInfernoSource(source) && source.strategies.includes("html_fallback") && initial.response.url && !isInfernoResponse(initial.response.url)) throw Object.assign(new Error("Inferno source redirected away from its official homepage"), { attempts: initial.attempts });
   if (source.festivalSlug === "motocultor" && source.strategies.includes("official_markup") && initial.response.ok) {
     const url = new URL(source.fetchUrl ?? source.url);
