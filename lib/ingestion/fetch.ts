@@ -1,3 +1,4 @@
+import { isPolandrockSource, polandrockAnnouncementUrl } from "./adapters/polandrock.ts";
 import { handlesBrutalAssault, fetchBrutalAssaultDocuments } from "./adapters/brutal-assault.ts";
 import { isCopenhellCurrentSource, copenhellUrl, copenhellNews, copenhellArtistLinks, copenhellEnvelope, type CopenhellDocument } from "./adapters/copenhell-current.ts";
 import { isRockInRomaSource } from "./adapters/rock-in-roma.ts";
@@ -125,6 +126,23 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     const lineup = await fetchWithRetry(new URL(path, source.url).href);
     if (lineup.response.ok && lineup.response.url && lineup.response.url !== new URL(path, source.url).href) throw Object.assign(new Error("Rock in Roma lineup redirected away from its trusted edition page"), { attempts: initial.attempts + lineup.attempts });
     return { response: lineup.response, attempts: initial.attempts + lineup.attempts };
+  }
+  if (isPolandrockSource(source) && initial.response.ok) {
+    if (initial.response.url && new URL(initial.response.url).origin !== new URL(source.url).origin) throw Object.assign(new Error("Pol'and'Rock homepage redirected off official origin"), { attempts: initial.attempts });
+    const html = await initial.response.text();
+    const url = polandrockAnnouncementUrl(html, source);
+    if (url) {
+      const announcement = await fetchWithRetry(url);
+      const attempts = initial.attempts + announcement.attempts;
+      // Provider failures remain real failures; never wrap a 403 as HTTP200.
+      if (!announcement.response.ok) return { response: announcement.response, attempts };
+      if (announcement.response.url && new URL(announcement.response.url).origin !== new URL(source.url).origin) throw Object.assign(new Error("Pol'and'Rock announcement redirected off official origin"), { attempts });
+      const body = await announcement.response.text();
+      return { response: new Response(`${html}\n<template data-pnr-announcement-source="${encodeURIComponent(url)}">${body}</template>`, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } }), attempts };
+    }
+    // No announcement alone is not failure: retain current dated roster and
+    // leave absent endDate untouched rather than guessing festival duration.
+    return { response: new Response(html, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } }), attempts: initial.attempts };
   }
   if (initial.response.ok && isFrequencySource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern && new URL(source.url).pathname === "/") {
     if (initial.response.url && new URL(initial.response.url).origin !== "https://www.frequency.at") throw Object.assign(new Error("Frequency homepage redirected away from its official origin"), { attempts: initial.attempts });
