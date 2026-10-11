@@ -1,3 +1,4 @@
+import { extractInfernoCandidate } from "./adapters/inferno.ts";
 import { extractFrequencyCandidate } from "./adapters/frequency.ts";
 import { extractPaleoCandidate } from "./adapters/paleo.ts";
 import { extractLeedsCandidate } from "./adapters/leeds.ts";
@@ -23,6 +24,8 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
   if (source.festivalSlug === "summer-breeze" && source.strategies.includes("html_fallback"))
     return extractHtmlFallbackCandidate(html, source, fetchedAt);
   if (source.strategies.includes("html_fallback")) {
+    const inferno = extractInfernoCandidate(html, source, fetchedAt);
+    if (inferno) return inferno;
     const frequency = extractFrequencyCandidate(html, source, fetchedAt);
     if (frequency) return frequency;
     const paleo = extractPaleoCandidate(html, source, fetchedAt);

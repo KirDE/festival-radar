@@ -1,3 +1,4 @@
+import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
 import { discoverMotocultorAnnouncement } from "./adapters/motocultor.ts";
 import { isFrequencySource, frequencyTicketLink, frequencyDocuments } from "./adapters/frequency.ts";
 import { isPaleoSource, paleoTicketLink, isPaleoTicketUrl } from "./adapters/paleo.ts";
@@ -52,6 +53,7 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && isInfernoSource(source) && source.strategies.includes("html_fallback") && initial.response.url && !isInfernoResponse(initial.response.url)) throw Object.assign(new Error("Inferno source redirected away from its official homepage"), { attempts: initial.attempts });
   if (source.festivalSlug === "motocultor" && source.strategies.includes("official_markup") && initial.response.ok) {
     const url = new URL(source.fetchUrl ?? source.url);
     if (url.origin === "https://www.motocultor-festival.com" && ["/", "/actualites/"].includes(url.pathname)) {
