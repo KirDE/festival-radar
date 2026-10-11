@@ -1,7 +1,10 @@
+import { extractInfernoCandidate } from "./adapters/inferno.ts";
 import { extractFrequencyCandidate } from "./adapters/frequency.ts";
+import { extractPaleoCandidate } from "./adapters/paleo.ts";
 import { extractLeedsCandidate } from "./adapters/leeds.ts";
 import { isFullForceArchivedEdition } from "./adapters/full-force-archive.ts";
 import { extractReadingCandidate } from "./adapters/reading.ts";
+import { isRockImperiumSource, extractRockImperiumCandidate } from "./adapters/rock-imperium.ts";
 import { isMadCoolArchivedEdition } from "./adapters/mad-cool-archive.ts";
 import { isPistoiaBluesArchivedEdition } from "./adapters/pistoia-blues-archive.ts";
 import { extractHtmlFallbackCandidate } from "./adapters/html-fallback.ts";
@@ -14,14 +17,19 @@ import { INGESTION_SCHEMA_VERSION } from "./types.ts";
 const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city", "headliners", "lineup", "ticketsUrl", "status", "ticketStatus"];
 
 export function extractFestivalCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  if (isRockImperiumSource(source)) return extractRockImperiumCandidate(html, source, fetchedAt);
   // Summer Breeze's existing HTML source mixes archived news, a navigation filter
   // and current metadata. Its trusted fallback owns the result; generic Event or
   // container guesses must not overwrite verified partial artists/billing.
   if (source.festivalSlug === "summer-breeze" && source.strategies.includes("html_fallback"))
     return extractHtmlFallbackCandidate(html, source, fetchedAt);
   if (source.strategies.includes("html_fallback")) {
+    const inferno = extractInfernoCandidate(html, source, fetchedAt);
+    if (inferno) return inferno;
     const frequency = extractFrequencyCandidate(html, source, fetchedAt);
     if (frequency) return frequency;
+    const paleo = extractPaleoCandidate(html, source, fetchedAt);
+    if (paleo) return paleo;
     const leeds = extractLeedsCandidate(html, source, fetchedAt);
     if (leeds) return leeds;
   }
