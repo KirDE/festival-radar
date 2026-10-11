@@ -1,4 +1,5 @@
 import { extractBrutalAssaultCandidate } from "./brutal-assault.ts";
+import { extractIdaysCandidate } from "./idays.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 import { extractSummerBreezeCandidate } from "./summer-breeze.ts";
@@ -108,6 +109,7 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const brutalAssault = extractBrutalAssaultCandidate(html, source, fetchedAt);
   if (brutalAssault) return brutalAssault;
+  if (source.festivalSlug === "idays") return extractIdaysCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "summer-breeze") return extractSummerBreezeCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "eurockeennes") return extractEurockeennesCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "sweden-rock") return extractSwedenRockCandidate(html, source, fetchedAt);
