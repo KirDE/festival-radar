@@ -94,3 +94,53 @@ test("production bot English navigation follows translated product slug and Buy 
   const r = await fetchSource(source, { maxAttempts: 1, fetchImpl: async u => { assert.ok(pages.has(u)); return new Response(pages.get(u)); } });
   const c = extractFestivalCandidate(await r.response.text(), source, "now"); assert.equal(c.ticketStatus, "available"); assert.deepEqual(c.warnings, []);
 });
+
+const announced = () => { const e = envelope(); e.documents[0].html += fixture("announcement"); return e; };
+test("real second correction: current linked promoter prose supplies Mayhem and Erik without stale Venom", () => {
+  const c = extract(announced());
+  assert.deepEqual(c.lineup, ["Helloween", "Children Of Bodom", "Mayhem", "Erik Grönwall"]);
+  assert.equal(c.lineupScope, "announcement"); assert.equal(c.status, "partial"); assert.equal(c.headliners, undefined);
+  assert.equal(c.ticketStatus, "available"); assert.equal(c.ticketsUrl, source.url);
+  assert.equal(c.evidence.find(e => e.field === "lineup").sourceUrl, landing);
+  const current = { slug: "rock-imperium", editionYear: 2027, startDate: "2027-07-02", endDate: "2027-07-04", ticketsUrl: source.url, ticketStatus: "available", status: "partial", headliners: ["Bruce Dickinson", "Children of Bodom", "Helloween"], lineup: ["Mayhem", "Erik Grönwall"] };
+  const r = evaluateCandidate(current, c); assert.deepEqual(r.changes, []); assert.deepEqual(r.reviewReasons, []);
+  const missing = evaluateCandidate({ ...current, lineup: [] }, c);
+  assert.deepEqual(missing.changes.map(x => x.after), ["Mayhem", "Erik Grönwall"]);
+});
+test("future named confirmations and entity-encoded artists are parsed, not a frozen bill", () => {
+  const e = announced(); e.documents[0].html = e.documents[0].html.replaceAll("Helloween", "The Offspring").replaceAll("Children Of Bodom", "Sons Of Apollo").replaceAll("Mayhem", "Parkway Drive").replaceAll("Erik Grönwall", "Rock &amp; Roll");
+  assert.deepEqual(extract(e).lineup, ["The Offspring", "Sons Of Apollo", "Parkway Drive", "Rock & Roll"]);
+});
+test("first-wave absence never removes reviewed acts or downgrades a full bill", () => {
+  const r = evaluateCandidate({ slug: "rock-imperium", editionYear: 2027, status: "confirmed", headliners: ["Helloween"], lineup: ["Venom", "Bruce Dickinson", "Children Of Bodom", "Mayhem", "Erik Grönwall"] }, extract(announced()));
+  assert.ok(!r.changes.some(x => /removed/.test(x.kind) || x.field === "status"));
+});
+for (const phrase of ["cancelación", "retirada", "no actuará", "sustituye"]) test(`cancellation/replacement language blocks additive announcement: ${phrase}`, () => {
+  const e = announced(); e.documents[0].html = e.documents[0].html.replace("auténtico lujo", phrase);
+  assert.equal(extract(e).lineup, undefined); assert.ok(extract(e).warnings.some(w => /announcement/.test(w)));
+});
+test("wrong edition promoter title and unlinked document cannot supply lineup", () => {
+  const e = announced(); e.documents[0].html = e.documents[0].html.replaceAll("2027", "2026"); assert.equal(extract(e).lineup, undefined);
+  const u = envelope(); u.documents.push({ url: "https://www.rockimperiumfestival.es/es/primeras-bandas-anunciadas-para-rock-imperium-2027/", html: fixture("announcement") + "<p>Venom</p>" }); assert.equal(extract(u).lineup, undefined);
+});
+test("current year header does not license old-edition announcement paragraphs", () => {
+  const e = announced(); e.documents[0].html = e.documents[0].html.replace("España de 2027", "España de 2026"); assert.equal(extract(e).lineup, undefined);
+});
+test("unknown prose subjects fail closed, never becoming artist names", () => {
+  const e = announced(); e.documents[0].html = e.documents[0].html.replace("Mayhem, estandartes", "La formación, estandartes"); assert.equal(extract(e).lineup, undefined);
+});
+test("future edition follows live prose but never pins poster names or hashes", () => {
+  const e = JSON.parse(JSON.stringify(announced()).replaceAll("2027", "2028"));
+  assert.deepEqual(extract(e, { ...source, editionYear: 2028 }).lineup, ["Helloween", "Children Of Bodom", "Mayhem", "Erik Grönwall"]);
+});
+
+test("live English promoter text supplies the same additive confirmations", () => {
+  const e = envelope(); e.documents[0].html += fixture("announcement-en");
+  assert.deepEqual(extract(e).lineup, ["Helloween", "Children Of Bodom", "Mayhem", "Erik Grönwall"]);
+  assert.deepEqual(extract(e).warnings, []);
+});
+test("English later announcement uses new subjects and blocks explicit withdrawals", () => {
+  const e = envelope(); e.documents[0].html += fixture("announcement-en").replaceAll("Mayhem", "New Band").replaceAll("Erik Grönwall", "Another Artist");
+  assert.deepEqual(extract(e).lineup, ["Helloween", "Children Of Bodom", "New Band", "Another Artist"]);
+  e.documents[0].html += "<p>New Band will not perform.</p>"; assert.equal(extract(e).lineup, undefined);
+});

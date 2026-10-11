@@ -1,3 +1,4 @@
+import { isCopenhellCurrentSource, COPENHELL_REVIEW } from "./adapters/copenhell-current.ts";
 import { IDAYS_ARTIST_REVIEW } from "./adapters/idays.ts";
 import type { Festival } from "../domain/festival.ts";
 import type { FestivalCandidate, IngestionResult } from "./types.ts";
@@ -33,10 +34,18 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
   // Nova Rock's provider gate protects actual artist/billing changes, not
   // unchanged verified cards or independent ticket metadata refreshes.
   const unchangedNovaLineup = candidate.festivalSlug === "nova-rock" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
+  const unchangedCopenhell = candidate.festivalSlug === "copenhell" && current.slug === candidate.festivalSlug &&
+    current.editionYear === candidate.observedEditionYears[0] && candidate.observedEditionYears.length === 1 &&
+    isCopenhellCurrentSource({ festivalSlug: candidate.festivalSlug, url: candidate.sourceUrl, editionYear: current.editionYear, strategies: ["official_markup"], enabled: true, refreshPolicy: "weekly" }) &&
+    !changes.some(change => ["lineup", "headliners"].includes(change.field));
   const reviewReasons = new Set(warnings.filter(warning =>
+    !(unchangedCopenhell && warning === COPENHELL_REVIEW) &&
     !(unchangedIdays && warning === IDAYS_ARTIST_REVIEW) &&
     !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
-
+  // Known, unchanged Dynamo facts are successful quiet checks. New performers
+  // still need agent review: their publication would enqueue provider work.
+  if (current.slug === "dynamo-metal-fest" && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))
+    reviewReasons.add("Agent review required before lineup-triggered provider activity");
   if (candidate.festivalSlug !== current.slug) reviewReasons.add("Candidate slug does not match the current festival");
   const catalogueYear = current.editionYear ?? (current.startDate ? Number(current.startDate.slice(0, 4)) : undefined);
   const mismatchedYears = catalogueYear ? candidate.observedEditionYears.filter((year) => year !== catalogueYear) : [];

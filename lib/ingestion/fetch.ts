@@ -1,4 +1,5 @@
 import { handlesBrutalAssault, fetchBrutalAssaultDocuments } from "./adapters/brutal-assault.ts";
+import { isCopenhellCurrentSource, copenhellUrl, copenhellNews, copenhellArtistLinks, copenhellEnvelope, type CopenhellDocument } from "./adapters/copenhell-current.ts";
 import { isRockInRomaSource } from "./adapters/rock-in-roma.ts";
 import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
 import { discoverMotocultorAnnouncement } from "./adapters/motocultor.ts";
@@ -9,6 +10,7 @@ import { isReadingSource } from "./adapters/reading.ts";
 import { isRockImperiumSource, envelopeKind, findRockImperiumLanding, findRockImperiumCategory, findRockImperiumProduct, type PassDocument } from "./adapters/rock-imperium.ts";
 import { novarockDocuments, novarockTicketsUrl } from "./adapters/novarock.ts";
 import type { FestivalSource } from "./types.ts";
+import { discoverDynamoBands, isDynamoAnnouncement } from "./adapters/dynamo.ts";
 
 export type FetchAttempt = { response: Response; attempts: number };
 export type FetchOptions = {
@@ -72,6 +74,31 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     }
   }
 
+  if (initial.response.ok && isCopenhellCurrentSource(source)) {
+    if (initial.response.url && !copenhellUrl(initial.response.url)) throw new Error("Copenhell source redirected outside its official origin");
+    const documents: CopenhellDocument[] = [{ url: source.url, html: await initial.response.text() }];
+    let attempts = initial.attempts;
+    const read = async (url: string): Promise<Response | undefined> => {
+      if (documents.some(d => d.url === url)) return undefined;
+      const result = await fetchWithRetry(url, "error"); attempts += result.attempts;
+      if (!result.response.ok) return result.response;
+      if (result.response.url && result.response.url !== url) throw new Error("Copenhell official document redirected");
+      documents.push({ url, html: await result.response.text() });
+      return undefined;
+    };
+    const homeError = await read("https://copenhell.dk/");
+    if (homeError) return { response: homeError, attempts };
+    const home = documents.find(d => d.url === "https://copenhell.dk/")!;
+    for (const url of [...copenhellNews(home.html, source.editionYear), "https://copenhell.dk/program/", "https://copenhell.dk/billetter/"]) {
+      const error = await read(url); if (error) return { response: error, attempts };
+    }
+    const program = documents.find(d => d.url === "https://copenhell.dk/program/")!;
+    for (const card of copenhellArtistLinks(program.html).filter(c => c.name.toUpperCase() === "ANGEL DUST")) {
+      const error = await read(card.url); if (error) return { response: error, attempts };
+    }
+    return { response: new Response(JSON.stringify({ kind: copenhellEnvelope, documents }), { headers: { "content-type": "application/json" } }), attempts };
+  }
+
   // The home page mixes old concert news with current navigation. Discover
   // only the linked same-origin lineup for the configured edition.
   if (initial.response.ok && isRockInRomaSource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern && new URL(source.url).pathname === "/") {
@@ -133,6 +160,21 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     const tickets = await fetchWithRetry("https://www.readingfestival.com/tickets");
     if (tickets.response.ok && tickets.response.url && !/^https:\/\/www\.readingfestival\.com\/tickets\/?$/.test(tickets.response.url)) throw Object.assign(new Error("Reading ticket page redirected away from its trusted landing page"), { attempts: initial.attempts + tickets.attempts });
     return { response: tickets.response, attempts: initial.attempts + tickets.attempts };
+  }
+  if (initial.response.ok && isDynamoAnnouncement(source)) {
+    let attempts = initial.attempts;
+    try {
+      const body = await discoverDynamoBands(await initial.response.text(), async (url) => {
+        const linked = await fetchWithRetry(url);
+        attempts += linked.attempts;
+        return linked.response;
+      });
+      const headers = new Headers(initial.response.headers);
+      headers.delete("content-length"); headers.delete("content-encoding");
+      return { response: new Response(body, { status: 200, headers }), attempts };
+    } catch (error) {
+      throw Object.assign(error instanceof Error ? error : new Error(String(error)), { attempts });
+    }
   }
   if (isRockImperiumSource(source) && initial.response.ok) {
     const finalUrl = new URL(initial.response.url || source.url);
