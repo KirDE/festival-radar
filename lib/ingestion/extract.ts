@@ -1,4 +1,5 @@
 import { extractRoadburnCandidate } from "./adapters/roadburn.ts";
+import { extractCopenhellCurrent } from "./adapters/copenhell-current.ts";
 import { extractRockInRomaCandidate } from "./adapters/rock-in-roma.ts";
 import { extractInfernoCandidate } from "./adapters/inferno.ts";
 import { extractFrequencyCandidate } from "./adapters/frequency.ts";
@@ -21,6 +22,8 @@ const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city
 export function extractFestivalCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const roadburn = extractRoadburnCandidate(html, source, fetchedAt);
   if (roadburn) return roadburn;
+  const copenhell = extractCopenhellCurrent(html, source, fetchedAt);
+  if (copenhell) return copenhell;
   if (isRockImperiumSource(source)) return extractRockImperiumCandidate(html, source, fetchedAt);
   // Summer Breeze's existing HTML source mixes archived news, a navigation filter
   // and current metadata. Its trusted fallback owns the result; generic Event or
