@@ -1,9 +1,11 @@
 import { isRockInRomaSource } from "./adapters/rock-in-roma.ts";
+import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
 import { discoverMotocultorAnnouncement } from "./adapters/motocultor.ts";
 import { isFrequencySource, frequencyTicketLink, frequencyDocuments } from "./adapters/frequency.ts";
 import { isPaleoSource, paleoTicketLink, isPaleoTicketUrl } from "./adapters/paleo.ts";
 import { isLeedsSource } from "./adapters/leeds.ts";
 import { isReadingSource } from "./adapters/reading.ts";
+import { isRockImperiumSource, envelopeKind, findRockImperiumLanding, findRockImperiumCategory, findRockImperiumProduct, type PassDocument } from "./adapters/rock-imperium.ts";
 import { novarockDocuments, novarockTicketsUrl } from "./adapters/novarock.ts";
 import type { FestivalSource } from "./types.ts";
 
@@ -22,12 +24,12 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   const sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
   const baseDelayMs = Math.max(0, options.baseDelayMs ?? 1_000);
-  const fetchWithRetry = async (url: string): Promise<FetchAttempt> => {
+  const fetchWithRetry = async (url: string, redirect: RequestRedirect = "follow"): Promise<FetchAttempt> => {
     let response: Response | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       response = await fetchImpl(url, {
-        redirect: "follow",
+        redirect,
         signal: AbortSignal.timeout(20_000),
         headers: {
           accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -52,6 +54,7 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && isInfernoSource(source) && source.strategies.includes("html_fallback") && initial.response.url && !isInfernoResponse(initial.response.url)) throw Object.assign(new Error("Inferno source redirected away from its official homepage"), { attempts: initial.attempts });
   if (source.festivalSlug === "motocultor" && source.strategies.includes("official_markup") && initial.response.ok) {
     const url = new URL(source.fetchUrl ?? source.url);
     if (url.origin === "https://www.motocultor-festival.com" && ["/", "/actualites/"].includes(url.pathname)) {
@@ -128,6 +131,27 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     const tickets = await fetchWithRetry("https://www.readingfestival.com/tickets");
     if (tickets.response.ok && tickets.response.url && !/^https:\/\/www\.readingfestival\.com\/tickets\/?$/.test(tickets.response.url)) throw Object.assign(new Error("Reading ticket page redirected away from its trusted landing page"), { attempts: initial.attempts + tickets.attempts });
     return { response: tickets.response, attempts: initial.attempts + tickets.attempts };
+  }
+  if (isRockImperiumSource(source) && initial.response.ok) {
+    const finalUrl = new URL(initial.response.url || source.url);
+    if (finalUrl.protocol !== "https:" || finalUrl.hostname !== "www.rockimperiumfestival.es" || !/^\/(?:es\/|en\/)?$/.test(finalUrl.pathname))
+      throw new Error("Rock Imperium homepage redirected outside its official gateway");
+    const home = await initial.response.text();
+    const documents: PassDocument[] = [];
+    let attempts = initial.attempts;
+    let url = findRockImperiumLanding(home, source);
+    for (let hop = 0; hop < 3 && url; hop += 1) {
+      // Linked seller pages must not redirect outside the reviewed origin.
+      const linked = await fetchWithRetry(url, "error");
+      attempts += linked.attempts;
+      if (!linked.response.ok) return { response: linked.response, attempts };
+      if (linked.response.url && linked.response.url !== url) throw new Error("Rock Imperium linked document redirected");
+      const document = { url, html: await linked.response.text() };
+      documents.push(document);
+      url = hop === 0 ? findRockImperiumCategory(document, source.editionYear)
+        : hop === 1 ? findRockImperiumProduct(document, source.editionYear) : undefined;
+    }
+    return { response: new Response(JSON.stringify({ kind: envelopeKind, home, documents }), { status: 200, headers: { "content-type": "application/json" } }), attempts };
   }
   if (source.festivalSlug === "nova-rock" && source.strategies.includes("official_markup") && source.url === "https://www.novarock.at/lineup/" && !source.fetchUrl && !source.followLinkPattern && initial.response.ok) {
     const tickets = await fetchWithRetry(novarockTicketsUrl);
