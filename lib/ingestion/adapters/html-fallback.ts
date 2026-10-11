@@ -1,4 +1,5 @@
 import { extractPolandrockCandidate, isPolandrockSource } from "./polandrock.ts";
+import { extractMysticCandidate } from "./mystic.ts";
 import { extractIdaysCandidate } from "./idays.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
@@ -109,6 +110,7 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
 
 export function extractHtmlFallbackCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   if (isPolandrockSource(source)) return extractPolandrockCandidate(html, source, fetchedAt);
+  if (source.festivalSlug === "mystic") return extractMysticCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "masters-of-rock") return extractMastersOfRockCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "idays") return extractIdaysCandidate(html, source, fetchedAt);
   if (source.festivalSlug === "summer-breeze") return extractSummerBreezeCandidate(html, source, fetchedAt);
