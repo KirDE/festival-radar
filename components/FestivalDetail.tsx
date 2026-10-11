@@ -187,6 +187,7 @@ export function FestivalDetail({
       <PlanningTools item={item} festivals={festivals} />
       <section className="sourceNote">
         <strong>{t("transparency")}</strong>
+        <p>{t("catalogUpdated", { date: prettyDate(item.updatedAt.slice(0, 10)) })}</p>
         <p>{item.sourceDeprecated ? t("sourceDeprecatedHelp") : t("sourceText")}</p>
         <a href={item.officialUrl} target="_blank" rel="noreferrer">
           {t("primarySource")}
