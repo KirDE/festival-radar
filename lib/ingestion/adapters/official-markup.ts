@@ -1,3 +1,4 @@
+import { leyendas } from "./leyendas.ts";
 import { graspop } from "./graspop.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { rockWerchter } from "./rock-werchter.ts";
@@ -12,7 +13,7 @@ import { bloodstock } from "./bloodstock.ts";
 import { impericon } from "./impericon.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-type AdapterResult = { noAnnouncement?: boolean; lineupScope?: "announcement"; artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; ticketsUrl?: string; ticketsExcerpt?: string; excerpt: string; lineupSourceUrl?: string; warning?: string };
+type AdapterResult = { noAnnouncement?: boolean; lineupScope?: "announcement"; artistListMode?: "additive"; editionYear?: number; startDate?: string; endDate?: string; city?: string; headliners?: string[]; lineup?: string[]; status?: FestivalCandidate["status"]; ticketStatus?: FestivalCandidate["ticketStatus"]; ticketsUrl?: string; ticketsExcerpt?: string; excerpt: string; lineupSourceUrl?: string; warning?: string; warnings?: string[] };
 
 const months: Record<string, string> = { januari: "01", februari: "02", maart: "03", april: "04", mei: "05", juni: "06", juli: "07", augustus: "08", september: "09", oktober: "10", november: "11", december: "12" };
 const pad = (value: string) => value.padStart(2, "0");
@@ -404,11 +405,6 @@ function tolminator(html: string): AdapterResult | undefined {
   return { startDate: `${date[3]}-07-${pad(date[1])}`, endDate: `${date[3]}-08-${pad(date[2])}`, excerpt: date[0] };
 }
 
-function leyendas(html: string): AdapterResult | undefined {
-  const title = html.match(/<title[^>]*>[\s\S]*?Leyendas del Rock\s+(20\d{2})[\s\S]*?<\/title>/i);
-  return title ? { excerpt: title[0].replace(/<[^>]+>/g, " ").trim() } : undefined;
-}
-
 const adapters: Record<string, (html: string, source: FestivalSource, fetchedAt: string) => AdapterResult | undefined> = {
   "firenze-rocks": firenzeRocks,
   "rock-werchter": rockWerchter,
@@ -452,6 +448,7 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
   if (result.lineupScope) candidate.lineupScope = result.lineupScope;
   if (result.artistListMode) candidate.artistListMode = result.artistListMode;
   if (result.warning) candidate.warnings.push(result.warning);
+  if (result.warnings) candidate.warnings.push(...result.warnings);
   if (result.editionYear) candidate.observedEditionYears.push(result.editionYear);
   if (result.startDate) candidate.observedEditionYears.push(Number(result.startDate.slice(0, 4)));
   for (const field of ["startDate", "endDate", "city", "headliners", "lineup", "status", "ticketStatus", "ticketsUrl"] as const) {
