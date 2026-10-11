@@ -1,4 +1,5 @@
 import { extractRockInRomaCandidate } from "./adapters/rock-in-roma.ts";
+import { extractAlpenFlairCandidate } from './adapters/alpen-flair.ts';
 import { extractInfernoCandidate } from "./adapters/inferno.ts";
 import { extractFrequencyCandidate } from "./adapters/frequency.ts";
 import { extractPaleoCandidate } from "./adapters/paleo.ts";
@@ -27,6 +28,8 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
   if (source.strategies.includes("html_fallback")) {
     const roma = extractRockInRomaCandidate(html, source, fetchedAt);
     if (roma) return roma;
+    const alpen = extractAlpenFlairCandidate(html, source, fetchedAt);
+    if (alpen) return alpen;
     const inferno = extractInfernoCandidate(html, source, fetchedAt);
     if (inferno) return inferno;
     const frequency = extractFrequencyCandidate(html, source, fetchedAt);
