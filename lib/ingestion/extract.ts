@@ -4,6 +4,7 @@ import { isFullForceArchivedEdition } from "./adapters/full-force-archive.ts";
 import { extractReadingCandidate } from "./adapters/reading.ts";
 import { isRockImperiumSource, extractRockImperiumCandidate } from "./adapters/rock-imperium.ts";
 import { isMadCoolArchivedEdition } from "./adapters/mad-cool-archive.ts";
+import { isPistoiaBluesArchivedEdition } from "./adapters/pistoia-blues-archive.ts";
 import { extractHtmlFallbackCandidate } from "./adapters/html-fallback.ts";
 import { extractJsonLdCandidate } from "./adapters/json-ld.ts";
 import { extractOfficialMarkupCandidate } from "./adapters/official-markup.ts";
@@ -15,6 +16,11 @@ const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city
 
 export function extractFestivalCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   if (isRockImperiumSource(source)) return extractRockImperiumCandidate(html, source, fetchedAt);
+  // Summer Breeze's existing HTML source mixes archived news, a navigation filter
+  // and current metadata. Its trusted fallback owns the result; generic Event or
+  // container guesses must not overwrite verified partial artists/billing.
+  if (source.festivalSlug === "summer-breeze" && source.strategies.includes("html_fallback"))
+    return extractHtmlFallbackCandidate(html, source, fetchedAt);
   if (source.strategies.includes("html_fallback")) {
     const frequency = extractFrequencyCandidate(html, source, fetchedAt);
     if (frequency) return frequency;
@@ -36,11 +42,15 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     const reading = extractReadingCandidate(html, source, fetchedAt);
     if (reading) return reading;
   }
+  // Alcatraz mixes the current banner with an archived bill and ticket terms.
+  // Its trusted fallback owns this existing source, not generic Event guesses.
+  if (source.festivalSlug === "alcatraz" && source.strategies.includes("html_fallback"))
+    return extractHtmlFallbackCandidate(html, source, fetchedAt);
   const candidates = source.strategies.flatMap((strategy) => {
     if (strategy === "json_ld_event") return [extractJsonLdCandidate(html, source, fetchedAt)];
     if (strategy === "html_fallback") return [extractHtmlFallbackCandidate(html, source, fetchedAt)];
     if (strategy === "official_markup") return [extractOfficialMarkupCandidate(html, source, fetchedAt)];
-    if (strategy === "manual_review" && (isFullForceArchivedEdition(html, source) || isMadCoolArchivedEdition(html, source))) return [{ schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] }];
+    if (strategy === "manual_review" && (isFullForceArchivedEdition(html, source) || isMadCoolArchivedEdition(html, source) || isPistoiaBluesArchivedEdition(html, source))) return [{ schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [], observedEditionYears: [] }];
     if (strategy === "manual_review") return [{ schemaVersion: INGESTION_SCHEMA_VERSION, festivalSlug: source.festivalSlug, sourceUrl: source.url, fetchedAt, evidence: [], warnings: [`Manual review only: ${source.manualReviewReason ?? "no trustworthy automated extraction path"}`], observedEditionYears: [] }];
     return [];
   });
@@ -58,6 +68,7 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
     for (const field of supportedFields) {
       if (merged[field] === undefined && candidate[field] !== undefined) Object.assign(merged, { [field]: candidate[field] });
     }
+    if (candidate.lineupScope && merged.lineup === candidate.lineup) merged.lineupScope = candidate.lineupScope;
     merged.evidence.push(...candidate.evidence.filter(({ field }) => merged[field] !== undefined));
     merged.observedEditionYears.push(...candidate.observedEditionYears);
     merged.warnings.push(...candidate.warnings);
