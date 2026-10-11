@@ -1,4 +1,5 @@
 import { extractFrequencyCandidate } from "./adapters/frequency.ts";
+import { extractPaleoCandidate } from "./adapters/paleo.ts";
 import { extractLeedsCandidate } from "./adapters/leeds.ts";
 import { isFullForceArchivedEdition } from "./adapters/full-force-archive.ts";
 import { extractReadingCandidate } from "./adapters/reading.ts";
@@ -22,6 +23,8 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
   if (source.strategies.includes("html_fallback")) {
     const frequency = extractFrequencyCandidate(html, source, fetchedAt);
     if (frequency) return frequency;
+    const paleo = extractPaleoCandidate(html, source, fetchedAt);
+    if (paleo) return paleo;
     const leeds = extractLeedsCandidate(html, source, fetchedAt);
     if (leeds) return leeds;
   }
