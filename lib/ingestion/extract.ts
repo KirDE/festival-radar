@@ -1,3 +1,4 @@
+import { extractCopenhellCurrent } from "./adapters/copenhell-current.ts";
 import { extractRockInRomaCandidate } from "./adapters/rock-in-roma.ts";
 import { extractAlpenFlairCandidate } from './adapters/alpen-flair.ts';
 import { extractInfernoCandidate } from "./adapters/inferno.ts";
@@ -19,6 +20,8 @@ import { INGESTION_SCHEMA_VERSION } from "./types.ts";
 const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city", "headliners", "lineup", "ticketsUrl", "status", "ticketStatus"];
 
 export function extractFestivalCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  const copenhell = extractCopenhellCurrent(html, source, fetchedAt);
+  if (copenhell) return copenhell;
   if (isRockImperiumSource(source)) return extractRockImperiumCandidate(html, source, fetchedAt);
   // Summer Breeze's existing HTML source mixes archived news, a navigation filter
   // and current metadata. Its trusted fallback owns the result; generic Event or
