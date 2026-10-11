@@ -14,7 +14,7 @@ export function isReadingSource(source: FestivalSource): boolean {
 
 // Remove non-visible nodes before using purchase controls or date banners. This
 // avoids commented/hidden stale products, scripts and cookie/navigation copy.
-function visibleHtml(html: string): string {
+export function visibleHtml(html: string): string {
   html = html.replace(/<!--[\s\S]*?-->|<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
   const stack: { tag: string; hidden: boolean }[] = [];
   let result = "";
