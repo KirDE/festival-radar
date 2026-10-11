@@ -1,5 +1,6 @@
 import { ALPEN_ARTIST_REVIEW } from './adapters/alpen-flair.ts';
 import { isCopenhellCurrentSource, COPENHELL_REVIEW } from "./adapters/copenhell-current.ts";
+import { LEYENDAS_ARTIST_REVIEW, LEYENDAS_ORIGIN } from "./adapters/leyendas.ts";
 import { IDAYS_ARTIST_REVIEW } from "./adapters/idays.ts";
 import type { Festival } from "../domain/festival.ts";
 import type { FestivalCandidate, IngestionResult } from "./types.ts";
@@ -31,6 +32,10 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     lineup: candidate.lineup?.filter(name => !reviewedHeadliners.has(name.toLocaleLowerCase())),
     warnings } : candidate;
   const changes = diffFestival(current, effective);
+  const unchangedLeyendas = candidate.festivalSlug === "leyendas-del-rock" && current.slug === candidate.festivalSlug &&
+    candidate.sourceUrl === LEYENDAS_ORIGIN + "/" && candidate.artistListMode === "additive" &&
+    candidate.lineupScope === "announcement" && candidate.observedEditionYears.length === 1 &&
+    candidate.observedEditionYears[0] === current.editionYear && !changes.some(change => ["lineup", "headliners"].includes(change.field));
   const unchangedIdays = candidate.festivalSlug === "idays" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
   // Nova Rock's provider gate protects actual artist/billing changes, not
   // unchanged verified cards or independent ticket metadata refreshes.
@@ -42,6 +47,7 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
   const reviewReasons = new Set(warnings.filter(warning =>
     !(candidate.festivalSlug === "alpen-flair" && !changes.some(change => ["lineup", "headliners"].includes(change.field)) && warning === ALPEN_ARTIST_REVIEW) &&
     !(unchangedCopenhell && warning === COPENHELL_REVIEW) &&
+    !(unchangedLeyendas && warning === LEYENDAS_ARTIST_REVIEW) &&
     !(unchangedIdays && warning === IDAYS_ARTIST_REVIEW) &&
     !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
   // Known, unchanged Dynamo facts are successful quiet checks. New performers

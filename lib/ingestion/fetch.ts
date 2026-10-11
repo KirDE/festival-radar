@@ -1,6 +1,7 @@
 import { isPolandrockSource, polandrockAnnouncementUrl } from "./adapters/polandrock.ts";
 import { handlesBrutalAssault, fetchBrutalAssaultDocuments } from "./adapters/brutal-assault.ts";
 import { isCopenhellCurrentSource, copenhellUrl, copenhellNews, copenhellArtistLinks, copenhellEnvelope, type CopenhellDocument } from "./adapters/copenhell-current.ts";
+import { isLeyendasSource, leyendasLinkedRoute, leyendasNewsLinks, LEYENDAS_ORIGIN, LEYENDAS_DOCUMENTS } from "./adapters/leyendas.ts";
 import { isRockInRomaSource } from "./adapters/rock-in-roma.ts";
 import { isAlpenFlairSource, alpenAnnouncements, alpenEnvelope } from './adapters/alpen-flair.ts';
 import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
@@ -60,6 +61,29 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
   if (initial.response.ok && handlesBrutalAssault(source)) return fetchBrutalAssaultDocuments(source, initial, fetchWithRetry);
+  if (initial.response.ok && isLeyendasSource(source) && !source.fetchUrl && !source.followLinkPattern) {
+    if (initial.response.url && initial.response.url !== LEYENDAS_ORIGIN + "/") throw new Error("Leyendas homepage redirected away from the official origin");
+    const home = await initial.response.text();
+    if (!leyendasLinkedRoute(home, "/noticias/") || !leyendasLinkedRoute(home, "/tickets/")) throw new Error("Leyendas official news/ticket links are missing");
+    let attempts = initial.attempts;
+    const document = async (path: string) => {
+      const result = await fetchWithRetry(path, "error"); attempts += result.attempts;
+      if (!result.response.ok) return {failed: result.response};
+      if (result.response.url && result.response.url !== path) throw new Error("Leyendas linked document redirected");
+      const html = await result.response.text();
+      if (/request is being verified|<title[^>]*>\s*(?:One moment|Just a moment)|cf-chl-/i.test(html)) throw new Error("Leyendas official document is blocked by a verification challenge");
+      return {html};
+    };
+    const news = await document(LEYENDAS_ORIGIN + "/noticias/"); if (news.failed) return {response: news.failed, attempts};
+    if (!/<h1\b[^>]*>\s*NOTICIAS\s*<\/h1>/i.test(news.html!)) throw new Error("Leyendas official news index markup is missing");
+    const tickets = await document(LEYENDAS_ORIGIN + "/tickets/"); if (tickets.failed) return {response: tickets.failed, attempts};
+    const posts = [];
+    for (const url of leyendasNewsLinks(news.html!, source).slice(0, 8)) {
+      const post = await document(url); if (post.failed) return {response: post.failed, attempts};
+      posts.push({url, html: post.html!});
+    }
+    return {response: new Response(JSON.stringify({kind: LEYENDAS_DOCUMENTS, home, news: news.html, tickets: tickets.html, posts}), {headers: {"content-type": "application/json"}}), attempts};
+  }
   if (initial.response.ok && isInfernoSource(source) && source.strategies.includes("html_fallback") && initial.response.url && !isInfernoResponse(initial.response.url)) throw Object.assign(new Error("Inferno source redirected away from its official homepage"), { attempts: initial.attempts });
   if (initial.response.ok && isAlpenFlairSource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern) {
     if (initial.response.url && !isAlpenFlairSource({ ...source, url: initial.response.url })) throw new Error("Alpen Flair homepage redirected away from its trusted route");
