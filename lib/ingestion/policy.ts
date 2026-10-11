@@ -1,9 +1,12 @@
+import { IDAYS_ARTIST_REVIEW } from "./adapters/idays.ts";
 import type { Festival } from "../domain/festival.ts";
 import type { FestivalCandidate, IngestionResult } from "./types.ts";
 import { INGESTION_SCHEMA_VERSION } from "./types.ts";
 import { diffFestival } from "./diff.ts";
 
 export function evaluateCandidate(current: Festival, candidate: FestivalCandidate): IngestionResult {
+  // An incomplete I-Days announcement cannot downgrade a verified full bill.
+  if (candidate.festivalSlug === "idays" && candidate.artistListMode === "additive" && candidate.status === "partial" && current.status === "confirmed") candidate = { ...candidate, status: undefined };
   // Additive first-wave pages do not redefine independently reviewed billing.
   // Scope each reconciliation to its own registered source and edition.
   const rockstadtAnnouncement = current.slug === "rockstadt" && candidate.festivalSlug === current.slug &&
@@ -26,10 +29,13 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     lineup: candidate.lineup?.filter(name => !reviewedHeadliners.has(name.toLocaleLowerCase())),
     warnings } : candidate;
   const changes = diffFestival(current, effective);
+  const unchangedIdays = candidate.festivalSlug === "idays" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
   // Nova Rock's provider gate protects actual artist/billing changes, not
   // unchanged verified cards or independent ticket metadata refreshes.
   const unchangedNovaLineup = candidate.festivalSlug === "nova-rock" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
-  const reviewReasons = new Set(warnings.filter(warning => !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
+  const reviewReasons = new Set(warnings.filter(warning =>
+    !(unchangedIdays && warning === IDAYS_ARTIST_REVIEW) &&
+    !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
   // Known, unchanged Dynamo facts are successful quiet checks. New performers
   // still need agent review: their publication would enqueue provider work.
   if (current.slug === "dynamo-metal-fest" && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))
