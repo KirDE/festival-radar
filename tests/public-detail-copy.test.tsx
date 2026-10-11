@@ -5,8 +5,45 @@ import { FestivalDetail } from "../components/FestivalDetail";
 import { LanguageProvider, translate, type Language } from "../components/LanguageProvider";
 import { LocalPlannerProvider } from "../components/LocalPlanner";
 import { festival } from "./support/catalog";
+import { hasAvailableTickets } from "../lib/tickets";
 
 const similar = { ...festival, slug: "similar-fest", name: "Similar Fest" };
+
+for (const language of ["en", "de", "ru"] as const) {
+  for (const ticketStatus of ["available", "unavailable", "unknown"] as const) {
+    test(`ticket page stays linked without changing ${ticketStatus} availability in ${language}`, () => {
+      const item = { ...festival, ticketStatus, ticketsUrl: "https://festival.example.test/tickets/" };
+      const before = structuredClone(item);
+      const html = renderToStaticMarkup(
+        <LanguageProvider initialLanguage={language}><LocalPlannerProvider>
+          <FestivalDetail item={item} festivals={[item]} artistSlugs={{}} />
+        </LocalPlannerProvider></LanguageProvider>,
+      );
+      assert.match(html, new RegExp(`<a href="https://festival.example.test/tickets/"[^>]*data-ticket-status="${ticketStatus}"`));
+      assert.ok(html.includes(translate(language, ticketStatus === "available" ? "officialTickets" : "ticketsInfo").replaceAll("&", "&amp;")));
+      if (ticketStatus !== "available") {
+        assert.ok(html.includes(translate(language, ticketStatus === "unavailable" ? "ticketsUnavailable" : "ticketsUnknown")));
+        assert.ok(!html.includes(translate(language, "officialTickets")));
+      }
+      assert.equal(hasAvailableTickets(item), ticketStatus === "available");
+      assert.deepEqual(item, before);
+    });
+  }
+}
+
+test("missing ticket URL stays disabled for every availability state", () => {
+  for (const ticketStatus of ["available", "unavailable", "unknown"] as const) {
+    const item = { ...festival, ticketStatus, ticketsUrl: undefined };
+    const html = renderToStaticMarkup(
+      <LanguageProvider initialLanguage="en"><LocalPlannerProvider>
+        <FestivalDetail item={item} festivals={[item]} artistSlugs={{}} />
+      </LocalPlannerProvider></LanguageProvider>,
+    );
+    assert.match(html, /class="disabled" data-ticket-status="(?:unknown|unavailable)"/);
+    assert.equal(hasAvailableTickets(item), false);
+    assert.doesNotMatch(html, /href="(?:undefined|#)"/);
+  }
+});
 const expectations: Record<"de" | "ru", string[]> = {
   de: ["☆ Speichern", "Teilnahme wählen", "Dabei", "Vielleicht", "Nicht dabei", "Meinen Plan öffnen →", "REISE PLANEN", "Kalender &amp; Karte", "Bühnenplan", "Noch kein bestätigter Zeitplan", "Ähnliche Festivals", "1 gemeinsame Künstler"],
   ru: ["☆ Сохранить", "Укажите участие", "Пойду", "Возможно", "Не пойду", "Открыть мой план →", "ПЛАНИРОВАНИЕ ПОЕЗДКИ", "Календарь и карта", "Расписание сцен", "Подтверждённое расписание пока не опубликовано", "Похожие фестивали", "Общих артистов: 1"],
