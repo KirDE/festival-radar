@@ -1,3 +1,4 @@
+import { ROADBURN_ARTIST_REVIEW } from "./adapters/roadburn.ts";
 import { ALPEN_ARTIST_REVIEW } from './adapters/alpen-flair.ts';
 import { isCopenhellCurrentSource, COPENHELL_REVIEW } from "./adapters/copenhell-current.ts";
 import { LEYENDAS_ARTIST_REVIEW, LEYENDAS_ORIGIN } from "./adapters/leyendas.ts";
@@ -40,11 +41,13 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
   // Nova Rock's provider gate protects actual artist/billing changes, not
   // unchanged verified cards or independent ticket metadata refreshes.
   const unchangedNovaLineup = candidate.festivalSlug === "nova-rock" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
+  const unchangedRoadburn = candidate.festivalSlug === "roadburn" && !changes.some(change => ["lineup", "headliners"].includes(change.field));
   const unchangedCopenhell = candidate.festivalSlug === "copenhell" && current.slug === candidate.festivalSlug &&
     current.editionYear === candidate.observedEditionYears[0] && candidate.observedEditionYears.length === 1 &&
     isCopenhellCurrentSource({ festivalSlug: candidate.festivalSlug, url: candidate.sourceUrl, editionYear: current.editionYear, strategies: ["official_markup"], enabled: true, refreshPolicy: "weekly" }) &&
     !changes.some(change => ["lineup", "headliners"].includes(change.field));
   const reviewReasons = new Set(warnings.filter(warning =>
+    !(unchangedRoadburn && warning === ROADBURN_ARTIST_REVIEW) &&
     !(candidate.festivalSlug === "alpen-flair" && !changes.some(change => ["lineup", "headliners"].includes(change.field)) && warning === ALPEN_ARTIST_REVIEW) &&
     !(unchangedCopenhell && warning === COPENHELL_REVIEW) &&
     !(unchangedLeyendas && warning === LEYENDAS_ARTIST_REVIEW) &&
