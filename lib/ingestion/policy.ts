@@ -1,4 +1,5 @@
 import { ROADBURN_ARTIST_REVIEW } from "./adapters/roadburn.ts";
+import { ALPEN_ARTIST_REVIEW } from './adapters/alpen-flair.ts';
 import { isCopenhellCurrentSource, COPENHELL_REVIEW } from "./adapters/copenhell-current.ts";
 import { IDAYS_ARTIST_REVIEW } from "./adapters/idays.ts";
 import type { Festival } from "../domain/festival.ts";
@@ -42,6 +43,7 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     !changes.some(change => ["lineup", "headliners"].includes(change.field));
   const reviewReasons = new Set(warnings.filter(warning =>
     !(unchangedRoadburn && warning === ROADBURN_ARTIST_REVIEW) &&
+    !(candidate.festivalSlug === "alpen-flair" && !changes.some(change => ["lineup", "headliners"].includes(change.field)) && warning === ALPEN_ARTIST_REVIEW) &&
     !(unchangedCopenhell && warning === COPENHELL_REVIEW) &&
     !(unchangedIdays && warning === IDAYS_ARTIST_REVIEW) &&
     !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));

@@ -2,6 +2,7 @@ import { isRoadburnSource, roadburnUrl, roadburnLinked, discoverRoadburnAnnounce
 import { handlesBrutalAssault, fetchBrutalAssaultDocuments } from "./adapters/brutal-assault.ts";
 import { isCopenhellCurrentSource, copenhellUrl, copenhellNews, copenhellArtistLinks, copenhellEnvelope, type CopenhellDocument } from "./adapters/copenhell-current.ts";
 import { isRockInRomaSource } from "./adapters/rock-in-roma.ts";
+import { isAlpenFlairSource, alpenAnnouncements, alpenEnvelope } from './adapters/alpen-flair.ts';
 import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
 import { discoverMotocultorAnnouncement } from "./adapters/motocultor.ts";
 import { isFrequencySource, frequencyTicketLink, frequencyDocuments } from "./adapters/frequency.ts";
@@ -89,6 +90,18 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   }
   if (initial.response.ok && handlesBrutalAssault(source)) return fetchBrutalAssaultDocuments(source, initial, fetchWithRetry);
   if (initial.response.ok && isInfernoSource(source) && source.strategies.includes("html_fallback") && initial.response.url && !isInfernoResponse(initial.response.url)) throw Object.assign(new Error("Inferno source redirected away from its official homepage"), { attempts: initial.attempts });
+  if (initial.response.ok && isAlpenFlairSource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern) {
+    if (initial.response.url && !isAlpenFlairSource({ ...source, url: initial.response.url })) throw new Error("Alpen Flair homepage redirected away from its trusted route");
+    const home = await initial.response.text(), articles: { url: string; html: string }[] = [];
+    let attempts = initial.attempts;
+    for (const url of alpenAnnouncements(home, source.editionYear!)) {
+      const linked = await fetchWithRetry(url, "error"); attempts += linked.attempts;
+      if (!linked.response.ok) return { response: linked.response, attempts };
+      if (linked.response.url && linked.response.url !== url) throw new Error("Alpen Flair announcement redirected away from its trusted route");
+      articles.push({ url, html: await linked.response.text() });
+    }
+    return { response: new Response(alpenEnvelope(home, articles), { headers: { "content-type": "application/json" } }), attempts };
+  }
   if (source.festivalSlug === "motocultor" && source.strategies.includes("official_markup") && initial.response.ok) {
     const url = new URL(source.fetchUrl ?? source.url);
     if (url.origin === "https://www.motocultor-festival.com" && ["/", "/actualites/"].includes(url.pathname)) {
