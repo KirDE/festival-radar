@@ -35,7 +35,7 @@ export const adminTranslations = {
 const translations = {
   en: {
     sourceDeprecated: "Deprecated source", sourceDeprecatedHelp: "This source has failed for three weeks. Saved festival data may be outdated; weekly checks continue.",
-    lineupSort: "Sort lineup", lineupOfficial: "Official source order", lineupAlphabetical: "Alphabetical", lineupChronological: "First scheduled performance", lineupPopularity: "Spotify popularity (highest first)", spotifyPopularityIndex: "Spotify popularity index (0–100)", spotifyFollowers: "Spotify followers", statsUnknown: "Unknown",
+    lineupSort: "Sort lineup", lineupOfficial: "Official source order", lineupAlphabetical: "Alphabetical", lineupChronological: "First scheduled performance", lineupPopularity: "Spotify popularity (highest first)", spotifyFollowers: "Spotify followers", statsUnknown: "Unknown",
     save: "☆ Save", saved: "★ Saved", attendanceFor: "Attendance for {festival}", setAttendance: "Set attendance", going: "Going", maybe: "Maybe", notGoing: "Not going", openPlan: "Open my plan →",
     region: "Europe 2027",
     festivals: "Festivals", notifications: "Notifications", aboutData: "About data", footerNote: "Always confirm dates and tickets with the official festival.", language: "Language",
@@ -52,7 +52,7 @@ const translations = {
   },
   de: {
     sourceDeprecated: "Quelle veraltet (deprecated)", sourceDeprecatedHelp: "Diese Quelle ist seit drei Wochen nicht erreichbar. Gespeicherte Festivaldaten können veraltet sein; wöchentliche Prüfungen laufen weiter.",
-    lineupSort: "Line-up sortieren", lineupOfficial: "Offizielle Reihenfolge", lineupAlphabetical: "Alphabetisch", lineupChronological: "Erster geplanter Auftritt", lineupPopularity: "Spotify-Popularität (absteigend)", spotifyPopularityIndex: "Spotify-Popularitätsindex (0–100)", spotifyFollowers: "Spotify-Follower", statsUnknown: "Unbekannt",
+    lineupSort: "Line-up sortieren", lineupOfficial: "Offizielle Reihenfolge", lineupAlphabetical: "Alphabetisch", lineupChronological: "Erster geplanter Auftritt", lineupPopularity: "Spotify-Popularität (absteigend)", spotifyFollowers: "Spotify-Follower", statsUnknown: "Unbekannt",
     save: "☆ Speichern", saved: "★ Gespeichert", attendanceFor: "Teilnahme an {festival}", setAttendance: "Teilnahme wählen", going: "Dabei", maybe: "Vielleicht", notGoing: "Nicht dabei", openPlan: "Meinen Plan öffnen →",
     region: "Europa 2027",
     festivals: "Festivals", notifications: "Benachrichtigungen", aboutData: "Über die Daten", footerNote: "Termine und Tickets immer auf der offiziellen Festival-Seite prüfen.", language: "Sprache",
@@ -69,7 +69,7 @@ const translations = {
   },
   ru: {
     sourceDeprecated: "Источник устарел (deprecated)", sourceDeprecatedHelp: "Источник не обновляется из-за ошибок уже три недели. Сохранённые данные могут устареть; проверки продолжаются раз в неделю.",
-    lineupSort: "Сортировка лайнапа", lineupOfficial: "Официальный порядок", lineupAlphabetical: "По алфавиту", lineupChronological: "Первое выступление по расписанию", lineupPopularity: "Популярность Spotify (по убыванию)", spotifyPopularityIndex: "Индекс популярности Spotify (0–100)", spotifyFollowers: "Подписчики Spotify", statsUnknown: "Неизвестно",
+    lineupSort: "Сортировка лайнапа", lineupOfficial: "Официальный порядок", lineupAlphabetical: "По алфавиту", lineupChronological: "Первое выступление по расписанию", lineupPopularity: "Популярность Spotify (по убыванию)", spotifyFollowers: "Подписчики Spotify", statsUnknown: "Неизвестно",
     save: "☆ Сохранить", saved: "★ Сохранено", attendanceFor: "Посещение фестиваля {festival}", setAttendance: "Укажите участие", going: "Пойду", maybe: "Возможно", notGoing: "Не пойду", openPlan: "Открыть мой план →",
     region: "Европа 2027",
     festivals: "Фестивали", notifications: "Уведомления", aboutData: "О данных", footerNote: "Всегда проверяйте даты и билеты на официальном сайте фестиваля.", language: "Язык",

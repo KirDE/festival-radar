@@ -84,17 +84,17 @@ test('worker invokes stats refresh on due artist information refresh and retains
   await runEnrichment(options); assert.equal(calls, 1);
   await runEnrichment({ ...options, now: () => new Date('2026-10-10') }); assert.equal(calls, 2);
 });
-test('EN/DE/RU accurately label index and followers, unknowns and all four lineup options', async () => {
+test('EN/DE/RU label followers and unknowns, keeping popularity only as a lineup sort', async () => {
   const provider = await readFile(new URL('../components/LanguageProvider.tsx', import.meta.url), 'utf8');
   const detail = await readFile(new URL('../components/ArtistDetail.tsx', import.meta.url), 'utf8');
   const lineup = await readFile(new URL('../components/FestivalDetail.tsx', import.meta.url), 'utf8');
   for (const [lang, followers] of Object.entries({ en: 'Spotify followers', de: 'Spotify-Follower', ru: 'Подписчики Spotify' })) {
     const block = provider.match(new RegExp(`\\n  ${lang}: \\{([\\s\\S]*?)\\n  \\},`))[1];
-    assert.ok(block.includes(followers)); assert.ok(block.includes('0–100'));
+    assert.ok(block.includes(followers));
     for (const key of ['lineupSort', 'lineupOfficial', 'lineupAlphabetical', 'lineupChronological', 'lineupPopularity', 'statsUnknown']) assert.ok(block.includes(`${key}:`));
   }
-  for (const key of ['spotifyPopularityIndex', 'spotifyFollowers', 'statsUnknown']) assert.ok(detail.includes(`t("${key}")`));
-  assert.match(detail, /popularity \?\? t\("statsUnknown"\)/);
+  for (const key of ['spotifyFollowers', 'statsUnknown']) assert.ok(detail.includes(`t("${key}")`));
+  assert.doesNotMatch(detail, /spotifyPopularityIndex|spotifyStats\?\.popularity/);
   assert.match(detail, /followers == null/);
   assert.match(lineup, /useState<LineupSort>\("official"\)/);
   assert.match(lineup, /item.headliners.map/); assert.match(lineup, /sortedLineup.map/);
