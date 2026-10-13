@@ -14,6 +14,7 @@ import { isReadingSource } from "./adapters/reading.ts";
 import { isRockImperiumSource, envelopeKind, findRockImperiumLanding, findRockImperiumCategory, findRockImperiumProduct, type PassDocument } from "./adapters/rock-imperium.ts";
 import { novarockDocuments, novarockTicketsUrl } from "./adapters/novarock.ts";
 import type { FestivalSource } from "./types.ts";
+import { discoverDynamoTickets } from "./adapters/dynamo-tickets.ts";
 import { discoverDynamoBands, isDynamoAnnouncement } from "./adapters/dynamo.ts";
 
 export type FetchAttempt = { response: Response; attempts: number };
@@ -31,7 +32,7 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   const sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   const maxAttempts = Math.max(1, options.maxAttempts ?? 3);
   const baseDelayMs = Math.max(0, options.baseDelayMs ?? 1_000);
-  const fetchWithRetry = async (url: string, redirect: RequestRedirect = "follow"): Promise<FetchAttempt> => {
+  const fetchWithRetry = async (url: string, redirect: RequestRedirect = "follow", requestHeaders: Record<string, string> = {}): Promise<FetchAttempt> => {
     let response: Response | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -44,6 +45,7 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
           "cache-control": "no-cache",
           "user-agent": "FestivalRadarBot/1.1 (+https://festivals.kir-it.de/; public festival-data monitor)",
           ...source.headers,
+          ...requestHeaders,
         },
       });
     } catch (error) {
@@ -249,11 +251,14 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   if (initial.response.ok && isDynamoAnnouncement(source)) {
     let attempts = initial.attempts;
     try {
-      const body = await discoverDynamoBands(await initial.response.text(), async (url) => {
-        const linked = await fetchWithRetry(url);
+      if (initial.response.url && initial.response.url !== source.url) throw new Error("Dynamo announcement redirected");
+      const linkedPage = async (url: string, headers?: Record<string, string>) => {
+        const linked = await fetchWithRetry(url, "error", headers);
         attempts += linked.attempts;
         return linked.response;
-      });
+      };
+      const bands = await discoverDynamoBands(await initial.response.text(), linkedPage);
+      const body = await discoverDynamoTickets(bands, linkedPage);
       const headers = new Headers(initial.response.headers);
       headers.delete("content-length"); headers.delete("content-encoding");
       return { response: new Response(body, { status: 200, headers }), attempts };

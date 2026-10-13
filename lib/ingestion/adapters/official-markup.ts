@@ -2,6 +2,7 @@ import { leyendas } from "./leyendas.ts";
 import { graspop } from "./graspop.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { rockWerchter } from "./rock-werchter.ts";
+import { extractDynamoTickets } from "./dynamo-tickets.ts";
 import { extractDynamoBands } from "./dynamo.ts";
 import { novarock } from "./novarock.ts";
 import { copenhell } from "./copenhell.ts";
@@ -289,7 +290,7 @@ function midgardsblot(html: string): AdapterResult | undefined {
   };
 }
 
-function dynamoMetalFest(html: string, source: FestivalSource): AdapterResult | undefined {
+function dynamoMetalFest(html: string, source: FestivalSource, fetchedAt: string): AdapterResult | undefined {
   // This exact article, not homepage navigation, SEO metadata or past posts.
   if (source.editionYear !== 2027 || source.url !== "https://dynamo-metalfest.nl/first-names-dmf-27/") return undefined;
   const title = decode(html.match(/<title\b[^>]*>([^<]*)<\/title>/i)?.[1] ?? "");
@@ -326,6 +327,7 @@ function dynamoMetalFest(html: string, source: FestivalSource): AdapterResult | 
     return { editionYear: 2027, startDate, endDate, city: "Eindhoven", excerpt: statement,
       warning: "Dynamo current artist discovery incomplete; preserve verified partial lineup" };
   return { editionYear: 2027, startDate, endDate, city: "Eindhoven", lineup: discovered, status: "partial", lineupSourceUrl: "https://dynamo-metalfest.nl/line-up/",
+    ...extractDynamoTickets(html, startDate, endDate, fetchedAt),
     excerpt: statement + " Current edition artist cards: " + discovered.join(", ") };
 }
 

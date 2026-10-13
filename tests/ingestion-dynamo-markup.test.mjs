@@ -89,6 +89,7 @@ const fetchMock = (override) => {
     calls.push(u); const custom = override?.(u); if(custom) return custom;
     if(u === url) return new Response(fixture + `<a href="${lineupUrl}">Line-Up</a>`);
     if(u === lineupUrl) return new Response(lineupHtml(docs));
+    if(u === "https://dynamo-metalfest.nl/nieuws/") return new Response("<h1>NIEUWS</h1>");
     const d = docs.find(d => d.url === u); assert.ok(d, "Only actual official artist cards may be fetched"); return new Response(bandHtml(d));
   };
   return { calls, fetchImpl };
@@ -96,8 +97,8 @@ const fetchMock = (override) => {
 
 test("deployed fetch pipeline discovers every actual card and extracts all eleven artists", async () => {
   const mock = fetchMock(); const fetched = await fetchSource(source(), {fetchImpl:mock.fetchImpl,maxAttempts:1});
-  assert.equal(fetched.attempts, 13);
-  assert.deepEqual(mock.calls, [url, lineupUrl, ...docs.map(d => d.url)]);
+  assert.equal(fetched.attempts, 14);
+  assert.deepEqual(mock.calls, [url, lineupUrl, ...docs.map(d => d.url), "https://dynamo-metalfest.nl/nieuws/"]);
   assert.deepEqual(extractFestivalCandidate(await fetched.response.text(), source(), at).lineup, artists);
 });
 
@@ -110,6 +111,6 @@ test("linked HTTP 403/schema failure/redirect is a source failure, never an inco
 
 test("navigation/external band links are not fetched and other configured sources stay unchanged", async () => {
   const mock = fetchMock(u => u === lineupUrl ? new Response(lineupHtml(docs) .replace('</main>', '<a href="https://evil.example/bands/x/"><div data-widget_type="theme-post-title.default"><h2>X</h2></div></a><a href="https://dynamo-metalfest.nl/bands/not-a-card/">News</a></main>')) : undefined);
-  await fetchSource(source(),{fetchImpl:mock.fetchImpl,maxAttempts:1}); assert.equal(mock.calls.length,13);
+  await fetchSource(source(),{fetchImpl:mock.fetchImpl,maxAttempts:1}); assert.equal(mock.calls.length,14);
   const other = fetchMock(); await fetchSource(source({festivalSlug:'other'}),{fetchImpl:other.fetchImpl,maxAttempts:1});assert.deepEqual(other.calls,[url]);
 });

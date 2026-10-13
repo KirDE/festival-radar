@@ -38,7 +38,7 @@ export async function discoverDynamoBands(html: string, fetchPage: (url: string)
     let event: unknown;
     try { event = JSON.parse(eventJson ?? ""); } catch { throw new Error("Dynamo artist event schema unavailable"); }
     documents.push({ url, canonical: canonical(body), title: text(body.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? ""),
-      heading: text(bandMain.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? ""),
+      heading: text(bandMain.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? "").replace(/ op Dynamo Metalfest in Eindhoven Nederland$/, ""),
       editionLink: [...bandMain.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)].some(m => m[1] === lineupUrl && text(m[2]) === "TERUG NAAR LINE-UP 2027"), event });
   }
   return html + `<script type="application/json" id="${bundleId}">${JSON.stringify(documents).replace(/</g, "\\u003c")}</script>`;

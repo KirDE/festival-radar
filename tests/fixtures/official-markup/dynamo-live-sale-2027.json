@@ -1,0 +1,227 @@
+{
+  "sale": {
+    "uid": "fe23f62bbb6b42db88d18411cc4ecd67",
+    "state": "Published",
+    "start_date": "2026-08-14T10:30:00Z",
+    "end_date": "2027-08-15T19:59:00Z",
+    "_links": {
+      "self": {
+        "href": "https://shopping-api.paylogic.com/sales/fe23f62bbb6b42db88d18411cc4ecd67"
+      }
+    },
+    "_embedded": {
+      "shop:event": {
+        "title": {
+          "en": "Dynamo Metalfest 2027",
+          "nl": "Dynamo Metalfest 2027",
+          "de": "Dynamo Metalfest 2027",
+          "fr": "Dynamo Metalfest 2027",
+          "es": "Dynamo Metalfest 2027",
+          "pt": "Dynamo Metalfest 2027",
+          "no": "Dynamo Metalfest 2027",
+          "da": "Dynamo Metalfest 2027",
+          "sv": "Dynamo Metalfest 2027",
+          "fi": "Dynamo Metalfest 2027",
+          "it": "Dynamo Metalfest 2027"
+        },
+        "_links": {
+          "self": {
+            "href": "https://shopping-api.paylogic.com/events/79ab4cb660184b75bf7e6fb11018025b"
+          }
+        }
+      }
+    }
+  },
+  "storefront": {
+    "generated_on": "2026-10-13T20:27:13Z",
+    "is_sold_out": false,
+    "_embedded": {
+      "shop:event": {
+        "title": {
+          "en": "Dynamo Metalfest 2027",
+          "nl": "Dynamo Metalfest 2027",
+          "de": "Dynamo Metalfest 2027",
+          "fr": "Dynamo Metalfest 2027",
+          "es": "Dynamo Metalfest 2027",
+          "pt": "Dynamo Metalfest 2027",
+          "no": "Dynamo Metalfest 2027",
+          "da": "Dynamo Metalfest 2027",
+          "sv": "Dynamo Metalfest 2027",
+          "fi": "Dynamo Metalfest 2027",
+          "it": "Dynamo Metalfest 2027"
+        },
+        "location": {
+          "city": "Eindhoven"
+        },
+        "_links": {
+          "self": {
+            "href": "https://shopping-api.paylogic.com/events/79ab4cb660184b75bf7e6fb11018025b"
+          },
+          "shop:ticketshop": {
+            "href": "https://tickets.dynamo-metalfest.nl/fe23f62bbb6b42db88d18411cc4ecd67"
+          }
+        }
+      },
+      "shop:product": [
+        {
+          "_links": {
+            "self": {
+              "href": "https://shopping-api.paylogic.com/products/9c0867a4864042c1a67057407158eabc"
+            },
+            "shop:event": {
+              "href": "https://shopping-api.paylogic.com/events/79ab4cb660184b75bf7e6fb11018025b"
+            }
+          },
+          "name": {
+            "en": "JUNIOR WEEKEND TICKET"
+          },
+          "type": "entrance",
+          "separately_saleable": true,
+          "requires_membership": false,
+          "sale_start": "2026-08-06T11:00:00Z",
+          "sale_end": "2027-08-15T19:59:00Z"
+        },
+        {
+          "_links": {
+            "self": {
+              "href": "https://shopping-api.paylogic.com/products/e34321ed266648acabadee30c96c03af"
+            },
+            "shop:event": {
+              "href": "https://shopping-api.paylogic.com/events/79ab4cb660184b75bf7e6fb11018025b"
+            }
+          },
+          "name": {
+            "en": "LOYALTY WEEKEND TICKET"
+          },
+          "type": "entrance",
+          "separately_saleable": true,
+          "requires_membership": false,
+          "sale_start": "2026-08-06T11:00:00Z",
+          "sale_end": "2027-08-15T08:00:00Z"
+        },
+        {
+          "_links": {
+            "self": {
+              "href": "https://shopping-api.paylogic.com/products/2365d4d68dbe498f8fb0eae420d9733c"
+            },
+            "shop:event": {
+              "href": "https://shopping-api.paylogic.com/events/79ab4cb660184b75bf7e6fb11018025b"
+            }
+          },
+          "name": {
+            "en": "EARLY BIRD WEEKEND TICKET"
+          },
+          "type": "entrance",
+          "separately_saleable": true,
+          "requires_membership": false,
+          "sale_start": "2026-08-18T08:00:00Z",
+          "sale_end": "2027-08-15T19:59:00Z"
+        },
+        {
+          "_links": {
+            "self": {
+              "href": "https://shopping-api.paylogic.com/products/4e60637fd0eb4ad687d8ee8f652aab9a"
+            },
+            "shop:event": {
+              "href": "https://shopping-api.paylogic.com/events/79ab4cb660184b75bf7e6fb11018025b"
+            }
+          },
+          "name": {
+            "en": "ADVANCE WEEKEND TICKET"
+          },
+          "type": "entrance",
+          "separately_saleable": true,
+          "requires_membership": false,
+          "sale_start": "2026-08-06T11:00:00Z",
+          "sale_end": "2027-08-15T19:59:00Z"
+        },
+        {
+          "_links": {
+            "self": {
+              "href": "https://shopping-api.paylogic.com/products/d89ff0f58ea34965984c38c733314660"
+            },
+            "shop:event": {
+              "href": "https://shopping-api.paylogic.com/events/79ab4cb660184b75bf7e6fb11018025b"
+            }
+          },
+          "name": {
+            "en": "REGULAR WEEKEND TICKET"
+          },
+          "type": "entrance",
+          "separately_saleable": true,
+          "requires_membership": false,
+          "sale_start": "2026-08-06T11:00:00Z",
+          "sale_end": "2027-08-15T19:59:00Z"
+        },
+        {
+          "_links": {
+            "self": {
+              "href": "https://shopping-api.paylogic.com/products/4b276ff7a6044b59a21c2fee90eaf941"
+            },
+            "shop:event": {
+              "href": "https://shopping-api.paylogic.com/events/79ab4cb660184b75bf7e6fb11018025b"
+            }
+          },
+          "name": {
+            "en": "INNER CIRCLE WEEKEND TICKET"
+          },
+          "type": "entrance",
+          "separately_saleable": true,
+          "requires_membership": false,
+          "sale_start": "2026-08-14T11:00:00Z",
+          "sale_end": "2027-08-15T19:59:00Z"
+        }
+      ]
+    },
+    "categories": [
+      {
+        "categories": [
+          {
+            "items": [
+              {
+                "product": "https://shopping-api.paylogic.com/products/9c0867a4864042c1a67057407158eabc",
+                "is_sold_out": false,
+                "max_quantity": null,
+                "combo": []
+              },
+              {
+                "product": "https://shopping-api.paylogic.com/products/e34321ed266648acabadee30c96c03af",
+                "is_sold_out": true,
+                "max_quantity": null,
+                "combo": []
+              },
+              {
+                "product": "https://shopping-api.paylogic.com/products/2365d4d68dbe498f8fb0eae420d9733c",
+                "is_sold_out": false,
+                "max_quantity": null,
+                "combo": []
+              },
+              {
+                "product": "https://shopping-api.paylogic.com/products/4e60637fd0eb4ad687d8ee8f652aab9a",
+                "is_sold_out": true,
+                "max_quantity": null,
+                "combo": []
+              },
+              {
+                "product": "https://shopping-api.paylogic.com/products/d89ff0f58ea34965984c38c733314660",
+                "is_sold_out": true,
+                "max_quantity": null,
+                "combo": []
+              },
+              {
+                "product": "https://shopping-api.paylogic.com/products/4b276ff7a6044b59a21c2fee90eaf941",
+                "is_sold_out": false,
+                "max_quantity": null,
+                "combo": []
+              }
+            ]
+          }
+        ],
+        "items": []
+      },
+      {
+        "items": []
+      }
+    ]
+  }
+}
