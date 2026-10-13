@@ -42,7 +42,11 @@ hosts come only from configured source/festival/ticket URLs, never candidate tex
 Only registered parsers may be activated. `dismiss` rejects a superseded/bad
 proposal; `retry` follows the same failure ladder: 1 hour, 6 hours, 1 day, 3 days, then weekly;
 `needs_user` stores a concrete unresolved question and suppresses repeat alerts.
-A manual no-op review is revisited weekly. A genuinely changed source/proposal
+A manual source without a trustworthy automated recognition path is revisited
+weekly. A fresh successful empty archive result with no warnings, facts, evidence
+or diffs is handled quietly by the importer, even for a `manual_review` source:
+it creates no agent issue. Missing/stale attempts, unknown markup, new facts,
+warnings and failed checks retain review. A genuinely changed source/proposal
 creates a different issue. On a user clarification, use `resume` for that exact
 needs_user record; do not reset unrelated receipts or importer failures.
 
@@ -114,9 +118,13 @@ ownership. API deployment alone is **not** an active agent integration.
 
 ## Correction → parser repair
 
-Successful correction/dismissal with changed facts, source binding, or a review
-candidate creates one idempotent parser-repair task in the SAME transaction as
-its audit and catalog receipt. The receipt includes `parserRepairId`. This is a
+Successful correction/dismissal with actually changed facts/source binding or
+candidate feedback (review status, warnings or diffs) creates one idempotent
+parser-repair task in the SAME transaction as
+its audit and catalog receipt. Merely having a candidate does not enqueue a
+repair. A no-op decision, including already-identical supplied facts/source,
+has `parserRepairId: null` and does not republish/reconfigure unchanged data.
+The receipt includes `parserRepairId`. This is a
 separate code-fix queue: fixing live data does not mean the parser has been fixed.
 GET `?mode=repairs` lists bounded ready tasks; `repairs-signal` is a quiet watcher
 signal. `repair_claim` takes a repairId and returns a two-hour capability;

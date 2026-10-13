@@ -103,6 +103,20 @@ export async function inspectSource(db: Database, sourceId: string) {
       .filter((k) => Object.hasOwn(normalized, k))
       .map((k) => [k, normalized[k]]),
   );
+  // The deployed archive recognizers deliberately return a successful empty
+  // candidate. A manual source is not itself an error: keep its scheduled
+  // probes, but do not wake a model for that already-covered no-op. Unknown
+  // markup retains its warning; new facts, evidence, diffs and failures remain
+  // reviewable. Never infer success from a missing/stale attempt or candidate.
+  if (
+    manual && !failed && a?.status === "UNCHANGED" &&
+    a.httpStatus !== null && a.httpStatus >= 200 && a.httpStatus < 300 && c &&
+    Array.isArray(c.warnings) && c.warnings.length === 0 &&
+    c.diffs.length === 0 && c.evidence.length === 0 &&
+    Object.keys(facts).every(k => k === "observedEditionYears") &&
+    Array.isArray(facts.observedEditionYears) && facts.observedEditionYears.length === 0
+  )
+    return null;
   const issueId = fingerprint({
     source: config(s),
     kind,
@@ -444,9 +458,26 @@ export async function resolveAgentIssue(
       >`SELECT id FROM "FestivalSource" WHERE id=${i.sourceId} AND ("leaseOwner" IS NULL OR "leaseExpiresAt" <= (clock_timestamp() AT TIME ZONE 'UTC')) FOR UPDATE`;
       if (sources.length !== 1) throw new ImportAgentError("busy");
       allowedEvidence(i, d, now);
+      // A stored candidate is not proof of a parser problem. In particular,
+      // manual no-op reviews (including unchanged supplied facts/source) must
+      // not manufacture repair tasks. Actual corrections and rejected/review
+      // proposals still enqueue atomically with their audit.
+      const changedFacts = d.facts && Object.entries(d.facts).some(
+        ([field, value]) => fingerprint(value) !== fingerprint(i.current[field as keyof typeof i.current]),
+      );
+      const changedSource = d.source && (
+        d.source.url !== i.source.url ||
+        fingerprint(d.source.strategies) !== fingerprint(i.source.strategies) ||
+        d.source.refreshPolicy !== i.source.refreshPolicy ||
+        (d.source.manualReviewReason ?? null) !== i.source.manualReviewReason
+      );
+      const candidateFeedback = i.candidate && (
+        i.attempt?.status === "REVIEW" || i.candidate.diffs.length > 0 ||
+        !Array.isArray(i.candidate.warnings) || i.candidate.warnings.length > 0
+      );
       let publication = null;
       if (d.action === "apply") {
-        if (d.facts)
+        if (d.facts && changedFacts)
           publication = await publishAgentFestivalResolution(tx, {
             editionId: i.current.editionId!,
             festivalSlug: i.festivalSlug,
@@ -456,7 +487,7 @@ export async function resolveAgentIssue(
             evidence: d.evidence,
             observedAt: now,
           });
-        if (d.source) {
+        if (d.source && changedSource) {
           const s = await tx.festivalSource.findUniqueOrThrow({
             where: { id: i.sourceId },
             include: { edition: { select: { festivalId: true, year: true } } },
@@ -504,11 +535,11 @@ export async function resolveAgentIssue(
           },
         });
       const attempts = Number(held[0].payload.attempts ?? 0) + 1;
-      const retryFailure = d.action === "apply" && i.kind === "failure" && !d.source;
+      const retryFailure = d.action === "apply" && i.kind === "failure" && !changedSource;
       const retryAt = d.action === "retry" || retryFailure
         ? failureRetryAt(Math.max(attempts, i.source.consecutiveFailures || 1), now).toISOString()
-        : i.kind === "manual_source" && !d.source ? new Date(now.getTime() + 604800000).toISOString() : null;
-      const parserRepairId = ["apply", "dismiss"].includes(d.action) && (d.facts || d.source || i.candidate)
+        : i.kind === "manual_source" && !changedSource ? new Date(now.getTime() + 604800000).toISOString() : null;
+      const parserRepairId = ["apply", "dismiss"].includes(d.action) && (changedFacts || changedSource || candidateFeedback)
         ? await enqueueParserRepair(tx, { sourceId: i.sourceId, festivalSlug: i.festivalSlug, issueId: i.issueId,
             parserKey: i.source.parserKey, sourceUrl: i.source.fetchUrl ?? i.source.url, year: i.current.year,
             reason: d.reason, decision: d, candidate: i.candidate, current: i.current }) : null;
