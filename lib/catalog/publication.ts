@@ -247,9 +247,11 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
       input.result.changes.every(({ field }) => ["startDate", "endDate", "headliners", "lineup", "status"].includes(field) &&
         candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl) &&
         input.result.candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl))))
-      throw new Error("Impericon playlist deferral requires matching persisted official announcement evidence");
-    const playlistRefreshDeferral = rockharzPublication || impericonPublication ? {
-      policy: impericonPublication ? "impericon-official-announcements-v1" : "rockharz-2027-official-sources-v1",
+      throw new Error("Impericon publication requires matching persisted official announcement evidence");
+    // Impericon uses the normal lineup-to-playlist queue. Keep its source and
+    // persisted-evidence guards above; only the provider deferral is removed.
+    const playlistRefreshDeferral = rockharzPublication ? {
+      policy: "rockharz-2027-official-sources-v1",
       reason: "Catalogue publication approved; provider playlist activity requires separate authorization",
     } : undefined;
     const publication = await createPublication(db, {
