@@ -38,6 +38,8 @@ export type Festival = {
 export type PlaylistStatus = {
   spotifyUrl: string;
   youtubeMusicUrl?: string;
+  youtubeMusicArtists?: number;
+  youtubeMusicTracks?: number;
   artists: number;
   tracks: number;
   updatedAt: string;

@@ -124,7 +124,12 @@ export function FestivalDetail({
         )}
         {playlist?.youtubeMusicUrl ? (
           <a href={playlist.youtubeMusicUrl} target="_blank" rel="noreferrer">
-            <small>{t("listen")} · {playlist.artists} {t("artists")} · {playlist.tracks} {t("tracks")}</small>
+            <small>
+              {t("listen")}
+              {playlist.youtubeMusicArtists !== undefined && playlist.youtubeMusicTracks !== undefined
+                ? ` · ${playlist.youtubeMusicArtists} ${t("artists")} · ${playlist.youtubeMusicTracks} ${t("tracks")}`
+                : ""}
+            </small>
             <strong>{t("youtubeMusicPlaylist")}</strong>
           </a>
         ) : null}

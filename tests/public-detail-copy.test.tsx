@@ -104,3 +104,28 @@ test("transparency follows an older catalogue record without claiming a fresh re
   assert.ok(html.includes("Catalogue data updated on September 3, 2026."));
   assert.doesNotMatch(html, /October 10|Seed data|data reviewed/);
 });
+
+for (const language of ["en", "de", "ru"] as const) {
+  test("playlist links show their own provider counts in " + language, () => {
+    for (const hasYoutubeCounts of [true, false]) {
+      const playlist = {
+        spotifyUrl: "https://open.spotify.com/playlist/spotify",
+        youtubeMusicUrl: "https://music.youtube.com/playlist?list=youtube",
+        artists: 44, tracks: 208, updatedAt: "2026-10-18",
+        ...(hasYoutubeCounts ? { youtubeMusicArtists: 43, youtubeMusicTracks: 205 } : {}),
+      };
+      const html = renderToStaticMarkup(
+        <LanguageProvider initialLanguage={language}><LocalPlannerProvider>
+          <FestivalDetail item={festival} festivals={[festival]} artistSlugs={{}} playlist={playlist} />
+        </LocalPlannerProvider></LanguageProvider>,
+      );
+      const spotify = html.match(/<a href="https:\/\/open\.spotify\.com\/playlist\/spotify"[^>]*>(.*?)<\/a>/)?.[1];
+      const youtube = html.match(/<a href="https:\/\/music\.youtube\.com\/playlist\?list=youtube"[^>]*>(.*?)<\/a>/)?.[1];
+      assert.ok(spotify?.includes(`44 ${translate(language, "artists")} · 208 ${translate(language, "tracks")}`));
+      assert.ok(youtube);
+      assert.ok(!youtube.includes("208"), "YouTube must never borrow Spotify's track count");
+      if (hasYoutubeCounts) assert.ok(youtube.includes(`43 ${translate(language, "artists")} · 205 ${translate(language, "tracks")}`));
+      else assert.ok(!youtube.includes(translate(language, "tracks")), "Missing YouTube counts stay unknown");
+    }
+  });
+}

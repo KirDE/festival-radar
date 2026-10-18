@@ -122,6 +122,7 @@ export class DatabaseCatalogRepository implements CatalogRepository {
       if (!spotify) continue;
       playlists[row.festival.slug] = {
         spotifyUrl: spotify.url, youtubeMusicUrl: youtube?.url,
+        youtubeMusicArtists: youtube?.artistCount ?? undefined, youtubeMusicTracks: youtube?.trackCount ?? undefined,
         artists: spotify.artistCount ?? row.lineup.length, tracks: spotify.trackCount ?? 0,
         updatedAt: instant(spotify.syncedAt) ?? row.sourceUpdatedAt.toISOString(),
       };
