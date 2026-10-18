@@ -40,6 +40,7 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npm run test:logo-assets
       - run: npm run test:playlist-queue
+      - run: node --import tsx --test tests/spotify-playlist-checkpoint.e2e.test.ts
       - run: npm run test:sources
       - run: npm run test:catalog-db
       - run: node --import tsx --test tests/import-agent.e2e.test.ts

@@ -48,21 +48,15 @@ extracted as review evidence rather than discarded. Date support is a range of
 or conflicting footer fails closed. No admin edit or special mutation endpoint
 is part of this workflow; the read-only review queue cannot publish REVIEW rows.
 
-Rockharz **2027 only** lineup/headliner catalogue publications from exact reviewed
-`/bands` and `/headliner-alarm` sources defer provider playlist refresh. The
-publication still records `lineupChanged: true`, but its immutable evidence records
-`playlistRefresh.status: deferred`, policy, reason and candidate/evidence IDs. No
-`CatalogPlaylistRefresh` row is created; replay returns the persisted absence
-without queueing. The exact `/headliner-alarm` contract also permits a simultaneous
-`status: partial` change, or a status-only repair when AMON AMARTH is already
-published (including the existing 29 lineup + 1 headliner state). Every changed
-field requires both candidate and persisted evidence from that exact URL;
-status additionally requires candidate/after value `partial`. Status-only audit
-records deferral with `lineupChanged: false` and never creates a refresh row.
-Source/edition/field/persisted-evidence drift fails closed and
-rolls back rather than falling through to provider enqueue. Ticket-only changes
-never queue. Other festivals/editions and admin edits retain default behavior.
-A separate authorization is needed to initiate later provider activity.
+Rockharz **2027 only** lineup/headliner publications from exact reviewed
+`/bands` and `/headliner-alarm` sources now use the normal transactional
+playlist-refresh queue. Exact edition/source/field and both candidate and
+persisted official evidence guards are retained. Replaying a publication returns
+the same queue row, never a duplicate. A simultaneous `status: partial` change
+is permitted with the verified headliner claim; a status-only repair when the
+headliner is already present records `lineupChanged: false` and never queues.
+Ticket-only changes also never queue. Source, edition or persisted-evidence
+drift fails closed and rolls back catalogue and provider requests together.
 
 Synthetic fixtures mirror actual structures, not live snapshots. Local read-only
 probes of the supplied `/tmp/rhz-*-live.html` captures dated October 8 2026 yielded
@@ -112,9 +106,9 @@ configuration.
    production source configuration or content mutation.
 5. Verify fresh baseline attempts publish the intended existing 2027 additions/
    ticket status (or are UNCHANGED when already applied), with source-specific
-   evidence and candidate/publication lineage. Confirm audited deferral and
-   **zero new playlist-refresh rows** for lineup/headliner publications; replay
-   remains false without enqueue. Novel
+   evidence and candidate/publication lineage. Confirm exactly one transactional playlist-refresh row for each verified
+   lineup/headliner publication; replay returns that same row. Status/ticket-only
+   publications create no provider request. Novel
    names/date/venue drift stay REVIEW; invalid markup has zero fields/diffs.
    Independent review plus parser/policy revision and deployment is required
    before a REVIEW candidate can re-enter the normal importer. Do not assume
@@ -129,7 +123,7 @@ npm run typecheck
 ```
 
 Disposable PostgreSQL host check (existing guarded E2E fixture, including
-non-Rockharz default queue and Rockharz deferral/replay/collision cases):
+normal queue and guarded Rockharz enqueue/replay/collision cases):
 
 ```sh
 node --import tsx --test tests/catalog-publication.e2e.test.ts

@@ -7,7 +7,7 @@ import { acquirePlaylistProcessLock } from '../lib/catalog/playlist-process-lock
 import { db } from '../lib/db.ts';
 import { readCatalog } from '../lib/catalog/repository.ts';
 import { stagePlaylistPlan } from '../lib/catalog/playlist-queue.ts';
-import { runPlaylistWorker } from '../lib/catalog/playlist-worker.ts';
+import { runPlaylistWorker, publishSpotifyCheckpoint } from '../lib/catalog/playlist-worker.ts';
 import { stageYoutubePlan, validateYoutubePlan, YOUTUBE_URL } from '../lib/catalog/youtube-playlist-queue.ts';
 const execute = promisify(execFile);
 // Activation requires explicit stop/drain/reconciliation of legacy consumers.
@@ -41,6 +41,16 @@ try {
       }
       const candidate = plan as { playlist_url?: string; edition_year?: number };
       if (candidate.playlist_url !== (creating ? '' : playlistUrl) || candidate.edition_year !== publication.editionYear) throw new Error('Durable plan binding mismatch');
+      await guard();
+      // apply accepts an explicit plan path; it does not need the report directory.
+      const planPath = path.join(directory, 'plan.json');
+      await writeFile(planPath, JSON.stringify(plan), { mode: 0o600 });
+      await execute(process.env.PLAYLIST_PYTHON ?? 'python3', [path.join(root, 'scripts/spotify_gmm_2026/apply_playlist_plan.py'), planPath], {
+        cwd: directory, env: { ...env, PLAYLIST_PROVIDER: 'spotify', PLAYLIST_LEASE: JSON.stringify(claim), PLAYLIST_EXPECTED_URL: playlistUrl, PLAYLIST_GUARD_NODE: process.execPath, PLAYLIST_GUARD_SCRIPT: path.join(root, 'scripts/playlist-lease-guard.ts') },
+        signal, timeout: 600_000, maxBuffer: 1024 * 1024,
+      });
+      const report = JSON.parse(await readFile(planPath, 'utf8'));
+      const spotify = await publishSpotifyCheckpoint(db, claim, { url: report.playlist_url, artists: report.artists_count, tracks: report.track_count, expectedUrl: playlistUrl });
       const [youtubeJob] = await db.$queryRaw<{ youtubePlan: unknown }[]>`SELECT "youtubePlan" FROM "CatalogPlaylistRefresh" WHERE id = ${claim.id}`;
       let youtubePlan = youtubeJob.youtubePlan;
       const youtubePlanPath = path.join(directory, 'youtube-plan.json');
@@ -53,22 +63,13 @@ try {
       validateYoutubePlan(youtubePlan);
       if (youtubePlan.expectedUrl !== youtubeUrl || youtubePlan.slug !== claim.festivalSlug || youtubePlan.editionYear !== publication.editionYear) throw new Error('Durable YouTube plan binding mismatch');
       await writeFile(youtubePlanPath, JSON.stringify(youtubePlan), { mode: 0o600 });
-      await guard();
-      // apply accepts an explicit plan path; it does not need the report directory.
-      const planPath = path.join(directory, 'plan.json');
-      await writeFile(planPath, JSON.stringify(plan), { mode: 0o600 });
-      await execute(process.env.PLAYLIST_PYTHON ?? 'python3', [path.join(root, 'scripts/spotify_gmm_2026/apply_playlist_plan.py'), planPath], {
-        cwd: directory, env: { ...env, PLAYLIST_PROVIDER: 'spotify', PLAYLIST_LEASE: JSON.stringify(claim), PLAYLIST_EXPECTED_URL: playlistUrl, PLAYLIST_GUARD_NODE: process.execPath, PLAYLIST_GUARD_SCRIPT: path.join(root, 'scripts/playlist-lease-guard.ts') },
-        signal, timeout: 600_000, maxBuffer: 1024 * 1024,
-      });
-      const report = JSON.parse(await readFile(planPath, 'utf8'));
       const youtubeResultPath = path.join(directory, 'youtube-result.json');
       await execute(process.env.PLAYLIST_PYTHON ?? 'python3', [path.join(root, 'scripts/spotify_gmm_2026/youtube_playlist_plan.py'), 'apply', youtubePlanPath, youtubeResultPath], {
         cwd: directory, env: { ...env, PLAYLIST_PROVIDER: 'youtube_music', PLAYLIST_LEASE: JSON.stringify(claim), YOUTUBE_EXPECTED_URL: youtubeUrl, PLAYLIST_GUARD_NODE: process.execPath, YOUTUBE_GUARD_SCRIPT: path.join(root, 'scripts/playlist-lease-guard.ts') },
         signal, timeout: 600_000, maxBuffer: 1024 * 1024,
       });
       const youtubeMusic = JSON.parse(await readFile(youtubeResultPath, 'utf8'));
-      return { url: report.playlist_url, artists: report.artists_count, tracks: report.track_count, expectedUrl: playlistUrl, youtubeMusic };
+      return { ...spotify, youtubeMusic };
     } finally { await rm(directory, { recursive: true, force: true }); }
   });
   console.log(JSON.stringify(result));
