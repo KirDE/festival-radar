@@ -20,7 +20,7 @@ export async function prepareImportEvent(db: PrismaClient, event: ImportEvent, n
   if (source.leaseExpiresAt && source.leaseExpiresAt > now) return { defer: source.leaseExpiresAt };
   const state = await db.operationalState.findUnique({ where: { key: issue.key } });
   const p = (state?.payload ?? {}) as any;
-  if (p.status === 'needs_user' || (p.status === 'resolved' && issue.kind !== 'manual_source')) return {};
+  if (p.status === 'needs_user' || p.status === 'resolved') return {};
   if (state?.leaseExpiresAt && state.leaseExpiresAt > now) return { defer: state.leaseExpiresAt };
   if (p.retryAt && new Date(p.retryAt) > now) return { defer: new Date(p.retryAt) };
   if (issue.kind === 'failure' && p.attempts > 0 && source.nextRunAt && source.nextRunAt > now) return { defer: source.nextRunAt };
@@ -40,7 +40,8 @@ export async function verifyDispatchEvent(db: PrismaClient, event: DispatchEvent
 export async function drainImportEvents(db: PrismaClient, send: (event: DispatchEvent) => Promise<void>, limit = 10) {
   if (!Number.isInteger(limit) || limit < 1 || limit > 10) throw new Error('Invalid import event batch');
   let delivered = 0, failed = 0;
-  for (let n = 0; n < limit; n++) {
+  const deadline = Date.now() + 60_000;
+  for (let n = 0; n < limit && Date.now() < deadline; n++) {
     const owner = randomUUID();
     const rows = await db.$queryRaw<Array<{key: string; payload: any}>>`
       UPDATE "OperationalState" SET "leaseOwner"=${owner}, "leaseExpiresAt"=timezone('UTC',clock_timestamp())+interval '2 minutes'

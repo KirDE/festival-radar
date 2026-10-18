@@ -32,8 +32,8 @@ export async function receiveEvent(event, config, deps = {}) {
   const response = await (deps.fetch ?? fetch)(url, { headers: { authorization: 'Bearer ' + credentials.token }, redirect: 'error', signal: AbortSignal.timeout(8000) });
   if (!response.ok) throw new Error('Event lookup unavailable');
   const verified = await response.json();
-  if (!verified.ready) {
-    if (!verified.obsolete) throw new Error('Event temporarily unavailable');
+  if (verified.ready !== true) {
+    if (verified.obsolete !== true) throw new Error('Event temporarily unavailable');
     // Obsolete events are acknowledged without spending model tokens.
   } else {
     const params = { agentId: config.agentId, sessionKey: config.sessionKey, message: eventPrompt(event, config.runbook),

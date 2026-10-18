@@ -51,7 +51,7 @@ export async function finishParserRepair(db: PrismaClient, id: string, token: st
     const payload = { ...old, ...result, resultHash: hash, leaseDigest: fingerprint(token),
       finishedAt: new Date().toISOString(), retryAt: result.status === 'retry' ? new Date(Date.now()+3600000).toISOString() : null };
     await tx.operationalState.update({ where: { key: prefix+id }, data: { payload: payload as Prisma.InputJsonValue, leaseOwner: null, leaseExpiresAt: null } });
-    if (result.status === 'retry') await queueImportEvent(tx, id + '-' + hash, { kind: 'repair', repairId: id }, new Date(payload.retryAt!));
+    if (result.status === 'retry') await queueImportEvent(tx, id + '-' + fingerprint({ hash, retryAt: payload.retryAt }), { kind: 'repair', repairId: id }, new Date(payload.retryAt!));
     await tx.adminAuditEntry.create({ data: { actorLabel: 'OpenClaw parser repair', action: 'ingestion.parser.'+result.status,
       resourceKind: 'FESTIVAL', resourceKey: String(old.festivalSlug), afterValue: result } });
     return { status: result.status, repairId: id };
