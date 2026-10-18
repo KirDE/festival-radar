@@ -1,3 +1,4 @@
+import { queueImportEvent } from "./import-event-queue.ts";
 import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { INGESTION_SCHEMA_VERSION, type IngestionResult } from "./types.ts";
@@ -49,6 +50,8 @@ export async function persistAttempt(db: PrismaClient, input: AttemptInput) {
       })) });
     }
     if (result) await tx.ingestionSourceState.upsert({ where: { festivalSlug: input.festivalSlug }, create: { festivalSlug: input.festivalSlug, lastSuccessfulCheck: input.endedAt, lastAttemptId: attempt.id }, update: { lastSuccessfulCheck: input.endedAt, lastAttemptId: attempt.id } });
+    const sources = await tx.festivalSource.findMany({ where: { enabled: true, festivalSlug: input.festivalSlug, url: input.requestedUrl }, select: { id: true } });
+    for (const source of sources) await queueImportEvent(tx, attempt.id + '-' + source.id, { kind: 'source', sourceId: source.id, attemptId: attempt.id });
     return attempt;
   });
 }

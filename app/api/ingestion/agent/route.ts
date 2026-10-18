@@ -1,3 +1,5 @@
+import { verifyDispatchEvent, drainImportEvents } from "@/lib/ingestion/import-events";
+import { validDispatchEvent, sendImportEvent, transportConfigured } from "@/lib/ingestion/import-event-transport.mjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -70,6 +72,13 @@ export async function GET(request: Request) {
   if (!agentAuthorized(request)) return reply({ error: "Unauthorized" }, 401);
   try {
     const mode = new URL(request.url).searchParams.get("mode");
+    if (mode === "event") {
+      const raw = new URL(request.url).searchParams.get('event') ?? '';
+      if (raw.length > 2048) return reply({ error: 'Invalid event' }, 400);
+      const event = JSON.parse(raw);
+      if (!validDispatchEvent(event) || event.kind === 'probe') return reply({ error: 'Invalid event' }, 400);
+      return reply(await verifyDispatchEvent(db, event));
+    }
     const result = mode?.startsWith("repairs") ? await listParserRepairs(db) : await listAgentIssues(db);
     return reply(
       ["signal", "repairs-signal"].includes(mode ?? "")
@@ -131,7 +140,10 @@ export async function POST(request: Request) {
           parsed.data.leaseToken,
         ),
       );
-    return reply(await resolveAgentIssue(db, parsed.data));
+    const result = await resolveAgentIssue(db, parsed.data);
+    // Corrections enqueue parser repair atomically; deliver only after commit.
+    if (transportConfigured()) { try { await drainImportEvents(db, sendImportEvent, 1); } catch { /* durable outbox remains pending */ } }
+    return reply(result);
   } catch (cause) {
     return failure(cause);
   }

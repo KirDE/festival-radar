@@ -163,7 +163,7 @@ test("post-UNCHANGED artifact failure uses bounded post_attempt_error, not parse
   }
 });
 
-test("real extraction exception before attempt uses parser category without leaking source data", async () => {
+test("real extraction exception persists a repair event and safe parser category", async () => {
   const marker = "parser-" + randomUUID();
   const invalidEntity = path.join(dir, "invalid-entity.html");
   await writeFile(invalidEntity, '<meta name="event:start_date" content="&#1114112;">');
@@ -178,7 +178,10 @@ test("real extraction exception before attempt uses parser category without leak
     orphanRunIds.push(terminal.id);
     assert.equal(terminal.status, "FAILED");
     assert.ok(terminal.endedAt);
-    assert.equal(await db.ingestionAttempt.count({ where: { runId: terminal.id } }), 0);
+    assert.equal(await db.ingestionAttempt.count({ where: { runId: terminal.id } }), 1);
+    const attempt = await db.ingestionAttempt.findFirstOrThrow({ where: { runId: terminal.id } });
+    assert.equal(attempt.error, "parser_error");
+    assert.equal(await db.operationalState.count({ where: { key: "import-event-" + attempt.id + "-" + sourceId } }), 1);
     const row = await db.festivalSource.findUniqueOrThrow({ where: { id: sourceId } });
     assert.equal(row.leaseOwner, null);
     assert.equal(row.lastError, "parser_error");
@@ -392,7 +395,7 @@ test("publication survives notification failure and independent drain recovers o
       encoding: "utf8", env: process.env,
     });
     assert.equal(recovered.status, 0, recovered.stderr);
-    assert.deepEqual(JSON.parse(recovered.stdout), { delivered: 1 });
+    assert.deepEqual(JSON.parse(recovered.stdout), { delivered: 1, importEvents: { delivered: 0, failed: 0 } });
     assert.equal(await drainIngestionNotificationOutbox(db), 0);
     const recorded = await db.notificationEvent.findMany({ where: { dedupeKey: outbox[0].dedupeKey } });
     assert.equal(recorded.length, 1);
