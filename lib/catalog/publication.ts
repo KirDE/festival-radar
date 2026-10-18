@@ -221,9 +221,8 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
     const expectedYear = input.result.candidate.observedEditionYears.length === 1 ? input.result.candidate.observedEditionYears[0] : candidate.sourceYear ?? undefined;
     if (!expectedYear && input.result.changes.some(({ field }) => field === "lineup" || field === "headliners")) throw new Error("Cannot publish a lineup without one verified edition year");
     const applied = await applyFestivalChanges(db, { festivalSlug: input.result.festivalSlug, expectedYear, changes: input.result.changes, strictBefore: true, observedAt: new Date(input.result.fetchedAt) });
-    // Rockharz 2027 lineup/headliner/status publication is authorized as catalogue
-    // data, not as public provider playlist activity. Exact edition/source/field
-    // and persisted evidence must match; never fall through to default enqueue.
+    // Rockharz 2027 publications retain exact edition/source/field and persisted
+    // evidence guards. Verified lineup changes use the normal provider queue.
     const sourceField = input.result.sourceUrl === "https://www.rockharz-festival.com/bands" ? "lineup"
       : input.result.sourceUrl === "https://www.rockharz-festival.com/headliner-alarm" ? "headliners" : undefined;
     const rockharzPublication = input.result.festivalSlug === "rockharz" &&
@@ -238,7 +237,7 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
         candidate.evidence.some((e) => e.field === field && e.sourceUrl === input.result.sourceUrl)) &&
       input.result.candidate.evidence.some((e) => e.field === sourceField && e.sourceUrl === input.result.sourceUrl) &&
       candidate.evidence.some((e) => e.field === sourceField && e.sourceUrl === input.result.sourceUrl);
-    if (rockharzPublication && !verifiedSource) throw new Error("Rockharz playlist deferral requires matching verified source evidence");
+    if (rockharzPublication && !verifiedSource) throw new Error("Rockharz publication requires matching verified source evidence");
     const impericonPublication = input.result.festivalSlug === "impericon" && input.result.sourceUrl === "https://www.impericon.com/pages/festival";
     if (impericonPublication && !(candidate.festivalSlug === "impericon" && applied.edition.year === expectedYear &&
       input.result.candidate.observedEditionYears.length === 1 && input.result.candidate.observedEditionYears[0] === expectedYear &&
@@ -248,17 +247,10 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
         candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl) &&
         input.result.candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl))))
       throw new Error("Impericon publication requires matching persisted official announcement evidence");
-    // Impericon uses the normal lineup-to-playlist queue. Keep its source and
-    // persisted-evidence guards above; only the provider deferral is removed.
-    const playlistRefreshDeferral = rockharzPublication ? {
-      policy: "rockharz-2027-official-sources-v1",
-      reason: "Catalogue publication approved; provider playlist activity requires separate authorization",
-    } : undefined;
     const publication = await createPublication(db, {
       source: CatalogPublicationSource.INGESTION, sourceId, festivalSlug: input.result.festivalSlug,
-      editionYear: applied.edition.year, actorLabel: "automatic-ingestion", fields: applied.changedFields, playlistRefreshDeferral,
-      evidence: { candidateId: candidate.id, sourceCommit: input.sourceCommit, sourceUrl: input.result.sourceUrl, evidenceIds: candidate.evidence.map(({ id }) => id),
-        ...(playlistRefreshDeferral ? { playlistRefresh: { status: "deferred", ...playlistRefreshDeferral } } : {}) },
+      editionYear: applied.edition.year, actorLabel: "automatic-ingestion", fields: applied.changedFields,
+      evidence: { candidateId: candidate.id, sourceCommit: input.sourceCommit, sourceUrl: input.result.sourceUrl, evidenceIds: candidate.evidence.map(({ id }) => id) },
     });
     // The due-worker event batch is committed atomically with the catalogue.
     if (publication && input.notificationEvents?.length) {
