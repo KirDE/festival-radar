@@ -26,12 +26,12 @@ const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
 });
 const require = createRequire(import.meta.url);
-function loadPage(editions) {
+function loadPage(editions, artists = []) {
   const exports = {};
   const dependencies = {
     "react/jsx-runtime": require("react/jsx-runtime"),
     "next/navigation": { notFound() { throw new Error("NEXT_NOT_FOUND"); } },
-    "@/lib/catalog/repository": { getCatalog: async () => ({ editions }) },
+    "@/lib/catalog/repository": { getCatalog: async () => ({ editions, artists }) },
     "@/components/PublicCatalogPages": { FestivalEditionContent },
   };
   new Function("require", "exports", outputText)((id) => {
@@ -42,8 +42,8 @@ function loadPage(editions) {
   return exports.default;
 }
 
-async function renderEdition(item, editions = [item], language = "en") {
-  const page = loadPage(editions);
+async function renderEdition(item, editions = [item], language = "en", artists = []) {
+  const page = loadPage(editions, artists);
   const body = await page({ params: Promise.resolve({ slug: item.slug, year: String(item.editionYear) }) });
   return renderToStaticMarkup(createElement(LanguageProvider, { initialLanguage: language }, body));
 }
@@ -145,4 +145,20 @@ test("edition route keeps partial facts and localized badges in DE and RU", asyn
 
 test("canonical route still rejects a missing edition", async () => {
   await assert.rejects(renderEdition(makeEdition(), []), /NEXT_NOT_FOUND/);
+});
+
+test("canonical edition links only resolved catalogue identities without modifying its lineup", async () => {
+  const item = makeEdition({ recordState: "current", headliners: ["New Headliner"], lineup: ["Known Support", "Archive-only Artist"] });
+  const before = structuredClone(item);
+  for (const language of ["en", "de", "ru"]) {
+    const html = await renderEdition(item, [item], language, [
+      { name: "New Headliner", slug: "canonical-headliner-identity" },
+      { name: "Known Support", slug: "canonical-support-identity" },
+    ]);
+    assert.match(html, /<a href="\/artists\/canonical-headliner-identity\/?">New Headliner<\/a>/);
+    assert.match(html, /<a href="\/artists\/canonical-support-identity\/?">Known Support<\/a>/);
+    assert.ok(html.includes("<span>Archive-only Artist</span>"));
+    assert.doesNotMatch(html, /artists\/(?:undefined|new-headliner|archive-only-artist)/);
+  }
+  assert.deepEqual(item, before);
 });
