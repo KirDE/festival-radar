@@ -1,3 +1,5 @@
+import { drainImportEvents } from "../lib/ingestion/import-events.ts";
+import { sendImportEvent, transportConfigured } from "../lib/ingestion/import-event-transport.mjs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -221,6 +223,12 @@ for (const source of selected) {
     } catch { /* retain the original error and still attempt lease cleanup */ }
     if (sourceLease && !leaseCompleted) await recoverSourceLease(sourceLease, publicationCommitted ? "success" : failureOutcome);
     throw error;
+  } finally {
+    // The importer itself requests repair after persisting the result and
+    // releasing its lease. The ordinary tick only recovers interrupted delivery.
+    if (publish && transportConfigured()) {
+      try { await drainImportEvents(db, sendImportEvent, 1); } catch { /* retain durable request and original import outcome */ }
+    }
   }
 }
 

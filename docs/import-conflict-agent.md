@@ -28,8 +28,10 @@ with their repair record. A thrown extraction error now persists a safe failed
 attempt, so it cannot silently disappear before event creation. No-attempt database,
 startup and server-health failures do not invoke a model.
 
-The existing server-side DB-due tick drains at most ten events after its fetch,
-including when fetching failed or found no due source. This is delivery of the
+The importer itself delivers a pending event as soon as its result is persisted
+and its lease released, including a thrown extraction error. The existing server-side
+DB-due tick also recovers at most ten undelivered events after its fetch, including
+when fetching failed or found no due source. This is delivery of the
 importer's own committed events, not an OpenClaw queue watcher. A source event is
 rechecked after the importer releases its lease; successful recognized no-ops,
 stale/resolved cases and completed repairs are discarded without model calls.
