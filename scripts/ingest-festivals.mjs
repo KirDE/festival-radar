@@ -153,6 +153,8 @@ for (const source of selected) {
     result = evaluateCandidate(current, candidate);
   } catch (error) {
     failureOutcome = "parser_error";
+    if (run) await persistAttempt(db, { runId: run.id, festivalSlug: source.festivalSlug, requestedUrl: source.url,
+      httpStatus: response?.status ?? null, durationMs: Date.now() - startedAt.getTime(), startedAt, endedAt: new Date(), error: "parser_error" });
     throw error;
   }
   const status = result.reviewReasons.length ? "review" : result.publishable ? "publishable" : "unchanged";

@@ -1,3 +1,4 @@
+import { queueImportEvent } from './import-event-queue.ts';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { RefreshPolicy } from './types.ts';
@@ -10,6 +11,7 @@ export async function enqueueParserRepair(db: Database, context: Record<string, 
   const id = fingerprint({ sourceId: context.sourceId, issueId: context.issueId });
   await db.operationalState.upsert({ where: { key: prefix + id },
     create: { key: prefix + id, payload: { ...context, repairId: id, status: 'pending', requestedAt: new Date().toISOString() } as Prisma.InputJsonValue }, update: {} });
+  await queueImportEvent(db, id, { kind: 'repair', repairId: id });
   return id;
 }
 export async function listParserRepairs(db: Database, now = new Date()) {
@@ -49,6 +51,7 @@ export async function finishParserRepair(db: PrismaClient, id: string, token: st
     const payload = { ...old, ...result, resultHash: hash, leaseDigest: fingerprint(token),
       finishedAt: new Date().toISOString(), retryAt: result.status === 'retry' ? new Date(Date.now()+3600000).toISOString() : null };
     await tx.operationalState.update({ where: { key: prefix+id }, data: { payload: payload as Prisma.InputJsonValue, leaseOwner: null, leaseExpiresAt: null } });
+    if (result.status === 'retry') await queueImportEvent(tx, id + '-' + hash, { kind: 'repair', repairId: id }, new Date(payload.retryAt!));
     await tx.adminAuditEntry.create({ data: { actorLabel: 'OpenClaw parser repair', action: 'ingestion.parser.'+result.status,
       resourceKind: 'FESTIVAL', resourceKey: String(old.festivalSlug), afterValue: result } });
     return { status: result.status, repairId: id };

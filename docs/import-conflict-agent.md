@@ -3,7 +3,7 @@
 The normal importer still fails closed. A protected, assistant-owned resolver
 handles CURRENT-edition review candidates, failed fetch/extraction attempts and
 manual sources. The existing durable source/candidate records and OperationalState
-table form its inbox: no public Gateway, callback endpoint, or extra database.
+table form its inbox. The importer pushes repair events over a dedicated restricted SSH key; the Gateway stays private and no extra database is needed.
 
 ## Transport and lifecycle
 
@@ -17,14 +17,48 @@ Example shape (never commit the real file):
 {"baseUrl":"https://festivals.kir-it.de","token":"<private generated secret>"}
 ```
 
-GET lists at most ten **ready** cases, with an exact catalog/source/attempt snapshot;
-`?mode=signal` only returns completeness, ready count and a revision. A bounded,
-read-only OpenClaw condition watcher runs every minute. Healthy empty inboxes do
-not call a model. Changed ready work wakes the OpenClaw development-controller;
-unchanged unclaimed work is rescued after 15 minutes. API errors wake it at most
-hourly. Initial HTTP 404 defers quietly until the API is deployed; disappearance
-after the first successful signal is an error. The former weekly source reviewer
-is updated in place, not duplicated.
+GET lists at most ten **ready** cases, with an exact catalog/source/attempt snapshot.
+`?mode=signal` is a diagnostic only; no OpenClaw-side timer watches it.
+
+## Importer-issued events (no model polling)
+
+Persisting an attempt also writes a small durable event into OperationalState in
+that same transaction. Parser corrections similarly enqueue an event atomically
+with their repair record. A thrown extraction error now persists a safe failed
+attempt, so it cannot silently disappear before event creation. No-attempt database,
+startup and server-health failures do not invoke a model.
+
+The existing server-side DB-due tick drains at most ten events after its fetch,
+including when fetching failed or found no due source. This is delivery of the
+importer's own committed events, not an OpenClaw queue watcher. A source event is
+rechecked after the importer releases its lease; successful recognized no-ops,
+stale/resolved cases and completed repairs are discarded without model calls.
+Identical failed checks share one semantic event identity within a failure episode.
+A deliberate agent retry follows the existing backoff, never a generic health loop.
+
+Transport uses optional production secrets `IMPORT_EVENTS_SSH_TARGET`,
+`IMPORT_EVENTS_SSH_KEY_B64` and `IMPORT_EVENTS_KNOWN_HOSTS` (pinned host key).
+The private key is decoded only into a temporary0600 file; SSH uses BatchMode,
+strict known-host verification, no forwarding, and a fixed command. Keep these
+secrets out of the repository. All three unset disables sending but retains events.
+Set all three together to activate. Transport failure retains the durable event
+and retries through the existing importer tick after15minutes, without any model.
+
+Install `scripts/import-event-receiver.mjs` on the OpenClaw host with a private
+configuration: stateDir, apiConfig (existing protected API credentials), agentId,
+sessionKey, to, threadId, accountId, runbook and openclaw executable. Its SSH key
+MUST be authorized with `restrict,command="/usr/bin/flock -w 25 ABS_LOCK /usr/bin/node ABS_RECEIVER ABS_PRIVATE_CONFIG"`.
+Never authorize this key for an unrestricted shell. The receiver accepts only
+bounded identifier-only events and a non-model connectivity probe. It verifies
+the exact live case over the protected API before submitting a fixed repair prompt
+and fixed topic destination. Durable local receipts and a stable Gateway admission
+idempotency key suppress delivery replays. A rejected/missing API or active lease
+never launches a model. The two former standing Gateway jobs must remain disabled.
+
+`?mode=event&event=<identifier-only JSON>` is protected by the same independent
+Bearer secret and exposes only readiness/obsolescence, not case details. A receiver
+acknowledgement means accepted by Gateway, not that the repair is complete; existing
+claim, resolution, deployment and audit requirements still apply.
 
 POST operations:
 
