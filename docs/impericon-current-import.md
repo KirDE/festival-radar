@@ -25,9 +25,9 @@ availability is inferred from dated prose. Articles are partial, additive announ
 rotation of older posts cannot erase already saved artists, and a billing promotion
 of an existing support act requires reviewed reclassification.
 
-For this source, verified catalogue publication does not authorize provider playlist
-activity. The existing ingestion publisher records a narrow deferral only when the
-edition, source, additive scope and persisted official field evidence all match.
-Replays remain idempotent. A subsequent unchanged check makes no publication or agent
+Verified Impericon lineup publications use the normal transactional playlist-refresh
+queue. The publisher still requires matching edition, source, additive scope and
+persisted official field evidence before committing catalogue or queue changes.
+Replays remain idempotent and do not create another job. A subsequent unchanged check makes no publication or agent
 call. Legacy exact-article parsing remains available for old bindings until cutover;
 it is not the ongoing discovery mechanism.

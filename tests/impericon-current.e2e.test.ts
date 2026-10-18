@@ -27,19 +27,22 @@ async function prepare(){
  const attempt=await persistAttempt(db,{runId:run.id,festivalSlug:'impericon',requestedUrl:source.url,httpStatus:200,durationMs:1,startedAt:new Date(),endedAt:new Date(),result});
  return{result,attempt};
 }
-test('persisted current-announcement import adds headliner, reuses identity and defers providers, including replay',async()=>{
+test('persisted current-announcement import adds headliner and queues one playlist refresh, including replay',async()=>{
  const archived=await db.festivalEdition.findFirstOrThrow({where:{festival:{slug:'impericon'},year:2026},include:{lineup:true}});
  const artist=await db.artist.findUniqueOrThrow({where:{slug:'beartooth'}});
  const jobs=await db.catalogPlaylistRefresh.count({where:{festivalSlug:'impericon'}});
  const {result,attempt}=await prepare();
  const publication=await publishIngestionResult(db,{attemptId:attempt.id,result,sourceCommit:'impericon-current-test'});
- assert.ok(publication);assert.equal(publication.playlistRefreshRequested,false);
+ assert.ok(publication);assert.equal(publication.playlistRefreshRequested,true);
+ const queued=await db.catalogPlaylistRefresh.findUniqueOrThrow({where:{publicationId:publication.id}});
+ assert.equal(queued.festivalSlug,'impericon');assert.equal(queued.status,'PENDING');
+ assert.equal((publication.evidence as {playlistRefresh?:unknown}).playlistRefresh,undefined);
  const edition=await db.festivalEdition.findFirstOrThrow({where:{festival:{slug:'impericon'},year:2027},include:{lineup:true}});
  assert.equal(edition.lineup.find(l=>l.artistId===artist.id)?.billing,'HEADLINER');assert.equal(edition.lineup.length,3);assert.equal(edition.status,'PARTIAL');
  assert.equal((await db.ingestionCandidate.findUniqueOrThrow({where:{attemptId:attempt.id}})).reviewState,'PUBLISHED');
  assert.deepEqual(await db.festivalEdition.findUniqueOrThrow({where:{id:archived.id},include:{lineup:true}}),archived);
  const replay=await publishIngestionResult(db,{attemptId:attempt.id,result,sourceCommit:'impericon-current-test'});assert.equal(replay?.id,publication.id);
- assert.equal(await db.catalogPlaylistRefresh.count({where:{festivalSlug:'impericon'}}),jobs);
+ assert.equal(await db.catalogPlaylistRefresh.count({where:{festivalSlug:'impericon'}}),jobs+1);
  const current=(await new DatabaseCatalogRepository(db).read()).festivals.find(f=>f.slug==='impericon')!;
  const unchanged=evaluateCandidate(current,result.candidate);assert.deepEqual(unchanged.changes,[]);assert.deepEqual(unchanged.reviewReasons,[]);
 });
@@ -47,6 +50,8 @@ test('missing persisted official field evidence rejects and rolls back before an
  const {result,attempt}=await prepare();
  const candidate=await db.ingestionCandidate.findUniqueOrThrow({where:{attemptId:attempt.id}});
  await db.ingestionEvidence.deleteMany({where:{candidateId:candidate.id,field:'headliners'}});
- await assert.rejects(publishIngestionResult(db,{attemptId:attempt.id,result,sourceCommit:'impericon-current-test'}),/deferral requires matching persisted/);
+ const jobs=await db.catalogPlaylistRefresh.count({where:{festivalSlug:'impericon'}});
+ await assert.rejects(publishIngestionResult(db,{attemptId:attempt.id,result,sourceCommit:'impericon-current-test'}),/publication requires matching persisted/);
+ assert.equal(await db.catalogPlaylistRefresh.count({where:{festivalSlug:'impericon'}}),jobs);
  const edition=await db.festivalEdition.findFirstOrThrow({where:{festival:{slug:'impericon'},year:2027},include:{lineup:true}});assert.equal(edition.lineup.length,2);
 });
