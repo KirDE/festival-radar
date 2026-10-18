@@ -39,3 +39,10 @@ test('fetch follows only discovered official edition articles and exact same-art
  assert.equal(calls.filter(u=>u===source.url).length,1);
  await assert.rejects(fetchSource(source,{maxAttempts:1,fetchImpl:async(url)=>url===source.url?new Response(e.home):new Response('',{status:302,headers:{location:'https://evil.example/'}})}),/redirected outside/);
 });
+
+test('a later support-only wave remains importable after headliner posts rotate out',()=>{
+ const e=impericonFixture();e.home=e.home.replace(/<a href="[^"]+-new-headliner">[^<]+<\/a>/,'');e.articles.shift();
+ e.articles[0].html=e.articles[0].html.replace(/<p>Our headliners[\s\S]*?<\/p>/,'').replace('<b>Support One</b>','<b>Support One</b> – prior act. <b>Future Collective</b>');
+ const c=extract(e);assert.deepEqual(c.warnings,[]);assert.equal(c.headliners,undefined);
+ const r=evaluateCandidate(current,c);assert.deepEqual(r.changes.map(c=>[c.kind,c.after]),[['artist_added','Future Collective']]);assert.equal(r.publishable,true);
+});

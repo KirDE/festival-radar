@@ -120,8 +120,8 @@ export function impericonCurrent(raw: string, source: FestivalSource) {
       if (result.excerpt) excerpts.push(result.excerpt);
     }
     for (const n of headliners.keys()) lineup.delete(n);
-    if (!headliners.size || headliners.size + lineup.size > 200) return;
-    return { editionYear: source.editionYear, startDate, endDate, headliners: [...headliners.values()], lineup: [...lineup.values()],
+    if ((!headliners.size && !lineup.size) || headliners.size + lineup.size > 200) return;
+    return { editionYear: source.editionYear, startDate, endDate, headliners: headliners.size ? [...headliners.values()] : undefined, lineup: lineup.size ? [...lineup.values()] : undefined,
       status: 'partial' as const, artistListMode: 'additive' as const, lineupScope: 'announcement' as const,
       excerpt: `Impericon Festival ${source.editionYear}; ${startDate}–${endDate}; ${excerpts.join('; ')}` };
   } catch { return; }
