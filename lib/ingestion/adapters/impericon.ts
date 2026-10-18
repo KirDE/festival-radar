@@ -1,3 +1,4 @@
+import { isImpericonCurrentSource, impericonCurrent } from "./impericon-current.ts";
 import type { FestivalSource } from "../types.ts";
 
 // This dated announcement is not an evergreen lineup grid. A different post
@@ -21,6 +22,7 @@ function content(html: string): string | undefined {
 }
 
 export function impericon(html: string, source: FestivalSource) {
+  if (isImpericonCurrentSource(source)) return impericonCurrent(html, source);
   if (source.url !== impericonAnnouncementUrl || source.editionYear !== 2027 || !/<\/body>\s*<\/html>\s*$/i.test(html)) return undefined;
   const clean = html.replace(/<!--[\s\S]*?-->/g, "");
   const head = clean.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1]?.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "");

@@ -1,3 +1,4 @@
+import { isImpericonCurrentSource, discoverImpericonAnnouncements, sameImpericonArticle, impericonArticleUrl, IMPERICON_DOCUMENTS } from "./adapters/impericon-current.ts";
 import { isRoadburnSource, roadburnUrl, roadburnLinked, discoverRoadburnAnnouncements, roadburnDocuments, type RoadburnDocument } from "./adapters/roadburn.ts";
 import { isPolandrockSource, polandrockAnnouncementUrl } from "./adapters/polandrock.ts";
 import { handlesBrutalAssault, fetchBrutalAssaultDocuments } from "./adapters/brutal-assault.ts";
@@ -63,6 +64,23 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && isImpericonCurrentSource(source)) {
+    if (initial.response.url && initial.response.url !== source.url) throw new Error("Impericon festival page redirected away from its trusted route");
+    const home = await initial.response.text(), articles = [];
+    let attempts = initial.attempts;
+    for (const url of discoverImpericonAnnouncements(home, source.editionYear)) {
+      let linked = await fetchWithRetry(url, "manual"); attempts += linked.attempts;
+      if ([301,302,307,308].includes(linked.response.status)) {
+        const target = impericonArticleUrl(new URL(linked.response.headers.get('location') ?? '', url).href, source.editionYear);
+        if (!target || !sameImpericonArticle(url, target, source.editionYear)) throw new Error('Impericon article redirected outside its exact official identity');
+        linked = await fetchWithRetry(target, "error"); attempts += linked.attempts;
+      }
+      if (!linked.response.ok) return { response: linked.response, attempts };
+      if (linked.response.url && !sameImpericonArticle(url, linked.response.url, source.editionYear)) throw new Error('Impericon article changed its official identity');
+      articles.push({url, html: await linked.response.text()});
+    }
+    return {response: new Response(JSON.stringify({kind: IMPERICON_DOCUMENTS, home, articles}), {headers: {'content-type': 'application/json'}}), attempts};
+  }
   if (initial.response.ok && isRoadburnSource(source) && !source.fetchUrl && !source.followLinkPattern) {
     if (initial.response.url && initial.response.url !== source.url) throw new Error("Roadburn homepage redirected away from its trusted route");
     const home = await initial.response.text();

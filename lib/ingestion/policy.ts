@@ -57,6 +57,9 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
   // still need agent review: their publication would enqueue provider work.
   if (current.slug === "dynamo-metal-fest" && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))
     reviewReasons.add("Agent review required before lineup-triggered provider activity");
+  if (candidate.festivalSlug === "impericon" && candidate.sourceUrl === "https://www.impericon.com/pages/festival" &&
+    candidate.headliners?.some(name => current.lineup.some(old => old.toLowerCase() === name.toLowerCase())))
+    reviewReasons.add("Impericon billing promotion requires reviewed reclassification");
   if (candidate.festivalSlug !== current.slug) reviewReasons.add("Candidate slug does not match the current festival");
   const catalogueYear = current.editionYear ?? (current.startDate ? Number(current.startDate.slice(0, 4)) : undefined);
   const mismatchedYears = catalogueYear ? candidate.observedEditionYears.filter((year) => year !== catalogueYear) : [];
