@@ -96,8 +96,7 @@ def apply_plan(plan, request, guard):
         raise ValueError('Playlist read-back mismatch')
 
 
-def main():
-    plan = json.load(open(sys.argv[1], encoding='utf-8'))
+def run_plan(plan):
     def guard():
         subprocess.run([os.environ['PLAYLIST_GUARD_NODE'], '--experimental-strip-types', os.environ['PLAYLIST_GUARD_SCRIPT']], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20)
     def creation_state(action, playlist_id=None):
@@ -115,6 +114,12 @@ def main():
     ensure_playlist(plan, request, guard, creation_state)
     apply_plan(plan, request, guard)
     guard()
+    return plan
+
+
+def main():
+    with open(sys.argv[1], encoding='utf-8') as source:
+        plan = run_plan(json.load(source))
     with open(sys.argv[1], 'w', encoding='utf-8') as output:
         json.dump(plan, output)
 

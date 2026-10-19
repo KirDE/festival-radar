@@ -13,6 +13,15 @@ The static MVP for [festivals.kir-it.de](https://festivals.kir-it.de) includes 5
 filterable cards, festival details, artist pages and links to official ticket,
 Spotify and setlist.fm resources.
 
+## Automation boundary
+
+GitHub Actions is restricted to **Quality** (offline tests, type checks and build)
+and **Deploy production**. There are no scheduled or manually dispatched runtime
+workflows. Import, source monitoring, artist enrichment, playlist queues,
+notification dispatch and analytics retention run on the application server.
+Historical runbooks describing GitHub operational dispatch are superseded by
+[this boundary](docs/runtime-ownership.md).
+
 ## Web app
 
 ```bash
@@ -149,8 +158,8 @@ site does not set analytics cookies or build visitor profiles.
 
 The receiver stores only daily `path`/`locale` counters in PostgreSQL. Set
 `ANALYTICS_RETENTION_DAYS` (90 by default) and configure the dedicated
-`ANALYTICS_RETENTION_TOKEN` used by the daily production retention workflow.
-The workflow invokes `/api/analytics/prune/`; database credentials remain
+`ANALYTICS_RETENTION_TOKEN` used by the daily production retention systemd timer.
+The server-local runner invokes `/api/analytics/prune/`; database credentials remain
 inside production. Each release installs exact nginx locations for both
 `/api/analytics/page-view` spellings. Those locations disable access logging,
 proxy directly to the loopback application, and remove client-address forwarding
@@ -263,13 +272,11 @@ Resume an existing YouTube Music playlist after the daily quota resets:
 YOUTUBE_MUSIC_PLAYLIST_ID=... python3 scripts/spotify_gmm_2026/youtube_music_transfer.py --publish --resume-publish
 ```
 
-The scheduled workflow requires three encrypted repository secrets:
-`YOUTUBE_MUSIC_CREDENTIALS_JSON`, `YOUTUBE_MUSIC_OAUTH_JSON`, and
-`YOUTUBE_MUSIC_PLAYLIST_IDS` (a JSON object mapping canonical festival slugs to
-persisted playlist IDs). Missing IDs fail closed so an unattended retry cannot
-create duplicate playlists. A failure for one festival is recorded without
-preventing later festivals from being attempted; the job itself remains failed
-until every eligible provider refresh succeeds.
+Production playlist work is driven by the database queue on the application
+server, not by GitHub Actions. Provider bindings, plans and resumable publication
+state are stored in PostgreSQL. Credentials remain in the protected server
+runtime configuration. The standalone examples below are operator tools, not
+scheduled GitHub workflows.
 
 For unattended quota checks, use the auto-resume wrapper. It first verifies that the playlist can be read, then runs the same quota-capped resume publish and prints one JSON line for each step:
 

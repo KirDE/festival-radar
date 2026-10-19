@@ -17,9 +17,12 @@ from spotify_auth import auth_headers
 
 SETLIST_API_KEY = os.environ.get('SETLIST_API_KEY')
 REPORT_DIR = Path('outputs/festival_playlists')
-REPORT_DIR.mkdir(parents=True, exist_ok=True)
+WORKER_STDIO = os.environ.get('FESTIVAL_WORKER_STDIO') == '1'
+if not WORKER_STDIO:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_DIR = Path('tmp/festival_playlists_cache')
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+if not WORKER_STDIO:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
 SETLIST_CACHE_FILE = CACHE_DIR / 'setlist_cache.json'
 CACHE_ONLY_SETLIST = os.environ.get('FESTIVAL_SETLIST_CACHE_ONLY') == '1'
 REPORT_ONLY = os.environ.get('FESTIVAL_REPORT_ONLY') == '1'
@@ -48,7 +51,7 @@ ARTIST_SEARCH_CACHE = {}
 MBID_CACHE = {}
 SETLIST_CACHE = {}
 TRACK_SEARCH_CACHE = {}
-PERSISTENT_SETLIST_CACHE = json.loads(SETLIST_CACHE_FILE.read_text(encoding='utf-8')) if SETLIST_CACHE_FILE.exists() else {}
+PERSISTENT_SETLIST_CACHE = json.loads(SETLIST_CACHE_FILE.read_text(encoding='utf-8')) if not WORKER_STDIO and SETLIST_CACHE_FILE.exists() else {}
 PERSISTENT_MBID_CACHE = {}
 MIN_TRACK_MS = 90_000
 NON_SONG_TITLE_HINTS = {'intro', 'outro', 'interlude', 'overture'}
@@ -98,7 +101,8 @@ def load_report_mbid_cache(report_dir: Path) -> dict[str, str]:
     return cache
 
 
-PERSISTENT_MBID_CACHE.update(load_report_mbid_cache(REPORT_DIR))
+if not WORKER_STDIO:
+    PERSISTENT_MBID_CACHE.update(load_report_mbid_cache(REPORT_DIR))
 
 
 def sl_get(url, params=None, retries=4):
@@ -679,7 +683,7 @@ def setlist_track_sort_key(item: tuple[int, int, str, dict]) -> tuple:
     return (-play_count, -popularity, is_feat_track(track), song.lower())
 
 
-def build_playlist(festival: Festival, user_id: str):
+def build_playlist(festival: Festival, user_id: str, *, persist_report=True):
     artists_raw, headliners = festival.lineup_fn()
     aliases = festival.aliases or {}
     spotify_artist_ids = festival.spotify_artist_ids or {}
@@ -827,6 +831,8 @@ def build_playlist(festival: Festival, user_id: str):
         'headliners': headliners,
         'report': report,
     }
+    if not persist_report:
+        return output
     report_path = REPORT_DIR / f'{festival.key}.json'
     if REPORT_ONLY and not playlist_uris and report_path.exists():
         existing = json.loads(report_path.read_text(encoding='utf-8'))
@@ -865,6 +871,10 @@ def build_playlist(festival: Festival, user_id: str):
 def load_canonical_festivals(path: Path | None = None) -> tuple[int, list[Festival], list[dict]]:
     path = path or Path(os.environ.get('FESTIVAL_CATALOG', 'tmp/festival-playlist-catalog.json'))
     catalog = json.loads(path.read_text(encoding='utf-8'))
+    return parse_canonical_festivals(catalog)
+
+
+def parse_canonical_festivals(catalog):
     season = int(catalog['season'])
     expected = int(os.environ.get('FESTIVAL_SEASON', season))
     if expected != season:

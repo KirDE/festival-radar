@@ -7,12 +7,9 @@ import { promisify } from "node:util";
 import { test } from "node:test";
 const execute = promisify(execFile);
 
-test("workflow keeps auditable publication and artifact handling after accepted partial runs", async () => {
-  const workflow = await readFile(".github/workflows/ingestion.yml", "utf8");
+test("ingestion response validation accepts durable partial runs", async () => {
   const validation = await readFile("scripts/validate-ingestion-response.jq", "utf8");
-  assert.match(workflow, /api\/ingestion\/run\//);
   assert.match(validation, /summary\.status == "COMPLETED" or \.summary\.status == "PARTIAL"/);
-  assert.match(workflow, /name: Retain review and diagnostic artifacts[\s\S]*if: always\(\)/);
 });
 
 

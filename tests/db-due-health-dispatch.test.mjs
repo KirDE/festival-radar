@@ -5,24 +5,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-test('dispatch has no inputs, runs on main in protected production and calls only exact SHA health', async () => {
-  const [workflow, deploy, grant, installer, upgrade] = await Promise.all([
-    '.github/workflows/db-due-health.yml', '.github/workflows/deploy.yml',
+test('deployment preserves protected exact-SHA health and server timer installation', async () => {
+  const [deploy, grant, installer, upgrade] = await Promise.all([
+    '.github/workflows/deploy.yml',
     'scripts/deploy/bootstrap-deploy-user.sh', 'scripts/deploy/install-release.sh',
     'scripts/deploy/upgrade-deployment-assets',
   ].map((file) => readFile(file, 'utf8')));
-  assert.match(workflow, /^on:\n  workflow_dispatch:\n/m);
-  assert.doesNotMatch(workflow, /inputs:|ingest|drain|schedule:|sudoers|\$\{\{\s*inputs\./);
-  assert.match(workflow, /if: github\.ref == 'refs\/heads\/main'/);
-  assert.match(workflow, /environment: production/);
-  assert.match(workflow, /group: festival-radar-production/);
   assert.match(deploy, /group: festival-radar-production/);
   for (const key of ['DEPLOY_HOST', 'DEPLOY_PORT', 'DEPLOY_KNOWN_HOSTS', 'DEPLOY_SSH_KEY']) {
-    assert.ok(workflow.includes('secrets.' + key));
+    assert.ok(deploy.includes('secrets.' + key));
   }
-  assert.match(workflow, /User festival-radar-deploy/);
-  assert.match(workflow, /StrictHostKeyChecking yes/);
-  assert.match(workflow, /ssh production sudo -n \/usr\/local\/libexec\/festival-radar\/activate-release "\$GITHUB_SHA" due-health/);
   assert.match(grant, /NOPASSWD: \/usr\/local\/libexec\/festival-radar\/activate-release \[0-9a-f\]\*/);
   assert.doesNotMatch(grant, /NOPASSWD:.*start-db-due/);
   assert.match(upgrade, /for asset in activate-release install-release\.sh upgrade-deployment-assets/);

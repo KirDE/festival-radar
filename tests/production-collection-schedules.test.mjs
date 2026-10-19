@@ -4,15 +4,6 @@ import { readFile } from "node:fs/promises";
 
 const jobs = ["artist-identities", "ingestion", "playlists", "source-monitor"];
 
-test("collection workflows are manual-only", async () => {
-  for (const job of jobs) {
-    const workflow = await readFile(`.github/workflows/${job}.yml`, "utf8");
-    assert.match(workflow, /workflow_dispatch:/);
-    assert.doesNotMatch(workflow, /\bschedule:/);
-    assert.doesNotMatch(workflow, /\bcron:/);
-  }
-});
-
 test("production installer owns every collection schedule", async () => {
   const [installer, runner, packager, deploy] = await Promise.all([
     readFile("scripts/deploy/install-release.sh", "utf8"),

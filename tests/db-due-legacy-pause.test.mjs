@@ -199,14 +199,3 @@ test('deployment preserves paused timer without rearming or clearing failed serv
     }
   } finally { await rm(h.dir, { recursive: true, force: true }); }
 });
-
-test('pause workflow remains manual-only, protected, and relays no raw output', async () => {
-  const workflow = await readFile('.github/workflows/db-due-legacy-pause.yml', 'utf8');
-  assert.match(workflow, /^on:\n  workflow_dispatch:\n/m);
-  assert.match(workflow, /github.ref == 'refs\/heads\/main'/);
-  assert.match(workflow, /environment: production/);
-  assert.match(workflow, /group: festival-radar-production/);
-  assert.match(workflow, /activate-release "\$GITHUB_SHA" due-pause-legacy-timer > "\$audit" 2>\/dev\/null/);
-  assert.match(workflow, /node scripts\/validate-db-due-legacy-pause.mjs/);
-  assert.doesNotMatch(workflow, /schedule:|due-switch|due-ingest|set -x|cat "\$audit"/);
-});

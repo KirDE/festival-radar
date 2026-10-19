@@ -8,49 +8,12 @@ import { promisify } from "node:util";
 
 const execute = promisify(execFile);
 
-for (const workflowName of ["notifications", "ingestion", "playlists"]) {
-  test(`${workflowName} uses production-scoped internal API credentials`, async () => {
-    const workflow = await readFile(`.github/workflows/${workflowName}.yml`, "utf8");
-    assert.match(workflow, /jobs:[\s\S]*?environment: production/);
-    assert.match(workflow, /APP_URL: \$\{\{ secrets\.APP_URL \}\}/);
-    assert.match(workflow, /INTERNAL_API_SECRET: \$\{\{ secrets\.INTERNAL_API_SECRET \}\}/);
-    assert.doesNotMatch(workflow, /INTERNAL_API_SECRET: \$\{\{ vars\./);
-  });
-}
-
-test("published ingestion lineups trigger a scoped production playlist refresh", async () => {
-  const workflow = await readFile(".github/workflows/ingestion.yml", "utf8");
-  assert.match(workflow, /select-published-festivals\.mjs outputs\/ingestion-response\.json/);
-  assert.match(workflow, /\/api\/playlists\/run\//);
-  assert.match(workflow, /No published lineup changes; playlist refresh skipped/);
-  assert.match(workflow, /if \.status == "QUEUED" then/);
-  assert.match(workflow, /\.jobs\[\]\.festivalSlug/);
-});
-
 test("deploy no longer derives playlist work from repository catalogue diffs", async () => {
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
-  const playlists = await readFile(".github/workflows/playlists.yml", "utf8");
   assert.doesNotMatch(workflow, /ingestion-publications|changed-publication-lineups|steps\.lineup/);
-  assert.match(playlists, /\/api\/playlists\/run\//);
-  assert.doesNotMatch(playlists, /create-pull-request|data\/playlist-status\.json/);
 });
 
-test("notification scheduler posts to the canonical non-redirecting endpoint", async () => {
-  const workflow = await readFile(".github/workflows/notifications.yml", "utf8");
-  assert.match(workflow, /"\$\{APP_URL%\/\}\/api\/notifications\/dispatch\/"/);
-  assert.doesNotMatch(workflow, /"\$APP_URL\/api\/notifications\/dispatch"/);
-});
-
-test("ingestion keeps database access inside production and uses the canonical internal endpoint", async () => {
-  const workflow = await readFile(".github/workflows/ingestion.yml", "utf8");
-  assert.doesNotMatch(workflow, /DATABASE_URL: \$\{\{ secrets\.DATABASE_URL \}\}/);
-  assert.match(workflow, /"\$\{APP_URL%\/\}\/api\/ingestion\/run\/"/);
-  assert.match(workflow, /mkdir -p outputs/);
-  assert.match(workflow, /--argjson force "\$FORCE"/);
-  assert.match(workflow, /scripts\/validate-ingestion-response\.jq/);
-});
-
-test("ingestion workflow validates scoped and full-catalogue responses independently", async () => {
+test("ingestion API validator handles scoped and full-catalogue responses independently", async () => {
   const validate = async (response, festival, force = true) => {
     const directory = await mkdtemp(path.join(tmpdir(), "ingestion-validation-"));
     const responsePath = path.join(directory, "response.json");
@@ -122,18 +85,11 @@ test("deployment installs only configured protected notification providers", asy
 
 test("deployment builds and installs the privacy analytics contract", async () => {
   const workflow = await readFile(".github/workflows/deploy.yml", "utf8");
-  const pruneWorkflow = await readFile(".github/workflows/prune-analytics.yml", "utf8");
   assert.match(workflow, /NEXT_PUBLIC_ANALYTICS_ENDPOINT: \/api\/analytics\/page-view\//);
   assert.match(workflow, /ANALYTICS_OPERATOR_TOKEN: \$\{\{ secrets\.ANALYTICS_OPERATOR_TOKEN \}\}/);
   assert.match(workflow, /ANALYTICS_RETENTION_TOKEN: \$\{\{ secrets\.ANALYTICS_RETENTION_TOKEN \}\}/);
   assert.match(workflow, /printf 'ANALYTICS_OPERATOR_TOKEN=%q\\n'/);
   assert.match(workflow, /printf 'ANALYTICS_RETENTION_DAYS=%q\\n'/);
-  assert.match(pruneWorkflow, /environment: production/);
-  assert.doesNotMatch(pruneWorkflow, /schedule:/);
-  assert.match(pruneWorkflow, /workflow_dispatch:/);
-  assert.doesNotMatch(pruneWorkflow, /DATABASE_URL/);
-  assert.match(pruneWorkflow, /ANALYTICS_RETENTION_TOKEN: \$\{\{ secrets\.ANALYTICS_RETENTION_TOKEN \}\}/);
-  assert.match(pruneWorkflow, /\/api\/analytics\/prune\//);
 });
 
 test("analytics retention route fails closed behind its dedicated secret", async () => {

@@ -195,12 +195,4 @@ test('recovery relay validates one bounded enum-only marker and matching remote 
     assert.throws(() => validateLegacyRecovery(Buffer.from(marker), sha, exit === '0' ? '6' : '0'), /rejected/);
     assert.throws(() => validateLegacyRecovery(Buffer.from(marker), sha, '255'), /rejected/);
   }
-  const workflow = await readFile('.github/workflows/db-due-legacy-recovery.yml', 'utf8');
-  assert.match(workflow, /^on:\n  workflow_dispatch:\n/m);
-  assert.match(workflow, /github.event_name == 'workflow_dispatch' && github.ref == 'refs\/heads\/main'/);
-  assert.match(workflow, /environment: production/); assert.match(workflow, /group: festival-radar-production/);
-  assert.match(workflow, /ulimit -f 4; timeout --signal=TERM --kill-after=5s 30s ssh/);
-  assert.match(workflow, /activate-release "\$GITHUB_SHA" due-reset-legacy-failed > "\$audit" 2>\/dev\/null\) 2>\/dev\/null/);
-  assert.match(workflow, /node scripts\/validate-db-due-legacy-recovery.mjs "\$GITHUB_SHA" "\$result" < "\$audit"/);
-  assert.doesNotMatch(workflow, /schedule:|due-ingest|due-switch|preflight-ssh|set -x|cat "\$audit"/);
 });

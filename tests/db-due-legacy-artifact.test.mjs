@@ -56,20 +56,11 @@ test('current failure evidence vs retained success, malformed, missing, oversize
     assert.equal(await diagnoseLegacyArtifacts(now + 120, dir, now), 'unknown');
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
-test('manual protected workflow uses only fixed SHA mode and validates exact marker', async () => {
+test('server legacy diagnostic remains fixed-mode and read-only', async () => {
   const { readFile } = await import('node:fs/promises');
-  const workflow = await readFile('.github/workflows/db-due-legacy-artifact.yml', 'utf8');
   const dispatcher = await readFile('scripts/deploy/activate-release', 'utf8');
   const scheduler = await readFile('scripts/deploy/db-due-scheduler', 'utf8');
   const packageScript = await readFile('scripts/deploy/package-release.sh', 'utf8');
-  assert.match(workflow, /workflow_dispatch:/);
-  assert.match(workflow, /github.ref == 'refs\/heads\/main'/);
-  assert.match(workflow, /environment: production/);
-  assert.match(workflow, /group: festival-radar-production/);
-  assert.match(workflow, /StrictHostKeyChecking yes/);
-  assert.match(workflow, /due-legacy-artifact-diagnose > "\$audit" 2>\/dev\/null/);
-  assert.match(workflow, /node scripts\/validate-db-due-legacy-artifact.mjs "\$GITHUB_SHA" < "\$audit"/);
-  assert.doesNotMatch(workflow, /inputs:|schedule:|tee |cat "\$audit"|set -x/);
   assert.match(dispatcher, /due-legacy-artifact-diagnose\) exec .*db-due-scheduler "\$commit" diagnose-legacy-artifact/);
   const branch = scheduler.slice(scheduler.indexOf('if [[ "$action" == diagnose-legacy-artifact ]]; then'), scheduler.indexOf('if [[ "$action" == health ]]; then'));
   assert.match(branch, /ExecMainStartTimestamp/);
