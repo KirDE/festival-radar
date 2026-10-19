@@ -9,6 +9,7 @@ from pathlib import Path
 import requests
 
 TOKEN_PATH = Path(os.environ.get('SPOTIFY_TOKEN_PATH', 'tmp/spotify_tokens.json'))
+_WORKER_TOKENS = None
 REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', 'http://127.0.0.1:8888/callback')
 CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID')
 CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET')
@@ -57,6 +58,8 @@ def _token_request(data: dict, retries=4) -> dict:
 
 
 def load_tokens() -> dict:
+    if os.environ.get('FESTIVAL_WORKER_STDIO') == '1':
+        return dict(_WORKER_TOKENS or {'refresh_token': os.environ.get('SPOTIFY_REFRESH_TOKEN')})
     if not TOKEN_PATH.exists():
         refresh_token = os.environ.get('SPOTIFY_REFRESH_TOKEN')
         return {'refresh_token': refresh_token} if refresh_token else {}
@@ -64,6 +67,10 @@ def load_tokens() -> dict:
 
 
 def save_tokens(tokens: dict) -> None:
+    global _WORKER_TOKENS
+    if os.environ.get('FESTIVAL_WORKER_STDIO') == '1':
+        _WORKER_TOKENS = dict(tokens)
+        return
     TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
     TOKEN_PATH.write_text(json.dumps(tokens, ensure_ascii=False, indent=2), encoding='utf-8')
 

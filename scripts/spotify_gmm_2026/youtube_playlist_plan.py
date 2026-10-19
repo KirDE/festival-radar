@@ -243,9 +243,7 @@ def publish_plan(plan, request, guard, state, progress, *, quota_limit=5000):
         raise
 
 
-def main():
-    mode, input_path, output_path = sys.argv[1:4]
-    value = json.loads(Path(input_path).read_text(encoding='utf-8'))
+def run_plan(mode, value):
     if mode == 'discover':
         result = discover_plan(value)
     elif mode == 'apply':
@@ -269,7 +267,13 @@ def main():
         result = publish_plan(value, request, guard, state, lambda data: state('progress', data), quota_limit=int(os.environ.get('YOUTUBE_WORKER_QUOTA_UNITS', '5000')))
     else:
         raise ValueError('Invalid YouTube plan operation')
-    Path(output_path).write_text(json.dumps(result), encoding='utf-8')
+    return result
+
+
+def main():
+    mode, input_path, output_path = sys.argv[1:4]
+    value = json.loads(Path(input_path).read_text(encoding='utf-8'))
+    Path(output_path).write_text(json.dumps(run_plan(mode, value)), encoding='utf-8')
 
 
 if __name__ == '__main__':

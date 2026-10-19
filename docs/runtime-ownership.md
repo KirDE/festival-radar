@@ -24,9 +24,11 @@ Files still have explicit operational purposes:
 
 - `shared/collection-jobs/*/latest.json` and scheduler status JSON are local
   diagnostics, not an alternative catalogue or playlist queue.
-- The playlist worker creates private per-attempt JSON for the Node/Python
-  subprocess interface and removes its directory in `finally`. Durable plans and
-  ambiguous provider-write reservations stay in PostgreSQL across retries.
+- The database playlist worker exchanges bounded JSON through stdin/stdout with
+  Python, not report/catalogue/plan files. Discovery caches and Spotify access-token
+  caching are in memory for these subprocesses. Durable plans and ambiguous
+  provider-write reservations stay in PostgreSQL across retries; the existing
+  lease-fenced local DB handler remains the only checkpoint/publication path.
 - Ingestion runners can write diagnostic artifacts; the DB-due pilot uses a
   private temporary directory with an exit cleanup trap.
 - Locks, the current-release symlink, protected credentials and event-delivery
