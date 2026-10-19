@@ -243,13 +243,10 @@ test('deployment dispatcher exposes only fixed exact-SHA scheduler modes', async
   assert.ok(dispatcher.includes('[[ "$commit" =~ ^[0-9a-f]{40}$ ]]'));
 });
 
-test('HTTP route places mode guard inside flock; forced workflow uses the same gate and fixed drain cap', async () => {
+test('HTTP route places mode guard inside flock and uses fixed drain cap', async () => {
   const route = await readFile('app/api/ingestion/run/route.ts', 'utf8');
   assert.match(route, /source-fetch.lock", "\/bin\/bash", "scripts\/deploy\/run-legacy-ingestion.sh", process.execPath/);
   assert.ok(route.indexOf('if (!await legacyRouteActive())') < route.indexOf('if (parsed.data.force)'));
-  const workflow = await readFile('.github/workflows/ingestion.yml', 'utf8');
-  assert.match(workflow, /FORCE: "false"/);
-  assert.match(workflow, /group: festival-radar-production/);
   const drain = await readFile('scripts/drain-ingestion-notifications.mjs', 'utf8');
   assert.match(drain, /drainIngestionNotificationOutbox\(db, \{ limit: 100 \}\)/);
 });

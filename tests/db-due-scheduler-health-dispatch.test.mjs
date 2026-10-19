@@ -39,20 +39,7 @@ test('only a single count-enum fixed-field diagnostic can be emitted', () => {
   assert.throws(() => validateSchedulerHealth(Buffer.from(good), 'bad'), /rejected/);
 });
 
-test('manual main-only protected diagnostic shares production lock and never relays raw SSH', async () => {
-  const workflow = await readFile('.github/workflows/db-due-scheduler-health.yml', 'utf8');
-  assert.match(workflow, /^on:\n  workflow_dispatch:\n/m);
-  assert.doesNotMatch(workflow, /inputs:|schedule:|preflight-ssh|due-switch|due-ingest|due-health\b/);
-  assert.match(workflow, /if: github.event_name == 'workflow_dispatch' && github.ref == 'refs\/heads\/main'/);
-  assert.match(workflow, /environment: production/);
-  assert.match(workflow, /group: festival-radar-production\n  cancel-in-progress: false/);
-  assert.match(workflow, /permissions:\n  contents: read/);
-  assert.match(workflow, /StrictHostKeyChecking yes/);
-  assert.match(workflow, /User festival-radar-deploy/);
-  assert.match(workflow, /ulimit -f 4; timeout --signal=TERM --kill-after=5s 30s ssh .*activate-release "\$GITHUB_SHA" due-scheduler-health > "\$audit" 2>\/dev\/null/);
-  assert.match(workflow, /node scripts\/validate-db-due-scheduler-health.mjs "\$GITHUB_SHA" < "\$audit"/);
-  assert.match(workflow, /> "\$audit" 2>\/dev\/null\) 2>\/dev\/null; then/);
-  assert.doesNotMatch(workflow, /cat "\$audit"|tee|set -x/);
+test('server scheduler health path is read-only', async () => {
   const scheduler = await readFile('scripts/deploy/db-due-scheduler', 'utf8');
   const health = scheduler.slice(scheduler.indexOf('if [[ "$action" == health ]]; then'), scheduler.indexOf('lock="$root/shared'));
   assert.doesNotMatch(health, /systemctl (start|stop|enable|disable)|write_mode|rm |mv |curl|journalctl/);

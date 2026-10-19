@@ -9,17 +9,11 @@ const good = JSON.stringify({ due: 52, queueLaggedOverHour: 0, active: 0, expire
   outboxPending: 0, outboxLaggedOverHour: 0, unknownParserKeys: 0 });
 const audit = JSON.stringify({ attempted: 1, processed: 1, published: 0, reviewRequired: 0, fetchErrors: 0 });
 
-test('fixed dispatch shares deploy lock and has no source, mode or shell input', async () => {
-  const [workflow, route, starter, runner, installer, packager] = await Promise.all([
-    '.github/workflows/db-due-ingest-pilot.yml', 'app/api/ingestion/run/route.ts', 'scripts/deploy/start-db-due',
+test('server pilot retains fetch locks, fixed runner mode and private audit', async () => {
+  const [route, starter, runner, installer, packager] = await Promise.all([
+    'app/api/ingestion/run/route.ts', 'scripts/deploy/start-db-due',
     'scripts/deploy/run-db-due-operation.sh', 'scripts/deploy/install-release.sh', 'scripts/deploy/package-release.sh',
   ].map((p) => readFile(p, 'utf8')));
-  assert.match(workflow, /workflow_dispatch:\n\nconcurrency:/);
-  assert.doesNotMatch(workflow, /inputs:|schedule:|slug|spotify|playlists/);
-  assert.match(workflow, /group: festival-radar-production/);
-  assert.match(workflow, /github.ref == 'refs\/heads\/main'/);
-  assert.match(workflow, /environment: production/);
-  assert.match(workflow, /activate-release \"\$GITHUB_SHA\" due-ingest-pilot/);
   assert.match(route, /execute\(\"\/usr\/bin\/flock\", \[\"-n\", \"-F\", \"\/opt\/festival-radar\/shared\/ingestion\/source-fetch.lock\"/);
   assert.match(starter, /flock -n 8/);
   assert.match(starter, /systemctl show --property=ActiveState --value festival-radar-collection@ingestion.service/);

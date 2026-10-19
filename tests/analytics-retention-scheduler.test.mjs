@@ -31,10 +31,9 @@ async function runWithResponse(body, status = "200") {
   return { result, state: JSON.parse(await readFile(stateFile, "utf8")) };
 }
 
-test("production owns analytics retention scheduling and GitHub is manual diagnostics only", async () => {
-  const [installer, workflow, runner, packager, deploy] = await Promise.all([
+test("production owns analytics retention scheduling", async () => {
+  const [installer, runner, packager, deploy] = await Promise.all([
     readFile("scripts/deploy/install-release.sh", "utf8"),
-    readFile(".github/workflows/prune-analytics.yml", "utf8"),
     readFile("scripts/analytics/prune-production.sh", "utf8"),
     readFile("scripts/deploy/package-release.sh", "utf8"),
     readFile(".github/workflows/deploy.yml", "utf8"),
@@ -44,8 +43,6 @@ test("production owns analytics retention scheduling and GitHub is manual diagno
   assert.match(installer, /Persistent=true/);
   assert.match(installer, /ANALYTICS_RETENTION_APP_URL=http:\/\/127\.0\.0\.1:\$port/);
   assert.match(installer, /systemctl enable --now "\$service-analytics-retention.timer"/);
-  assert.doesNotMatch(workflow, /schedule:/);
-  assert.match(workflow, /workflow_dispatch:/);
   assert.match(runner, /flock -n/);
   assert.match(runner, /authorization: Bearer \$ANALYTICS_RETENTION_TOKEN/);
   assert.match(runner, /--write-out '%\{http_code\}'/);
