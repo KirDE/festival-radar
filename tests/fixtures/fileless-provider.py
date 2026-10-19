@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Offline provider read-back for the actual worker/DB fence integration test."""
-import os
 from pathlib import Path
 import runpy
 import sys

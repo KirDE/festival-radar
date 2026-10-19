@@ -60,6 +60,8 @@ grep -Fxq 'app/scripts/drain-ingestion-notifications.mjs' "$archive_contents"
 grep -Fxq 'app/scripts/export-ingestion-review-queue.mjs' "$archive_contents"
 grep -Fxq 'app/lib/ingestion/review-queue.mjs' "$archive_contents"
 grep -Fxq 'app/scripts/spotify_gmm_2026/spotify_auth.py' "$archive_contents"
+grep -Fxq 'app/scripts/spotify_gmm_2026/playlist_worker_rpc.py' "$archive_contents"
+grep -Fxq 'app/lib/catalog/python-playlist-rpc.ts' "$archive_contents"
 grep -Eq '^app/\.python/(requests|ytmusicapi)/' "$archive_contents"
 grep -Fxq 'app/scripts/notifications/dispatch-production.sh' "$archive_contents"
 
