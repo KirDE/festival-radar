@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts/spotify_gmm_2026'))
-from youtube_playlist_plan import publish_plan, discover_plan, ReconciliationRequired, QuotaBoundReached
+from youtube_playlist_plan import publish_plan, discover_plan, ReconciliationRequired, QuotaBoundReached, ProviderWriteRejected
 
 PLAYLIST = 'PLsynthetic001'
 VIDEOS = [str(i).zfill(11) for i in range(1, 105)]
@@ -51,6 +51,10 @@ class Provider:
             if self.fail_bind:
                 raise RuntimeError('ID persistence failed')
             self.saved['playlistId'] = payload
+        elif action == 'adopt':
+            if self.saved['sent']:
+                raise AssertionError('adoption overwrote reservation')
+            self.saved.update(sent=True, playlistId=payload['playlistId'], adopted=True)
         elif action == 'insert':
             if self.saved['pendingInsert']:
                 raise AssertionError('insert intent overwritten')
@@ -65,6 +69,14 @@ class Provider:
             if self.saved['pendingMetadata'] != payload:
                 raise AssertionError('wrong metadata confirmation')
             self.saved['pendingMetadata'] = None
+        elif action.endswith('-rejected'):
+            key = {'create-rejected': 'creationMetadata', 'insert-rejected': 'pendingInsert', 'metadata-rejected': 'pendingMetadata'}[action]
+            if self.saved[key] != payload['intent']:
+                raise AssertionError('wrong rejected intent')
+            self.saved[key] = None
+            if action == 'create-rejected':
+                self.saved['sent'] = False
+            self.saved['lastRejectedWrite'] = payload['rejection']
         return copy.deepcopy(self.saved)
 
     def request(self, method, url, **kwargs):
@@ -130,13 +142,92 @@ class Provider:
         raise AssertionError('unexpected API request')
 
     def run(self, quota_limit=5000):
-        return publish_plan(self.plan, self.request, self.guard, self.state, lambda data: self.progress.append(data), quota_limit=quota_limit)
+        return publish_plan(self.plan, self.request, self.guard, self.state, lambda data: self.progress.append(data), quota_limit=quota_limit, wait=lambda delay: None)
 
     def writes(self, resource=None):
         return [call for call in self.calls if call[0] != 'GET' and (resource is None or call[1] == resource)]
 
 
 class YoutubePlanTests(unittest.TestCase):
+    def test_explicit_rejected_write_releases_only_its_exact_intent(self):
+        for creating, method, resource in [(True, 'POST', 'playlists'), (False, 'POST', 'playlistItems'), (False, 'PUT', 'playlists')]:
+            provider = Provider(creating=creating)
+            if method == 'PUT':
+                provider.metadata['snippet']['title'] = 'Old title'
+            def request(verb, url, **kwargs):
+                if verb == method and url.endswith('/' + resource):
+                    raise ProviderWriteRejected(403, 'quotaExceeded')
+                return provider.request(verb, url, **kwargs)
+            with self.assertRaises(ProviderWriteRejected):
+                publish_plan(provider.plan, request, provider.guard, provider.state, provider.progress.append, wait=lambda delay: None)
+            self.assertIsNone(provider.saved['pendingInsert'])
+            self.assertIsNone(provider.saved['pendingMetadata'])
+            if creating:
+                self.assertFalse(provider.saved['sent'])
+            self.assertEqual(provider.saved['lastRejectedWrite']['reason'], 'quotaExceeded')
+            self.assertEqual(provider.writes(), [])
+
+    def test_acknowledged_insert_eventually_appears_without_resend(self):
+        provider = Provider()
+        provider.delayed = True
+        delays = []
+        def wait(delay):
+            delays.append(delay)
+            provider.items.append(provider.delayed_insert)
+        result = publish_plan(provider.plan, provider.request, provider.guard, provider.state, provider.progress.append, wait=wait)
+        self.assertEqual(result['tracks'], 3)
+        self.assertEqual(delays, [1, 1, 1])
+        self.assertEqual(provider.writes('playlistItems').count(('POST', 'playlistItems')), 3)
+        self.assertIsNone(provider.saved['pendingInsert'])
+
+    def test_readback_mismatch_is_bounded_and_never_replays_post(self):
+        provider = Provider()
+        provider.drop_insert = True
+        waits = []
+        with self.assertRaisesRegex(ReconciliationRequired, 'youtube_insert_readback_failed'):
+            publish_plan(provider.plan, provider.request, provider.guard, provider.state, provider.progress.append, wait=waits.append)
+        self.assertEqual(waits, [1, 2, 4])
+        self.assertEqual(provider.writes('playlistItems'), [('POST', 'playlistItems')])
+        self.assertIsNotNone(provider.saved['pendingInsert'])
+
+    def test_lease_loss_during_readback_wait_prevents_more_calls(self):
+        provider = Provider()
+        provider.delayed = True
+        def wait(delay):
+            provider.lost = True
+        with self.assertRaisesRegex(RuntimeError, 'lease lost'):
+            publish_plan(provider.plan, provider.request, provider.guard, provider.state, provider.progress.append, wait=wait)
+        self.assertEqual(provider.writes('playlistItems'), [('POST', 'playlistItems')])
+        self.assertIsNotNone(provider.saved['pendingInsert'])
+
+    def test_missing_binding_adopts_owned_exact_legacy_playlist(self):
+        provider = Provider(creating=True, videos=VIDEOS[:3])
+        provider.metadata = {'id': PLAYLIST, 'snippet': {'title': provider.plan['title'], 'description': provider.plan['description'], 'channelId': 'owner'}, 'status': {'privacyStatus': 'public'}}
+        provider.run()
+        self.assertTrue(provider.saved['adopted'])
+        self.assertEqual(provider.saved['playlistId'], PLAYLIST)
+        self.assertNotIn(('POST', 'playlists'), provider.writes())
+        self.assertEqual(provider.writes(), [('PUT', 'playlists')])
+
+    def test_legacy_discovery_does_not_treat_advisory_total_as_missing_page(self):
+        provider = Provider(creating=True, videos=VIDEOS[:3])
+        provider.metadata = {'id': PLAYLIST, 'snippet': {'title': provider.plan['title'], 'description': provider.plan['description'], 'channelId': 'owner'}, 'status': {'privacyStatus': 'public'}}
+        def request(method, url, **kwargs):
+            result = provider.request(method, url, **kwargs)
+            if method == 'GET' and kwargs.get('params', {}).get('mine') == 'true' and url.endswith('/playlists'):
+                result['pageInfo']['totalResults'] += 2
+            return result
+        publish_plan(provider.plan, request, provider.guard, provider.state, provider.progress.append, wait=lambda delay: None)
+        self.assertNotIn(('POST', 'playlists'), provider.writes())
+
+    def test_multiple_owned_legacy_matches_refuse_creation(self):
+        provider = Provider(creating=True)
+        provider.metadata = {'id': PLAYLIST, 'snippet': {'title': provider.plan['title'], 'description': provider.plan['description'], 'channelId': 'owner'}, 'status': {'privacyStatus': 'public'}}
+        provider.duplicate_discovery = True
+        with self.assertRaisesRegex(ReconciliationRequired, 'youtube_existing_identity_ambiguous'):
+            provider.run()
+        self.assertEqual(provider.writes(), [])
+
     def test_exact_existing_playlist_is_noop(self):
         provider = Provider(videos=VIDEOS[:3])
         self.assertEqual(provider.run()['tracks'], 3)

@@ -7,7 +7,7 @@ const videoIdPattern = /^[A-Za-z0-9_-]{11}$/;
 export type YoutubePlan = { slug: string; editionYear: number; expectedUrl: string; title: string; description: string; videoIds: string[]; artists: number; sourceTracks: number };
 export type YoutubeInsert = { playlistId: string; expectedIds: string[] };
 export type YoutubeMetadata = { playlistId: string; title: string; description: string };
-export type YoutubeState = { marker: string; sent: boolean; playlistId: string | null; creationMetadata: { title: string; description: string } | null; pendingInsert: YoutubeInsert | null; pendingMetadata: YoutubeMetadata | null };
+export type YoutubeState = { marker: string; sent: boolean; playlistId: string | null; creationMetadata: { title: string; description: string } | null; pendingInsert: YoutubeInsert | null; pendingMetadata: YoutubeMetadata | null; adopted?: boolean; lastRejectedWrite?: { operation: string; status: number; reason: string } };
 export type YoutubeProgress = { verifiedTracks: number; totalTracks: number; quotaUsed: number; complete: boolean };
 
 export function validateYoutubePlan(value: unknown): asserts value is YoutubePlan {
@@ -48,9 +48,9 @@ export async function stageYoutubePlan(db: PrismaClient, claim: PlaylistLease, p
 // next attempt belongs to a different publication. Never overwrite an ambiguity.
 export async function youtubeProviderState(
   db: PrismaClient, claim: PlaylistLease, expectedUrl: string,
-  action: 'read' | 'reserve' | 'bind' | 'insert' | 'confirm' | 'metadata' | 'metadata-confirm', payload?: unknown,
+  action: 'read' | 'reserve' | 'adopt' | 'bind' | 'insert' | 'confirm' | 'metadata' | 'metadata-confirm' | 'create-rejected' | 'insert-rejected' | 'metadata-rejected', payload?: unknown,
 ): Promise<YoutubeState> {
-  if (!['read', 'reserve', 'bind', 'insert', 'confirm', 'metadata', 'metadata-confirm'].includes(action)) throw new Error('Invalid YouTube state action');
+  if (!['read', 'reserve', 'adopt', 'bind', 'insert', 'confirm', 'metadata', 'metadata-confirm', 'create-rejected', 'insert-rejected', 'metadata-rejected'].includes(action)) throw new Error('Invalid YouTube state action');
   return withPlaylistRefreshLease(db, claim, async tx => {
     const publication = await providerScope(tx, claim, expectedUrl);
     const [job] = await tx.$queryRaw<{ youtubePlan: unknown }[]>`SELECT "youtubePlan" FROM "CatalogPlaylistRefresh" WHERE id = ${claim.id}`;
@@ -69,7 +69,38 @@ export async function youtubeProviderState(
     const boundId = YOUTUBE_URL.exec(expectedUrl)?.[1] ?? state.playlistId;
     if (state.pendingInsert && boundId !== state.pendingInsert.playlistId) throw new Error('Unresolved YouTube insert belongs to another binding');
     if (state.pendingMetadata && boundId !== state.pendingMetadata.playlistId) throw new Error('Unresolved YouTube metadata belongs to another binding');
-    if (action === 'reserve') {
+    if (action.endsWith('-rejected')) {
+      const evidence = payload as { intent?: unknown; rejection?: { status?: number; reason?: string } } | null;
+      const rejection = evidence?.rejection;
+      if (!rejection || ![400, 401, 403, 404, 409, 429].includes(rejection.status ?? 0)
+        || typeof rejection.reason !== 'string' || !/^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(rejection.reason)) throw new Error('Invalid YouTube rejection evidence');
+      const operation = action.slice(0, -9);
+      const expected = operation === 'create' ? state.creationMetadata : operation === 'insert' ? state.pendingInsert : state.pendingMetadata;
+      // Compare structure, independent of JSON key insertion order.
+      const equal = (a: unknown, b: unknown): boolean => {
+        if (a === b) return true;
+        if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+        const left = Object.entries(a), right = Object.entries(b);
+        return left.length === right.length && left.every(([key, value]) => Object.hasOwn(b, key) && equal(value, (b as Record<string, unknown>)[key]));
+      };
+      if (!expected || !equal(expected, evidence?.intent)) throw new Error('YouTube rejected intent mismatch');
+      if (operation === 'create') {
+        if (!['', 'NEW'].includes(expectedUrl) || !state.sent || state.playlistId || state.pendingInsert || state.pendingMetadata) throw new Error('YouTube creation cannot be reopened');
+        state.sent = false;
+        state.creationMetadata = null;
+      } else if (operation === 'insert') state.pendingInsert = null;
+      else state.pendingMetadata = null;
+      state.lastRejectedWrite = { operation, status: rejection.status!, reason: rejection.reason };
+    } else if (action === 'adopt') {
+      const existing = payload as { playlistId?: string; title?: string; description?: string } | null;
+      if (!['', 'NEW'].includes(expectedUrl) || state.sent || state.playlistId || state.pendingInsert || state.pendingMetadata
+        || !existing || typeof existing.playlistId !== 'string' || !playlistIdPattern.test(existing.playlistId)
+        || existing.title !== plan.title || existing.description !== plan.description) throw new Error('Invalid existing YouTube adoption');
+      state.sent = true;
+      state.playlistId = existing.playlistId;
+      state.adopted = true;
+      state.creationMetadata = { title: plan.title, description: `${plan.description}\n[${state.marker}]` };
+    } else if (action === 'reserve') {
       if (!['', 'NEW'].includes(expectedUrl) || state.sent || state.pendingInsert || state.pendingMetadata) throw new Error('YouTube creation already sent or bound; reconcile');
       const metadata = payload as { title?: string; description?: string } | null;
       if (!metadata || metadata.title !== plan.title || metadata.description !== `${plan.description}\n[${state.marker}]`) throw new Error('YouTube creation metadata mismatch');

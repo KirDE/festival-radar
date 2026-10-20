@@ -62,6 +62,50 @@ test('YouTube plans reject unsafe IDs, duplicates, bindings and counts', () => {
   validateYoutubePlan(plan);
 });
 
+test('legacy adoption is fenced and cannot overwrite a sent create or pending write', async () => {
+  const state = fixture();
+  await stageYoutubePlan(state.db, lease, plan);
+  const payload = { playlistId, title: plan.title, description: plan.description };
+  state.expire(true);
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'adopt', payload), PlaylistLeaseLostError);
+  state.expire(false);
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'adopt', { ...payload, title: 'Other edition' }), /Invalid existing/);
+  const adopted = await youtubeProviderState(state.db, lease, '', 'adopt', payload);
+  assert.equal(adopted.adopted, true);
+  assert.equal(adopted.playlistId, playlistId);
+  assert.equal(adopted.sent, true);
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'reserve', {}), /already sent/);
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'adopt', payload), /Invalid existing/);
+});
+
+test('only structured explicit rejection releases the matching pending intent under the lease', async () => {
+  const state = fixture();
+  await stageYoutubePlan(state.db, lease, plan);
+  const read = await youtubeProviderState(state.db, lease, '', 'read');
+  const metadata = { title: plan.title, description: `${plan.description}\n[${read.marker}]` };
+  await youtubeProviderState(state.db, lease, '', 'reserve', metadata);
+  const rejection = { status: 403, reason: 'quotaExceeded' };
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'create-rejected', { intent: metadata, rejection: { status: 503, reason: 'backendError' } }), /Invalid YouTube rejection/);
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'create-rejected', { intent: { ...metadata, title: 'Different' }, rejection }), /intent mismatch/);
+  const reopened = await youtubeProviderState(state.db, lease, '', 'create-rejected', { intent: metadata, rejection });
+  assert.equal(reopened.sent, false);
+  assert.equal(reopened.creationMetadata, null);
+  assert.deepEqual(reopened.lastRejectedWrite, { operation: 'create', ...rejection });
+  await youtubeProviderState(state.db, lease, '', 'reserve', metadata);
+  await youtubeProviderState(state.db, lease, '', 'bind', playlistId);
+  const insert = { playlistId, expectedIds: plan.videoIds.slice(0, 1) };
+  await youtubeProviderState(state.db, lease, '', 'insert', insert);
+  state.expire(true);
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'insert-rejected', { intent: insert, rejection }), PlaylistLeaseLostError);
+  state.expire(false);
+  assert.deepEqual((await youtubeProviderState(state.db, lease, '', 'read')).pendingInsert, insert);
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'insert-rejected', { intent: { ...insert, expectedIds: plan.videoIds }, rejection }), /intent mismatch/);
+  const cleared = await youtubeProviderState(state.db, lease, '', 'insert-rejected', { intent: { expectedIds: insert.expectedIds, playlistId }, rejection });
+  assert.equal(cleared.pendingInsert, null);
+  assert.equal(cleared.playlistId, playlistId);
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'create-rejected', { intent: metadata, rejection }), /creation cannot be reopened/);
+});
+
 test('durable YouTube discovery is immutable, edition-bound and rolls back on lease expiry', async () => {
   const state = fixture();
   state.expire(true);

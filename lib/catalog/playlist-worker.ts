@@ -120,7 +120,10 @@ export async function runPlaylistWorker(db: PrismaClient, execute: PlaylistExecu
     return { status: 'SUCCEEDED' };
   } catch (error) {
     abort.abort();
-    await finishPlaylistRefresh(db, active, 'FAILED');
+    const failure = error as { code?: unknown; stderr?: unknown };
+    const quotaCheckpoint = failure?.code === 2 && typeof failure.stderr === 'string'
+      && failure.stderr.split('\n').includes('youtube_quota_bound_reached');
+    await finishPlaylistRefresh(db, active, 'FAILED', { quotaCheckpoint });
     throw error;
   } finally {
     clearInterval(timer);

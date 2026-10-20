@@ -43,7 +43,7 @@ async function guardYoutube() {
   const expectedUrl = process.env.YOUTUBE_EXPECTED_URL ?? '';
   const action = process.argv[2] ?? 'read';
   let payload: unknown;
-  if (['reserve', 'bind', 'insert', 'confirm', 'metadata', 'metadata-confirm', 'progress'].includes(action)) {
+  if (['reserve', 'adopt', 'bind', 'insert', 'confirm', 'metadata', 'metadata-confirm', 'progress', 'create-rejected', 'insert-rejected', 'metadata-rejected'].includes(action)) {
     let input = '';
     for await (const chunk of process.stdin) {
       input += chunk.toString();
