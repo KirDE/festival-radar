@@ -256,7 +256,51 @@ function tuska(html: string): AdapterResult | undefined {
   return { startDate: `${date[4]}-${pad(date[3])}-${pad(date[1])}`, endDate: `${date[4]}-${pad(date[3])}-${pad(date[2])}`, excerpt: date[0] };
 }
 
-function tonsOfRock(html: string): AdapterResult | undefined {
+function tonsOfRockDayBill(html: string, source: FestivalSource): AdapterResult | undefined {
+  // Later announcements carry the provisional bill by day, not a fixed artist
+  // count. Ignore hydration scripts, navigation and the separate new-act blurbs.
+  const visible = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+  const main = visible.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1];
+  const article = main?.match(/<div\b[^>]*\bdata-component=["']ContentRichTextModule["'][^>]*>([\s\S]*?)<\/div>/i)?.[1];
+  if (!article) return undefined;
+  const bill = article.match(/<p\b[^>]*>\s*DISSE ARTISTENE ER FORELØPIG BEKREFTET FOR TONS OF ROCK\s+(20\d{2}):\s*<\/p>([\s\S]*?)<p\b[^>]*>\s*(?:…|\.{3})og mange flere kommer!\s*<\/p>/iu);
+  if (!bill || Number(bill[1]) !== source.editionYear) return undefined;
+  const paragraphs = [...bill[2].matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)];
+  if (paragraphs.length < 2 || paragraphs.length > 7 || bill[2].replace(/<p\b[^>]*>[\s\S]*?<\/p>/gi, "").trim()) return undefined;
+  const weekdays = ["SØNDAG", "MANDAG", "TIRSDAG", "ONSDAG", "TORSDAG", "FREDAG", "LØRDAG"];
+  const dates: Date[] = [];
+  const lineup: string[] = [];
+  for (const paragraph of paragraphs) {
+    const day = paragraph[1].match(/^\s*<strong>\s*(SØNDAG|MANDAG|TIRSDAG|ONSDAG|TORSDAG|FREDAG|LØRDAG)\s+(\d{1,2})\.\s*JUNI\s*<\/strong>\s*<br\s*\/?\s*>([\s\S]+)$/iu);
+    if (!day) return undefined;
+    const date = new Date(Date.UTC(Number(bill[1]), 5, Number(day[2])));
+    if (date.getUTCMonth() !== 5 || weekdays[date.getUTCDay()] !== day[1].toLocaleUpperCase() ||
+        (dates.length && date.getTime() - dates.at(-1)!.getTime() !== 86400000)) return undefined;
+    dates.push(date);
+    // Inline emphasis is harmless; other markup or an empty separator cell is
+    // not a reliable artist name. Keep the official spellings, including acronyms.
+    const cells = day[3].split(/\|\|/).map(cell => cell.replace(/<\/?(?:strong|em|b|i)\b[^>]*>/gi, ""));
+    if (cells.some(cell => /[<>]/.test(cell))) return undefined;
+    const names = cells.map(decode);
+    if (names.some(name => !name || name.length > 200)) return undefined;
+    lineup.push(...names);
+  }
+  if (new Set(lineup.map(name => name.toLocaleLowerCase())).size !== lineup.length) return undefined;
+  return {
+    editionYear: Number(bill[1]), startDate: dates[0].toISOString().slice(0, 10),
+    endDate: dates.at(-1)!.toISOString().slice(0, 10), lineup,
+    status: "partial", lineupScope: "announcement", artistListMode: "additive",
+    excerpt: bill[0],
+  };
+}
+
+function tonsOfRock(html: string, source: FestivalSource): AdapterResult | undefined {
+  html = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+  const dayBill = tonsOfRockDayBill(html, source);
+  if (dayBill) return dayBill;
+  // A malformed/new-edition day bill cannot fall back to an archived first
+  // announcement elsewhere in the document.
+  if (/DISSE ARTISTENE ER[\s\S]*?BEKREFTET FOR TONS OF ROCK/iu.test(html)) return undefined;
   const edition = html.match(/FØRSTE ARTISTER TIL TONS OF ROCK\s+(20\d{2})\s+ER KLARE/iu);
   const date = html.match(/\b(\d{1,2})\s*[-–—]\s*(\d{1,2})\.\s*juni\s+(20\d{2})\b/iu);
   const announced = html.match(/de første\s+(\d+)\s+artistene til Tons of Rock\s+(20\d{2})\s+er klare/iu);
