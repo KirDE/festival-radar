@@ -157,7 +157,7 @@ def publish_plan(plan, request, guard, state, progress, *, quota_limit=5000, wai
     def read_until(read, matches, failure):
         # YouTube may acknowledge a write before its list endpoint reflects it.
         # Retry reads only, re-fencing every call; never replay the mutation.
-        for delay in (0, 1, 2, 4):
+        for delay in (0, 1, 2, 4, 8):
             if delay:
                 guard()
                 wait(delay)

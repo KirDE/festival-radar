@@ -6,10 +6,11 @@ import { PlaylistLeaseLostError } from '../lib/catalog/playlist-queue.ts';
 
 const url = 'https://open.spotify.com/playlist/' + 'a'.repeat(22);
 
-function fixture(initialUrl: string | null, verifiedId: string | null = null, youtube?: { url: string | null; complete: boolean; pending?: boolean; verifiedId?: string }) {
+function fixture(initialUrl: string | null, verifiedId: string | null = null, youtube?: { url: string | null; complete: boolean; pending?: boolean; verifiedId?: string }, attempts = 1) {
   let current = initialUrl === null ? null : { id: 'binding', url: initialUrl };
   let claim: Record<string, unknown>;
   const writes: unknown[] = [];
+  const retryDelays: unknown[] = [];
   let lost = false;
   const tx = {
     async $queryRaw(strings: TemplateStringsArray, ...values: unknown[]) {
@@ -17,7 +18,7 @@ function fixture(initialUrl: string | null, verifiedId: string | null = null, yo
       if (sql.includes('SELECT candidate.id')) return [{ id: 'job', festivalSlug: 'festival', requestedAt: new Date() }];
       if (sql.includes('pg_try_advisory')) return [{ acquired: true }];
       if (sql.includes('RETURNING job.id')) {
-        claim = { id: 'job', publicationId: 'publication', festivalSlug: 'festival', attempts: 1, leaseOwner: values[0], leaseExpiresAt: new Date(Date.now() + 120_000) };
+        claim = { id: 'job', publicationId: 'publication', festivalSlug: 'festival', attempts, leaseOwner: values[0], leaseExpiresAt: new Date(Date.now() + 120_000) };
         return [claim];
       }
       if (sql.includes("->>'playlistId'")) return [{ playlistId: verifiedId }];
@@ -29,7 +30,10 @@ function fixture(initialUrl: string | null, verifiedId: string | null = null, yo
       if (sql.includes('job.status')) return lost ? [] : [{ id: 'job' }];
       return [{ id: 'job' }];
     },
-    async $executeRaw() { return 1; },
+    async $executeRaw(strings: TemplateStringsArray, ...values: unknown[]) {
+      if (strings.join('?').includes('"retryAt" = CASE')) retryDelays.push(values[2]);
+      return 1;
+    },
     festivalEdition: { async findFirstOrThrow() { return { id: 'edition' }; } },
     catalogPublication: { async findUniqueOrThrow() { return { editionYear: 2027, createdAt: new Date() }; } },
     catalogPlaylistRefresh: { async count() { return 0; } },
@@ -47,8 +51,22 @@ function fixture(initialUrl: string | null, verifiedId: string | null = null, yo
     },
   };
   const db = { async $transaction(callback: (value: typeof tx) => Promise<unknown>) { return callback(tx); } } as unknown as PrismaClient;
-  return { db, writes, lose() { lost = true; }, rebind() { current = { id: 'binding', url: 'https://open.spotify.com/playlist/' + 'c'.repeat(22) }; } };
+  return { db, writes, retryDelays, lose() { lost = true; }, rebind() { current = { id: 'binding', url: 'https://open.spotify.com/playlist/' + 'c'.repeat(22) }; } };
 }
+
+test('local quota and acknowledged readback checkpoints do not inherit failure backoff; ambiguities still do', async () => {
+  for (const [code, stderr, expected] of [
+    [2, 'youtube_quota_bound_reached\n', 60_000],
+    [3, 'youtube_reconciliation_required\nyoutube_insert_readback_failed\n', 60_000],
+    [3, 'youtube_reconciliation_required\nyoutube_insert_unknown_no_resend\n', 86_400_000],
+    [1, 'youtube_provider_rejected_403_quotaExceeded\n', 86_400_000],
+  ] as const) {
+    const state = fixture(url, null, undefined, 12);
+    await assert.rejects(runPlaylistWorker(state.db, async () => { throw Object.assign(new Error('provider stopped'), { code, stderr }); }));
+    assert.deepEqual(state.retryDelays, [expected]);
+    assert.equal(state.writes.length, 0);
+  }
+});
 
 test('worker creates DB binding only for durably verified provider ID', async () => {
   const valid = fixture(null, 'a'.repeat(22));

@@ -186,7 +186,7 @@ class YoutubePlanTests(unittest.TestCase):
         waits = []
         with self.assertRaisesRegex(ReconciliationRequired, 'youtube_insert_readback_failed'):
             publish_plan(provider.plan, provider.request, provider.guard, provider.state, provider.progress.append, wait=waits.append)
-        self.assertEqual(waits, [1, 2, 4])
+        self.assertEqual(waits, [1, 2, 4, 8])
         self.assertEqual(provider.writes('playlistItems'), [('POST', 'playlistItems')])
         self.assertIsNotNone(provider.saved['pendingInsert'])
 
