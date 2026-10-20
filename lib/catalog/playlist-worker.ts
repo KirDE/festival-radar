@@ -120,7 +120,12 @@ export async function runPlaylistWorker(db: PrismaClient, execute: PlaylistExecu
     return { status: 'SUCCEEDED' };
   } catch (error) {
     abort.abort();
-    await finishPlaylistRefresh(db, active, 'FAILED');
+    const failure = error as { code?: unknown; stderr?: unknown };
+    const quotaCheckpoint = failure?.code === 2 && typeof failure.stderr === 'string'
+      && failure.stderr.split('\n').includes('youtube_quota_bound_reached');
+    const readbackCheckpoint = failure?.code === 3 && typeof failure.stderr === 'string'
+      && failure.stderr.split('\n').some(line => ['youtube_insert_readback_failed', 'youtube_metadata_readback_failed', 'youtube_delete_readback_failed'].includes(line));
+    await finishPlaylistRefresh(db, active, 'FAILED', { quotaCheckpoint, readbackCheckpoint });
     throw error;
   } finally {
     clearInterval(timer);

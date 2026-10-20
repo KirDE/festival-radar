@@ -195,11 +195,13 @@ export async function commitPlaylistRefresh<T>(
 
 // Completion changes state once. Repeats return false; commit repeats throw
 // lease loss before calling write. Neither infers ownership from terminal status.
-export async function finishPlaylistRefresh(db: PrismaClient, claim: PlaylistLease, outcome: "SUCCEEDED" | "FAILED") {
+export async function finishPlaylistRefresh(db: PrismaClient, claim: PlaylistLease, outcome: "SUCCEEDED" | "FAILED", options: { quotaCheckpoint?: boolean; readbackCheckpoint?: boolean } = {}) {
   validateLease(claim);
   if (outcome !== "SUCCEEDED" && outcome !== "FAILED") throw new Error("Invalid playlist completion outcome");
   // Failed attempts cannot hot-loop; backoff starts at DB completion time.
-  const retryDelayMs = Math.min(86_400_000, 60_000 * 2 ** Math.min(11, Math.max(0, claim.attempts - 1)));
+  // A bounded local provider budget is a safe checkpoint, not a new provider
+  // failure. Keep ordinary/ambiguous failures on their existing backoff.
+  const retryDelayMs = options.quotaCheckpoint || options.readbackCheckpoint ? 60_000 : Math.min(86_400_000, 60_000 * 2 ** Math.min(11, Math.max(0, claim.attempts - 1)));
   try {
     return await db.$transaction(async (tx) => {
       await lockPlaylistLease(tx, claim);

@@ -51,12 +51,16 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as error:
-        from youtube_playlist_plan import QuotaBoundReached, ReconciliationRequired
+        from youtube_playlist_plan import QuotaBoundReached, ReconciliationRequired, ProviderWriteRejected, failure_diagnostic
         if isinstance(error, QuotaBoundReached):
             sys.stderr.write('youtube_quota_bound_reached\n')
             sys.exit(2)
         if isinstance(error, ReconciliationRequired):
-            sys.stderr.write('youtube_reconciliation_required\n')
+            detail = failure_diagnostic(error)
+            sys.stderr.write('youtube_reconciliation_required\n' + (detail + '\n' if detail != 'youtube_plan_failed' else ''))
             sys.exit(3)
+        if isinstance(error, ProviderWriteRejected):
+            sys.stderr.write(failure_diagnostic(error) + '\n')
+            sys.exit(1)
         sys.stderr.write('playlist_rpc_failed\n')
         sys.exit(1)
