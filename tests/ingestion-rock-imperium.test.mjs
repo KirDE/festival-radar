@@ -35,6 +35,15 @@ test("direct category supports later years and changing category/product IDs", (
   const e = JSON.parse(JSON.stringify(direct()).replaceAll("2027", "2028").replaceAll("/85-", "/999-").replaceAll("2041-", "8888-"));
   assert.equal(extract(e, { ...source, editionYear: 2028 }).ticketStatus, "available");
 });
+test("translated navigation to the same category is one gateway, with the requested language preferred", async () => {
+  const enSource = { ...source, url: source.url + "en/" };
+  const enCategory = category.replace("/es/", "/en/"), enProduct = product.replace("/es/", "/en/");
+  const pages = new Map([[enSource.url, fixture("direct-home")], [enCategory, fixture("category").replaceAll("/es/", "/en/")], [enProduct, fixture("product")]]);
+  const requests = [];
+  const r = await fetchSource(enSource, { maxAttempts: 1, fetchImpl: async url => { requests.push(url); assert.ok(pages.has(url)); return new Response(pages.get(url)); } });
+  assert.deepEqual(requests, [...pages.keys()]);
+  assert.equal(extractFestivalCandidate(await r.response.text(), enSource, "now").ticketStatus, "available");
+});
 test("direct gateway remains ambiguous with another current landing or category", () => {
   for (const other of [landing, category.replace("/85-", "/999-")]) {
     const e = direct(); e.home += `<a href="${other}">Entradas</a>`;

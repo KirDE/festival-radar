@@ -45,12 +45,17 @@ function unique(values: string[]): string | undefined {
 }
 export function findRockImperiumLanding(html: string, source: FestivalSource): string | undefined {
   if (!currentTitle(html, source.editionYear)) return undefined;
-  return unique(links(html).flatMap(({ href }) => {
+  const gateways = links(html).flatMap(({ href }) => {
     const url = sellerUrl(href, source.url);
     // The official gateway may bypass the promoter page and link directly to
     // its current ticket category. Both routes retain the same seller/year gate.
     return url && new RegExp(`^/(?:es|en)/(?:pagina/)?\\d+-rock-imperium-festival-${source.editionYear}/?$`).test(url.pathname) ? [url.href] : [];
-  }));
+  });
+  // Translated navigation can expose ES and EN links to the same seller page.
+  // Collapse only the language segment, not distinct IDs or landing/category routes.
+  if (!unique(gateways.map(url => new URL(url).pathname.replace(/^\/(?:es|en)\//, "/")))) return undefined;
+  const language = new URL(source.url).pathname.startsWith("/en/") ? "en" : "es";
+  return gateways.find(url => new URL(url).pathname.startsWith(`/${language}/`)) ?? gateways[0];
 }
 export function findRockImperiumCategory(document: PassDocument, year: number): string | undefined {
   if (!currentTitle(document.html, year)) return undefined;
