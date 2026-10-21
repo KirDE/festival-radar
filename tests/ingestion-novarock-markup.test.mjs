@@ -10,6 +10,7 @@ const url = "https://www.novarock.at/lineup/";
 const canonical = "https://www.novarock.at/event/nova-rock-2027-pannonia-fields-2027-06-09/";
 const at = "2026-10-08T00:00:00Z";
 const fixture = await readFile(new URL("./fixtures/official-markup/novarock-lineup-2027.html", import.meta.url), "utf8");
+const currentCapture = await readFile(new URL("./fixtures/official-markup/novarock-lineup-20271021.html", import.meta.url), "utf8");
 const source = (overrides = {}) => parserSource("nova-rock", { url, ...overrides });
 const extract = (html, overrides) => extractFestivalCandidate(html, source(overrides), at);
 const current = { slug: "nova-rock", editionYear: 2027, startDate: "2027-06-10", endDate: "2027-06-12", headliners: ["Die Ärzte", "Motionless In White"], lineup: ["TBS"] };
@@ -46,9 +47,9 @@ test("reviewed current-edition official cards yield four explicitly billed headl
   assert.equal(result.publishable, false);
   assert.ok(result.reviewReasons.includes("Agent review required before lineup-triggered provider activity"));
   assert.ok(result.changes.some((c) => c.kind === "date_changed" && c.before === "2027-06-10" && c.after === "2027-06-09" && c.reviewRequired));
-  assert.ok(result.changes.some((c) => c.kind === "headliner_removed" && c.before === "Motionless In White" && c.reviewRequired));
-  assert.ok(result.changes.some((c) => c.kind === "artist_added" && c.after === "Motionless In White"));
-  assert.deepEqual(result.reviewReasons.sort(), ["Agent review required before lineup-triggered provider activity", "Removals require confirmation", "date_changed requires review"].sort());
+  assert.ok(!result.changes.some((c) => c.kind.endsWith("_removed")));
+  assert.ok(!result.changes.some((c) => c.kind === "artist_added" && c.after === "Motionless In White"));
+  assert.deepEqual(result.reviewReasons.sort(), ["Agent review required before lineup-triggered provider activity", "date_changed requires review"].sort());
 });
 
 test("synthetic current cards produce REVIEW even with unchanged dates and only additions", () => {
@@ -60,6 +61,32 @@ test("synthetic current cards produce REVIEW even with unchanged dates and only 
   assert.ok(result.changes.every((c) => !c.reviewRequired));
   assert.equal(result.publishable, false);
   assert.ok(result.reviewReasons.some((reason) => /provider activity/.test(reason)));
+});
+
+test("2026-10-21 real43-card grid remains usable without deleting the reviewed Neck Deep booking", () => {
+  const full = extract(fixture);
+  const saved = { ...current, startDate: full.startDate, endDate: full.endDate, status: "partial", headliners: full.headliners, lineup: full.lineup };
+  const snapshot = structuredClone(saved);
+  const c = extract(currentCapture);
+  assert.equal(c.headliners?.length, 4); assert.equal(c.lineup?.length, 39);
+  assert.ok(c.lineup.includes("Static-X")); assert.ok(!c.lineup.includes("Neck Deep"));
+  assert.equal(c.artistListMode, "additive"); assert.equal(c.lineupScope, "announcement");
+  assert.equal(c.startDate, "2027-06-09"); assert.equal(c.endDate, "2027-06-12");
+  const r = evaluateCandidate(saved, c);
+  assert.deepEqual(r.changes, []); assert.deepEqual(r.reviewReasons, []);
+  assert.deepEqual(saved, snapshot); assert.ok(saved.lineup.includes("Neck Deep"));
+});
+
+test("changing valid card counts have no fixed historical floor and cannot authorize removals", () => {
+  const full = extract(synthetic);
+  for (const count of [5, 12, 43, 45, 60]) {
+    const grid = Array.from({ length: count }, (_, i) => card(`Artist ${i}`, `artist-${i}`, String(9 + i % 4).padStart(2, "0"), i < 4 ? "headliner" : "support")).join("");
+    const c = extract(synthetic.replace(cards.join(""), grid));
+    assert.equal(c.lineup?.length, count - 4); assert.equal(c.headliners?.length, 4);
+    const r = evaluateCandidate({ ...current, startDate: full.startDate, headliners: full.headliners, lineup: [...full.lineup, "Reviewed absent artist"] }, c);
+    assert.ok(!r.changes.some(change => change.kind.endsWith("_removed")));
+    if (count > 44) assert.ok(r.reviewReasons.some(reason => /provider activity/.test(reason)));
+  }
 });
 
 test("exact URL/year and direct fetch are mandatory; manual source activation stays inert", () => {
@@ -106,12 +133,13 @@ test("missing, ambiguous, duplicate, hidden, malformed or drifted cards never pr
   rejected(synthetic.slice(0, synthetic.indexOf(cards[30])));
 });
 
-test("partial snapshots cannot mass-remove; valid smaller proposals above the floor remain reviewed", () => {
-  rejected(synthetic.replace(cards[43], ""));
+test("partial snapshots cannot mass-remove; incomplete day coverage still fails closed", () => {
+  const smaller = extract(synthetic.replace(cards[43], ""));
+  assert.equal(smaller.lineup?.length, 39);
   rejected(synthetic.replace(cards.join(""), cards.slice(0, 4).join("")));
   const candidate = extract(synthetic);
-  const result = evaluateCandidate({ ...current, headliners: candidate.headliners, lineup: [...candidate.lineup, "Removed Artist"] }, candidate);
+  const result = evaluateCandidate({ ...current, startDate: candidate.startDate, headliners: candidate.headliners, lineup: [...candidate.lineup, "Reviewed absent artist"] }, candidate);
   assert.equal(result.publishable, false);
-  assert.ok(result.changes.some((c) => c.kind === "artist_removed" && c.before === "Removed Artist" && c.reviewRequired));
+  assert.deepEqual(result.changes, []); assert.deepEqual(result.reviewReasons, []);
   rejected(synthetic.replaceAll('data-filter-day="2027-06-09"', 'data-filter-day="2027-06-10"'));
 });
