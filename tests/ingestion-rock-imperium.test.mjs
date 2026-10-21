@@ -14,6 +14,48 @@ const files = () => new Map([[source.url, fixture("home")], [landing, fixture("l
 const envelope = () => ({ kind: envelopeKind, home: fixture("home"), documents: [{ url: landing, html: fixture("landing") }, { url: category, html: fixture("category") }, { url: product, html: fixture("product") }] });
 const extract = (e = envelope(), s = source) => extractFestivalCandidate(JSON.stringify(e), s, "2026-10-10T15:30:00Z");
 
+const direct = () => ({ kind: envelopeKind, home: fixture("direct-home"), documents: envelope().documents.slice(1) });
+test("2026-10-21 real homepage bypasses the landing and still verifies the current general pass", async () => {
+  const pages = new Map([[source.url, fixture("direct-home")], [category, fixture("category")], [product, fixture("product")]]);
+  const requests = [];
+  const fetched = await fetchSource(source, { maxAttempts: 1, fetchImpl: async (url, options) => {
+    requests.push(url); assert.ok(pages.has(url));
+    if (url !== source.url) assert.equal(options.redirect, "error");
+    return new Response(pages.get(url));
+  } });
+  assert.deepEqual(requests, [...pages.keys()]); assert.equal(fetched.attempts, 3);
+  const c = extractFestivalCandidate(await fetched.response.text(), source, "2026-10-21T13:47:35Z");
+  assert.equal(c.ticketStatus, "available"); assert.equal(c.ticketsUrl, source.url);
+  assert.equal(c.startDate, "2027-07-02"); assert.equal(c.endDate, "2027-07-04");
+  assert.deepEqual(c.warnings, []); assert.equal(c.lineup, undefined); assert.equal(c.status, undefined);
+  const r = evaluateCandidate({ slug: "rock-imperium", editionYear: 2027, startDate: "2027-07-02", endDate: "2027-07-04", ticketsUrl: source.url, ticketStatus: "available", status: "partial", headliners: ["Bruce Dickinson", "Children of Bodom", "Helloween"], lineup: ["Mayhem", "Erik Grönwall"] }, c);
+  assert.deepEqual(r.changes, []); assert.deepEqual(r.reviewReasons, []);
+});
+test("direct category supports later years and changing category/product IDs", () => {
+  const e = JSON.parse(JSON.stringify(direct()).replaceAll("2027", "2028").replaceAll("/85-", "/999-").replaceAll("2041-", "8888-"));
+  assert.equal(extract(e, { ...source, editionYear: 2028 }).ticketStatus, "available");
+});
+test("direct gateway remains ambiguous with another current landing or category", () => {
+  for (const other of [landing, category.replace("/85-", "/999-")]) {
+    const e = direct(); e.home += `<a href="${other}">Entradas</a>`;
+    assert.equal(extract(e).ticketsUrl, undefined);
+  }
+});
+test("direct gateway cannot use stale, foreign, query-bearing or commented links", () => {
+  for (const url of [category.replace("2027", "2026"), category.replace("www.madnesslive.es", "evil.example"), category + "?redirect=elsewhere"]) {
+    const e = direct(); e.home = `<title>Rock Imperium Festival 2027</title><a href="${url}">Tickets</a><!-- <a href="${category}">Tickets</a> -->`;
+    assert.equal(extract(e).ticketsUrl, undefined);
+  }
+  const e = direct(); e.documents[0].html = e.documents[0].html.replaceAll("2027", "2026");
+  assert.equal(extract(e).ticketStatus, undefined);
+});
+test("direct category requires actual enabled general pass and preserves seller HTTP failures", async () => {
+  const e = direct(); e.documents[1].html = e.documents[1].html.replace('type="submit"', 'type="submit" disabled');
+  assert.equal(extract(e).ticketStatus, undefined);
+  const r = await fetchSource(source, { maxAttempts: 1, fetchImpl: async url => url === source.url ? new Response(fixture("direct-home")) : new Response("blocked", { status: 403 }) });
+  assert.equal(r.response.status, 403); assert.equal(r.attempts, 2);
+});
+
 test("real correction: stale navigation loses to verified current gateway and enabled general pass", () => {
   const c = extract();
   assert.equal(c.startDate, "2027-07-02"); assert.equal(c.endDate, "2027-07-04");

@@ -300,8 +300,8 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
       if (linked.response.url && linked.response.url !== url) throw new Error("Rock Imperium linked document redirected");
       const document = { url, html: await linked.response.text() };
       documents.push(document);
-      url = hop === 0 ? findRockImperiumCategory(document, source.editionYear)
-        : hop === 1 ? findRockImperiumProduct(document, source.editionYear) : undefined;
+      const categoryUrl = findRockImperiumCategory(document, source.editionYear);
+      url = categoryUrl === document.url ? findRockImperiumProduct(document, source.editionYear) : categoryUrl;
     }
     return { response: new Response(JSON.stringify({ kind: envelopeKind, home, documents }), { status: 200, headers: { "content-type": "application/json" } }), attempts };
   }
