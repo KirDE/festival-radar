@@ -105,10 +105,9 @@ function novarockCards(html: string, source: FestivalSource) {
   if (sections.length !== 1 || grids.length !== 1 || grids[0].tag !== "ul" ||
       !descendants(sections[0]).includes(grids[0])) return undefined;
   const grid = grids[0], cards = grid.children;
-  // Observed first wave has 44 cards. Smaller/filtered snapshots cannot propose
-  // mass removals. Larger valid snapshots and removals above this floor still
-  // remain REVIEW, never automatic publication.
-  if (grid.text.trim() || cards.length < 44 || cards.length > 160 ||
+  // Card count is not a completeness claim. Validate every visible card and
+  // require all four days below; an absent card never authorizes a removal.
+  if (grid.text.trim() || cards.length > 160 ||
       all.filter((n) => hasClass(n, "artistCard")).length !== cards.length) return undefined;
   const headliners: string[] = [], lineup: string[] = [], seen = new Set<string>(), hrefs = new Set<string>(), observedDays = new Set<string>();
   let firstEvidence = "";
@@ -150,6 +149,7 @@ function novarockCards(html: string, source: FestivalSource) {
   }
   if (observedDays.size !== 4 || !headliners.length || !lineup.length) return undefined;
   return { editionYear: 2027, startDate: days[0], endDate: days[3], headliners, lineup,
+    artistListMode: "additive" as const, lineupScope: "announcement" as const,
     excerpt: `Line-Up 2027; canonical ${canonical}; ${cards.length} closed official cards; data-filter-day ${days.join(", ")}; ${firstEvidence}`,
     warning: "Agent review required before lineup-triggered provider activity" };
 }
