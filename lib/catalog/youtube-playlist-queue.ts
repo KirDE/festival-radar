@@ -67,6 +67,15 @@ export async function youtubeProviderState(
     `;
     const state = row?.youtubeState ?? { marker: `festival-radar:youtube:${claim.id}`, sent: false, playlistId: null, creationMetadata: null, pendingInsert: null, pendingMetadata: null };
     const boundId = YOUTUBE_URL.exec(expectedUrl)?.[1] ?? state.playlistId;
+    // Provider titles may already have been renamed. An explicit archive by
+    // immutable ID must win over both a DB binding and legacy adoption.
+    const registry = await tx.operationalState.findUnique({ where: { key: 'playlist-provider-archives-v1' } });
+    if (registry) {
+      const archived = (registry.payload as { youtube_music?: unknown } | null)?.youtube_music;
+      if (!Array.isArray(archived) || archived.some(id => typeof id !== 'string' || !playlistIdPattern.test(id))) throw new Error('Invalid playlist archive registry');
+      const candidate = action === 'bind' ? payload : action === 'adopt' ? (payload as { playlistId?: unknown } | null)?.playlistId : null;
+      if ([boundId, state.playlistId, state.pendingInsert?.playlistId, state.pendingMetadata?.playlistId, candidate].some(id => archived.includes(id))) throw new Error('Archived YouTube playlist is immutable');
+    }
     if (state.pendingInsert && boundId !== state.pendingInsert.playlistId) throw new Error('Unresolved YouTube insert belongs to another binding');
     if (state.pendingMetadata && boundId !== state.pendingMetadata.playlistId) throw new Error('Unresolved YouTube metadata belongs to another binding');
     if (action.endsWith('-rejected')) {

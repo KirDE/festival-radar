@@ -35,6 +35,16 @@ test('real PostgreSQL legacy adoption, exact rejected-write recovery and expired
     await youtubeProviderState(db, claim, '', 'insert', insert);
     await assert.rejects(youtubeProviderState(db, claim, '', 'insert-rejected', { intent: insert, rejection: { status: 503, reason: 'backendError' } }), /Invalid YouTube rejection/);
     assert.deepEqual((await youtubeProviderState(db, claim, '', 'read')).pendingInsert, insert);
+    // A previously adopted/renamed identity remains protected by immutable ID.
+    const archiveKey = 'playlist-provider-archives-v1';
+    await db.operationalState.create({ data: { key: archiveKey, payload: { youtube_music: [adopted.playlistId] } } });
+    try {
+      await assert.rejects(youtubeProviderState(db, claim, '', 'read'), /Archived YouTube/);
+      await assert.rejects(youtubeProviderState(db, claim, '', 'insert-rejected', { intent: insert, rejection }), /Archived YouTube/);
+      assert.deepEqual((await db.catalogPlaylistRefresh.findUniqueOrThrow({ where: { id: job.id } })).youtubeState, { ...adopted, pendingInsert: insert });
+    } finally {
+      await db.operationalState.delete({ where: { key: archiveKey } });
+    }
     await db.catalogPlaylistRefresh.update({ where: { id: job.id }, data: { attempts: 12 } });
     claim.attempts = 12;
     await finishPlaylistRefresh(db, claim, 'FAILED', { quotaCheckpoint: true });

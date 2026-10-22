@@ -17,6 +17,7 @@ function fixture() {
   let binding = '';
   let expireOnWrite = false;
   let newer = false;
+  let archives: unknown = null;
   const db = { async $transaction(callback: (tx: unknown) => Promise<unknown>) {
     const nextPlans = structuredClone(plans), nextStates = structuredClone(states), nextProgress = structuredClone(progress);
     let expired = false;
@@ -47,13 +48,30 @@ function fixture() {
       festivalEdition: { async findFirstOrThrow() { return { id: 'edition' }; } },
       festivalPlaylist: { async findUnique() { return binding ? { url: binding } : null; } },
       catalogPlaylistRefresh: { async count() { return newer ? 1 : 0; } },
+      operationalState: { async findUnique() { return archives === null ? null : { payload: archives }; } },
     };
     const result = await callback(tx);
     plans = nextPlans; states = nextStates; progress = nextProgress;
     return result;
   } } as unknown as PrismaClient;
-  return { db, expire(value: boolean) { expireOnWrite = value; }, binding(value: string) { binding = value; }, newer() { newer = true; }, plans: () => plans, progress: () => progress };
+  return { db, archives(value: unknown) { archives = value; }, expire(value: boolean) { expireOnWrite = value; }, binding(value: string) { binding = value; }, newer() { newer = true; }, plans: () => plans, progress: () => progress };
 }
+
+test('immutable archive registry blocks renamed bound, adopted and inherited identities', async () => {
+  const state = fixture();
+  await stageYoutubePlan(state.db, lease, plan);
+  state.archives({ youtube_music: [playlistId] });
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'adopt', { playlistId, title: plan.title, description: plan.description }), /Archived YouTube/);
+  state.archives(null);
+  await youtubeProviderState(state.db, lease, '', 'adopt', { playlistId, title: plan.title, description: plan.description });
+  state.archives({ youtube_music: [playlistId] });
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'read'), /Archived YouTube/);
+  const bound = fixture();
+  bound.binding(url);
+  await stageYoutubePlan(bound.db, lease, { ...plan, expectedUrl: url });
+  bound.archives({ youtube_music: [playlistId] });
+  await assert.rejects(youtubeProviderState(bound.db, lease, url, 'read'), /Archived YouTube/);
+});
 
 test('YouTube plans reject unsafe IDs, duplicates, bindings and counts', () => {
   for (const change of [{ videoIds: [] }, { videoIds: ['invalid'] }, { videoIds: ['00000000001', '00000000001'] }, { expectedUrl: 'http://youtube.com/playlist?list=PLsynthetic001' }, { artists: 0 }, { sourceTracks: 1 }, { title: '' }]) {

@@ -23,7 +23,7 @@ def request(method, url, **kwargs):
     elif url.endswith('channels'):
         value = {'items': [{'id': 'owner'}], 'pageInfo': {'totalResults': 1}}
     elif url.endswith('playlists'):
-        value = {'items': [{'id': 'PLsynthetic001', 'snippet': {'title': 'Synthetic', 'description': 'Synthetic description', 'channelId': 'owner'}, 'status': {'privacyStatus': 'public'}}], 'pageInfo': {'totalResults': 1}}
+        value = {'items': [{'id': 'PLsynthetic001', 'snippet': {'title': 'Synthetic 2027', 'description': 'Synthetic description', 'channelId': 'owner'}, 'status': {'privacyStatus': 'public'}}], 'pageInfo': {'totalResults': 1}}
     elif url.endswith('playlistItems'):
         value = {'items': [{'id': 'item-1', 'snippet': {'position': 0, 'playlistId': 'PLsynthetic001', 'resourceId': {'kind': 'youtube#video', 'videoId': '00000000001'}}}], 'pageInfo': {'totalResults': 1}}
     else:
