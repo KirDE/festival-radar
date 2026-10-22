@@ -28,7 +28,7 @@ test('actual worker pipes durable plans to Python and commits fenced read-back w
     await db.lineupEntry.create({ data: { editionId: festival.editions[0].id, artistId: artist.id, billing: 'HEADLINER', position: 0 } });
     const publication = await db.catalogPublication.create({ data: { source: 'ADMIN', sourceId: slug, festivalSlug: slug, editionYear: 2027, actorLabel: 'test', fields: ['lineup'], lineupChanged: true } });
     const desiredPlan = { slug, edition_year: 2027, playlist_url: spotifyUrl, playlist_id: 'a'.repeat(22), playlist_name: 'Synthetic', festival: 'Synthetic', track_uris: ['spotify:track:' + 'b'.repeat(22)], track_count: 1, artists_count: 1 };
-    const youtubePlan = { slug, editionYear: 2027, expectedUrl: youtubeUrl, title: 'Synthetic', description: 'Synthetic description', videoIds: ['00000000001'], artists: 1, sourceTracks: 1 };
+    const youtubePlan = { slug, editionYear: 2027, expectedUrl: youtubeUrl, title: 'Synthetic 2027', description: 'Synthetic description', videoIds: ['00000000001'], artists: 1, sourceTracks: 1 };
     const job = await db.catalogPlaylistRefresh.create({ data: { publicationId: publication.id, festivalSlug: slug, requestedAt: new Date('1900-01-01'), desiredPlan, youtubePlan } });
     const launcher = path.join(directory, 'python');
     await writeFile(launcher, await readFile('tests/fixtures/fileless-provider.py'), { mode: 0o700 });

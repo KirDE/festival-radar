@@ -30,7 +30,7 @@ test('DB/Python publication recovers unknown create and insert across jobs witho
       editions: { create: { year: 2027, startDate: new Date('2027-06-01'), endDate: new Date('2027-06-02'), status: 'TBA', ticketStatus: 'UNKNOWN', recordState: 'CURRENT', completeness: 'TBA', sourceUpdatedAt: new Date('2026-01-01'), playlists: { create: { provider: 'spotify', url: spotifyUrl } } } },
     }, include: { editions: true } });
     editionId = festival.editions[0].id;
-    const basePlan: YoutubePlan = { slug, editionYear: 2027, expectedUrl: '', title: 'Synthetic festival', description: 'Synthetic description', videoIds: ['00000000001', '00000000002'], artists: 1, sourceTracks: 2 };
+    const basePlan: YoutubePlan = { slug, editionYear: 2027, expectedUrl: '', title: 'Synthetic festival 2027', description: 'Synthetic description', videoIds: ['00000000001', '00000000002'], artists: 1, sourceTracks: 2 };
     const attempt = async (offset: number, unknown?: string) => {
       // Keep failed fixtures out of the bounded worker scan during this test.
       await db.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "retryAt" = (clock_timestamp() AT TIME ZONE 'UTC') + interval '1 day' WHERE "festivalSlug" = ${slug} AND status = 'FAILED'`;
@@ -41,7 +41,7 @@ test('DB/Python publication recovers unknown create and insert across jobs witho
       const job = await db.catalogPlaylistRefresh.create({ data: { publicationId: publication.id, festivalSlug: slug, requestedAt: new Date(Date.UTC(1999, 0, 1, 0, 0, offset)) } });
       const execute = () => runPlaylistWorker(db, async active => {
         assert.equal(active.id, job.id);
-        const plan = { ...basePlan, title: `Synthetic title ${offset}` };
+        const plan = { ...basePlan, title: `Synthetic title 2027 ${offset}` };
         await stageYoutubePlan(db, active, plan);
         assert.deepEqual(await stageYoutubePlan(db, active, { ...plan, videoIds: ['00000000003'] }), plan);
         const planPath = path.join(directory, 'plan.json');

@@ -18,7 +18,7 @@ VIDEOS = [str(i).zfill(11) for i in range(1, 105)]
 class Provider:
     def __init__(self, creating=False, videos=None):
         self.plan = {'slug': 'synthetic', 'editionYear': 2027, 'expectedUrl': '' if creating else f'https://music.youtube.com/playlist?list={PLAYLIST}',
-                     'title': 'Synthetic festival', 'description': 'Synthetic description', 'videoIds': VIDEOS[:3], 'artists': 1, 'sourceTracks': 3}
+                     'title': 'Synthetic festival 2027', 'description': 'Synthetic description', 'videoIds': VIDEOS[:3], 'artists': 1, 'sourceTracks': 3}
         self.saved = {'marker': 'festival-radar:youtube:synthetic', 'sent': False, 'playlistId': None, 'creationMetadata': None, 'pendingInsert': None, 'pendingMetadata': None}
         self.metadata = None if creating else {'id': PLAYLIST, 'snippet': {'title': self.plan['title'], 'description': self.plan['description'], 'channelId': 'owner'}, 'status': {'privacyStatus': 'public'}}
         self.items = [{'id': f'item-{i}', 'video': v} for i, v in enumerate(videos or [])]
@@ -149,11 +149,43 @@ class Provider:
 
 
 class YoutubePlanTests(unittest.TestCase):
+    def test_wrong_or_unproven_provider_edition_is_never_modified(self):
+        for title, description in [('Synthetic festival 2026', 'old lineup'),
+                                   ('Synthetic festival', 'edition 2027'),
+                                   ('Synthetic festival 2027', 'edition 2026'),
+                                   ('Synthetic festival 2026 / 2027', '')]:
+            with self.subTest(title=title, description=description):
+                provider = Provider(videos=VIDEOS[3:8])
+                provider.metadata['snippet'].update(title=title, description=description)
+                before = copy.deepcopy((provider.items, provider.metadata, provider.saved))
+                with self.assertRaisesRegex(ReconciliationRequired, 'youtube_playlist_edition_mismatch'):
+                    provider.run()
+                self.assertEqual(provider.writes(), [])
+                self.assertEqual((provider.items, provider.metadata, provider.saved), before)
+
+    def test_historical_job_is_refused_without_provider_calls(self):
+        provider = Provider()
+        provider.plan['editionYear'] = 2025
+        provider.plan['title'] = 'Synthetic festival 2025'
+        with self.assertRaisesRegex(ReconciliationRequired, 'youtube_historical_edition_protected'):
+            provider.run()
+        self.assertEqual(provider.calls, [])
+
+    def test_ambiguous_insert_on_historical_playlist_is_not_cleared(self):
+        provider = Provider(videos=VIDEOS[:2])
+        provider.metadata['snippet']['title'] = 'Synthetic festival 2026'
+        provider.saved['pendingInsert'] = {'playlistId': PLAYLIST, 'expectedIds': VIDEOS[:2]}
+        before = copy.deepcopy(provider.saved)
+        with self.assertRaisesRegex(ReconciliationRequired, 'youtube_playlist_edition_mismatch'):
+            provider.run()
+        self.assertEqual(provider.saved, before)
+        self.assertEqual(provider.writes(), [])
+
     def test_explicit_rejected_write_releases_only_its_exact_intent(self):
         for creating, method, resource in [(True, 'POST', 'playlists'), (False, 'POST', 'playlistItems'), (False, 'PUT', 'playlists')]:
             provider = Provider(creating=creating)
             if method == 'PUT':
-                provider.metadata['snippet']['title'] = 'Old title'
+                provider.metadata['snippet']['title'] = 'Old title 2027'
             def request(verb, url, **kwargs):
                 if verb == method and url.endswith('/' + resource):
                     raise ProviderWriteRejected(403, 'quotaExceeded')
@@ -245,7 +277,7 @@ class YoutubePlanTests(unittest.TestCase):
         provider = Provider(creating=True)
         provider.unknown = 'create'
         with self.assertRaises(TimeoutError): provider.run()
-        provider.plan['title'] = 'Newer publication title'
+        provider.plan['title'] = 'Newer publication title 2027'
         provider.plan['description'] = 'Newer publication description'
         provider.run()
         self.assertEqual(provider.writes('playlists').count(('POST', 'playlists')), 1)
@@ -330,7 +362,7 @@ class YoutubePlanTests(unittest.TestCase):
 
     def test_metadata_unknown_and_delete_unknown_reconcile(self):
         provider = Provider(videos=VIDEOS[:3])
-        provider.metadata['snippet']['title'] = 'Old'
+        provider.metadata['snippet']['title'] = 'Old 2027'
         provider.unknown = 'metadata'
         with self.assertRaises(TimeoutError): provider.run()
         provider.run()

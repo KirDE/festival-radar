@@ -9,6 +9,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -109,6 +110,17 @@ def discover_plan(source, search=None):
 
 def publish_plan(plan, request, guard, state, progress, *, quota_limit=5000, wait=time.sleep):
     validate_plan(plan)
+    year = plan.get('editionYear')
+    if type(year) is not int or year < datetime.now(timezone.utc).year:
+        raise ReconciliationRequired('youtube_historical_edition_protected')
+    def edition_metadata(snippet):
+        # Require affirmative edition identity BEFORE metadata PUT or content
+        # reconciliation; never relabel a previous year's playlist into scope.
+        title_years = set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', snippet.get('title', '')))
+        years = title_years | set(re.findall(r'(?<!\d)(?:19|20)\d{2}(?!\d)', snippet.get('description', '')))
+        if title_years != {str(year)} or years != {str(year)}:
+            raise ReconciliationRequired('youtube_playlist_edition_mismatch')
+    edition_metadata(plan)
     budget = Budget(quota_limit)
     desired = plan['videoIds']
     verified = 0
@@ -174,6 +186,7 @@ def publish_plan(plan, request, guard, state, progress, *, quota_limit=5000, wai
         items = pages('playlists', {'part': 'snippet,status', 'id': playlist_id, 'maxResults': 50})
         if len(items) != 1 or items[0].get('id') != playlist_id or items[0].get('snippet', {}).get('channelId') != owner:
             raise ReconciliationRequired('youtube_ownership_readback_failed')
+        edition_metadata(items[0].get('snippet', {}))
         return items[0]
 
     def content(playlist_id):
