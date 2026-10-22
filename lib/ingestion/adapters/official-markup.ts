@@ -170,6 +170,7 @@ function meraLuna(html: string): AdapterResult | undefined {
   if (!date) return undefined;
 
   const lineup: string[] = [];
+  let incomplete = false;
   let excerpt = edition[0];
   for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
     const href = attribute(match[1], "href");
@@ -186,7 +187,14 @@ function meraLuna(html: string): AdapterResult | undefined {
     const blockEnd = html.lastIndexOf("</lineup-block>", match.index);
     if (blockStart < 0 || blockStart < blockEnd) continue;
 
-    const name = fkpArtistName(decode(match[2].replace(/<[^>]+>/g, " ")));
+    const label = decode(match[2].replace(/<[^>]+>/g, " "));
+    // The official act grid includes a linked TBA slot, not an artist. Its
+    // unfinished bill is additive evidence, never confirmation of removals.
+    if (/^\/line-up\/act\/tba\/?$/i.test(pathname) || /^[\s.\-–—]*t\.?\s*b\.?\s*a[\s.\-–—]*$/i.test(label)) {
+      incomplete = true;
+      continue;
+    }
+    const name = fkpArtistName(label);
     if (!name || lineup.some((existing) => existing.localeCompare(name, undefined, { sensitivity: "base" }) === 0)) continue;
     lineup.push(name);
     if (excerpt === edition[0]) excerpt = `${edition[0]} ${match[0]}`;
@@ -196,6 +204,7 @@ function meraLuna(html: string): AdapterResult | undefined {
     startDate: `${date[3]}-08-${pad(date[1])}`,
     endDate: `${date[3]}-08-${pad(date[2])}`,
     lineup,
+    ...(incomplete ? { artistListMode: "additive" as const } : {}),
     excerpt,
   };
 }
