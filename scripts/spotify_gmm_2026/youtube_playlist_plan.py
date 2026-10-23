@@ -208,6 +208,10 @@ def publish_plan(plan, request, guard, state, progress, *, quota_limit=5000, wai
             raise ReconciliationRequired('youtube_owner_ambiguous')
         owner = channels[0]['id']
         current_state = state('read')
+        archived_ids = current_state.get('archivedPlaylistIds', [])
+        if not isinstance(archived_ids, list) or any(not isinstance(value, str) or not PLAYLIST_ID.fullmatch(value) for value in archived_ids):
+            raise ReconciliationRequired('youtube_invalid_archive_policy')
+        archived_ids = set(archived_ids)
         creating = plan['expectedUrl'] in ('', 'NEW')
         playlist_id = current_state['playlistId'] if creating else URL.fullmatch(plan['expectedUrl']).group(1)
         description = plan['description']
@@ -218,6 +222,7 @@ def publish_plan(plan, request, guard, state, progress, *, quota_limit=5000, wai
                 # A missing DB binding does not mean the provider playlist is
                 # missing. Recover an exact owned legacy identity before create.
                 owned = pages('playlists', {'part': 'snippet,status', 'mine': 'true', 'maxResults': 50}, exact_total=False)
+                owned = [item for item in owned if item.get('id') not in archived_ids]
                 matches = [item for item in owned if item.get('snippet', {}).get('channelId') == owner
                            and item.get('snippet', {}).get('title') == plan['title']
                            and item.get('snippet', {}).get('description') == plan['description']]
@@ -232,7 +237,7 @@ def publish_plan(plan, request, guard, state, progress, *, quota_limit=5000, wai
                     current_state = state('adopt', {'playlistId': playlist_id, 'title': plan['title'], 'description': plan['description']})
             if not playlist_id and current_state['sent']:
                 matches = [item['id'] for item in pages('playlists', {'part': 'snippet,status', 'mine': 'true', 'maxResults': 50}, exact_total=False)
-                           if item.get('snippet', {}).get('channelId') == owner and item.get('snippet', {}).get('description') == creation_metadata['description'] and item.get('snippet', {}).get('title') == creation_metadata['title']]
+                           if item.get('id') not in archived_ids and item.get('snippet', {}).get('channelId') == owner and item.get('snippet', {}).get('description') == creation_metadata['description'] and item.get('snippet', {}).get('title') == creation_metadata['title']]
                 if len(matches) != 1:
                     raise ReconciliationRequired('youtube_create_unknown_no_resend')
                 playlist_id = matches[0]

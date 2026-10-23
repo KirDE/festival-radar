@@ -7,7 +7,7 @@ const videoIdPattern = /^[A-Za-z0-9_-]{11}$/;
 export type YoutubePlan = { slug: string; editionYear: number; expectedUrl: string; title: string; description: string; videoIds: string[]; artists: number; sourceTracks: number };
 export type YoutubeInsert = { playlistId: string; expectedIds: string[] };
 export type YoutubeMetadata = { playlistId: string; title: string; description: string };
-export type YoutubeState = { marker: string; sent: boolean; playlistId: string | null; creationMetadata: { title: string; description: string } | null; pendingInsert: YoutubeInsert | null; pendingMetadata: YoutubeMetadata | null; adopted?: boolean; lastRejectedWrite?: { operation: string; status: number; reason: string } };
+export type YoutubeState = { marker: string; sent: boolean; playlistId: string | null; creationMetadata: { title: string; description: string } | null; pendingInsert: YoutubeInsert | null; pendingMetadata: YoutubeMetadata | null; adopted?: boolean; lastRejectedWrite?: { operation: string; status: number; reason: string }; archivedPlaylistIds?: string[] };
 export type YoutubeProgress = { verifiedTracks: number; totalTracks: number; quotaUsed: number; complete: boolean };
 
 export function validateYoutubePlan(value: unknown): asserts value is YoutubePlan {
@@ -70,9 +70,11 @@ export async function youtubeProviderState(
     // Provider titles may already have been renamed. An explicit archive by
     // immutable ID must win over both a DB binding and legacy adoption.
     const registry = await tx.operationalState.findUnique({ where: { key: 'playlist-provider-archives-v1' } });
+    let archivedPlaylistIds: string[] | undefined;
     if (registry) {
       const archived = (registry.payload as { youtube_music?: unknown } | null)?.youtube_music;
       if (!Array.isArray(archived) || archived.some(id => typeof id !== 'string' || !playlistIdPattern.test(id))) throw new Error('Invalid playlist archive registry');
+      archivedPlaylistIds = archived as string[];
       const candidate = action === 'bind' ? payload : action === 'adopt' ? (payload as { playlistId?: unknown } | null)?.playlistId : null;
       if ([boundId, state.playlistId, state.pendingInsert?.playlistId, state.pendingMetadata?.playlistId, candidate].some(id => archived.includes(id))) throw new Error('Archived YouTube playlist is immutable');
     }
@@ -146,7 +148,10 @@ export async function youtubeProviderState(
       }
     }
     if (action !== 'read') await tx.$executeRaw`UPDATE "CatalogPlaylistRefresh" SET "youtubeState" = ${JSON.stringify(state)}::jsonb WHERE id = ${row?.id ?? claim.id} OR id = ${claim.id}`;
-    return state;
+    // Discovery must not mistake a protected archive (even one renamed into
+    // the current year) for a writable legacy identity or an unresolved create.
+    // Return live policy, never persist it in the edition's creation history.
+    return archivedPlaylistIds ? { ...state, archivedPlaylistIds } : state;
   });
 }
 
