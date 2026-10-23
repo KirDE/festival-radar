@@ -260,6 +260,54 @@ class YoutubePlanTests(unittest.TestCase):
             provider.run()
         self.assertEqual(provider.writes(), [])
 
+    def test_renamed_protected_archive_does_not_block_new_current_creation(self):
+        for description in ['renamed historical metadata', None]:
+            with self.subTest(description=description):
+                provider = Provider(creating=True)
+                archived = 'PLhistorical001'
+                provider.saved['archivedPlaylistIds'] = [archived]
+                old = {'id': archived, 'snippet': {'channelId': 'owner', 'title': provider.plan['title'], 'description': description or provider.plan['description']}}
+                def request(method, url, **kwargs):
+                    result = provider.request(method, url, **kwargs)
+                    if method == 'GET' and url.endswith('/playlists') and 'mine' in kwargs.get('params', {}):
+                        result['items'].append(copy.deepcopy(old))
+                        result['pageInfo']['totalResults'] += 1
+                    if method != 'GET':
+                        self.assertNotEqual(kwargs.get('json', {}).get('id'), archived)
+                        self.assertNotEqual(kwargs.get('json', {}).get('snippet', {}).get('playlistId'), archived)
+                    return result
+                result = publish_plan(provider.plan, request, provider.guard, provider.state, provider.progress.append, wait=lambda delay: None)
+                self.assertEqual(result['tracks'], 3)
+                self.assertEqual(provider.saved['playlistId'], PLAYLIST)
+                self.assertFalse(provider.saved.get('adopted', False))
+                self.assertEqual(provider.writes('playlists'), [('POST', 'playlists')])
+
+    def test_unregistered_same_title_still_blocks_creation_beside_archive(self):
+        provider = Provider(creating=True)
+        provider.saved['archivedPlaylistIds'] = ['PLhistorical001']
+        provider.metadata = {'id': PLAYLIST, 'snippet': {'channelId': 'owner', 'title': provider.plan['title'], 'description': 'unproven current identity'}}
+        with self.assertRaisesRegex(ReconciliationRequired, 'youtube_existing_identity_ambiguous'):
+            provider.run()
+        self.assertEqual(provider.writes(), [])
+
+    def test_archive_cannot_resolve_unknown_creation_or_allow_resend(self):
+        provider = Provider(creating=True)
+        provider.saved.update(sent=True, archivedPlaylistIds=[PLAYLIST], creationMetadata={'title': provider.plan['title'], 'description': provider.plan['description']})
+        provider.metadata = {'id': PLAYLIST, 'snippet': {'channelId': 'owner', **provider.saved['creationMetadata']}}
+        before = copy.deepcopy(provider.saved)
+        with self.assertRaisesRegex(ReconciliationRequired, 'youtube_create_unknown_no_resend'):
+            provider.run()
+        self.assertEqual(provider.saved, before)
+        self.assertEqual(provider.writes(), [])
+
+    def test_malformed_archive_policy_refuses_before_writes(self):
+        for value in [None, 'PLhistorical001', ['bad'], [123]]:
+            provider = Provider(creating=True)
+            provider.saved['archivedPlaylistIds'] = value
+            with self.subTest(value=value), self.assertRaisesRegex(ReconciliationRequired, 'youtube_invalid_archive_policy'):
+                provider.run()
+            self.assertEqual(provider.writes(), [])
+
     def test_exact_existing_playlist_is_noop(self):
         provider = Provider(videos=VIDEOS[:3])
         self.assertEqual(provider.run()['tracks'], 3)

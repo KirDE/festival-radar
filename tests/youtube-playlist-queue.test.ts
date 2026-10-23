@@ -80,6 +80,24 @@ test('YouTube plans reject unsafe IDs, duplicates, bindings and counts', () => {
   validateYoutubePlan(plan);
 });
 
+test('discovery receives live archive IDs without persisting policy in creation state', async () => {
+  const state = fixture();
+  await stageYoutubePlan(state.db, lease, plan);
+  state.archives({ youtube_music: ['PLhistorical001'] });
+  const read = await youtubeProviderState(state.db, lease, '', 'read');
+  assert.deepEqual(read.archivedPlaylistIds, ['PLhistorical001']);
+  const metadata = { title: plan.title, description: `${plan.description}\n[${read.marker}]` };
+  await youtubeProviderState(state.db, lease, '', 'reserve', metadata);
+  state.archives({ youtube_music: ['PLanotherarchive'] });
+  const updated = await youtubeProviderState(state.db, lease, '', 'read');
+  assert.deepEqual(updated.archivedPlaylistIds, ['PLanotherarchive']);
+  assert.deepEqual(updated.creationMetadata, metadata);
+  state.archives(null);
+  assert.equal((await youtubeProviderState(state.db, lease, '', 'read')).archivedPlaylistIds, undefined);
+  state.archives({ youtube_music: ['bad'] });
+  await assert.rejects(youtubeProviderState(state.db, lease, '', 'read'), /Invalid playlist archive registry/);
+});
+
 test('legacy adoption is fenced and cannot overwrite a sent create or pending write', async () => {
   const state = fixture();
   await stageYoutubePlan(state.db, lease, plan);
