@@ -39,3 +39,36 @@ test('missing/invalid current summary keeps review, does not silently accept dri
 });
 
 test("undated stale sale after year rollover is not reinterpreted as a new release",()=>{const c=parse(fixtures.home,{},"2027-01-01T10:00:00.000Z");assert.equal(c.ticketStatus,undefined);assert.ok(c.warnings.length);});
+
+const saleOpenAt='2026-10-24T15:16:46.310Z';
+const saleOpen=Object.fromEntries(['homepage','tickets'].map(name=>[name,readFileSync(new URL(`./fixtures/sweden-rock/sale-open-${name}.html`,import.meta.url),'utf8')]));
+for(const [name,html] of Object.entries(saleOpen)) test(`2026-10-24 actual ${name}: current Ticketmaster sale is open`,()=>{
+ const c=parse(html,name==='tickets'?{url:'https://swedenrock.com/biljetter'}:{},saleOpenAt);
+ assert.equal(c.ticketStatus,'available');assert.equal(c.ticketsUrl,'https://swedenrock.com/biljetter');assert.deepEqual(c.warnings,[]);
+ assert.deepEqual(c.observedEditionYears,[2027]);
+ assert.ok(c.evidence.some(e=>e.field==='ticketStatus'&&/ute nu på Ticketmaster/.test(e.excerpt)));
+ for(const field of ['lineup','headliners','startDate','endDate','status'])assert.equal(c[field],undefined);
+ const current={slug:'sweden-rock',editionYear:2027,ticketsUrl:c.ticketsUrl,ticketStatus:'unavailable',lineup:[],headliners:[],status:'tba'};
+ const r=evaluateCandidate(current,c);assert.deepEqual(r.reviewReasons,[]);assert.equal(r.publishable,true);
+ assert.equal(r.changes.length,1);assert.equal(r.changes[0].field,'ticketStatus');
+});
+test('current sale statement supports later editions and explicit festival sellout',()=>{
+ for(const html of Object.values(saleOpen)){
+  const later=html.replaceAll('2027','2028');
+  const c=parse(later,{editionYear:2028},'2027-10-24T15:16:46.310Z');
+  assert.equal(c.ticketStatus,'available');assert.deepEqual(c.warnings,[]);
+  assert.equal(parse(later,{},saleOpenAt).ticketStatus,undefined);
+  const sold=html.replace('ute nu på Ticketmaster','ute nu på Ticketmaster. Festivalpass är slutsålda');
+  assert.equal(parse(sold,{},saleOpenAt).ticketStatus,'sold_out');
+ }
+});
+test('sale announcements must be explicit and inside current ticket summary',()=>{
+ for(const [name,html] of Object.entries(saleOpen)){
+  for(const phrase of ['ute snart på Ticketmaster','ute nu på Merchshop','köp nu på Ticketmaster']){
+   const c=parse(html.replace('ute nu på Ticketmaster',phrase),{},saleOpenAt);
+   assert.equal(c.ticketStatus,undefined);assert.ok(c.warnings.length);
+  }
+  const unrelated=html.replace('ute nu på Ticketmaster','information kommer')+'<h2>Merch</h2><p>Biljetter ute nu på Ticketmaster.</p>';
+  assert.equal(parse(unrelated,{},saleOpenAt).ticketStatus,undefined,name);
+ }
+});

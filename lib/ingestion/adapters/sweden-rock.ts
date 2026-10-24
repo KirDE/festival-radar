@@ -58,7 +58,10 @@ export function extractSwedenRockCandidate(html: string, source: FestivalSource,
   const currentSale = text.replace(/Blind Bird\s+Round\s+\d[^.]*\./gi, " ");
   if (!candidate.ticketStatus && /(?:ordinarie\s+biljetter|festivalpass|4-dagarsbiljetter)\s+(?:är\s+)?(?:slutsålda|slutsålt)/iu.test(currentSale))
     add("ticketStatus", "sold_out", `${heading[0]} ${currentSale}`);
-  if (!candidate.ticketStatus && /(?:ordinarie\s+biljetter|festivalpass|4-dagarsbiljetter)\s+(?:är\s+)?(?:nu\s+)?(?:till\s+salu|finns\s+att\s+köpa)/iu.test(currentSale))
+  // Both current official summaries now announce the live sale, not a launch date.
+  // Keep this scoped to the edition's summary and the named official ticket partner.
+  const liveTicketmasterSale = /(?:ordinar(?:ie|e)\s+biljettsläpp:\s*|biljetter\s+)ute\s+nu\s+på\s+Ticketmaster\b/iu.test(currentSale);
+  if (!candidate.ticketStatus && (liveTicketmasterSale || /(?:ordinarie\s+biljetter|festivalpass|4-dagarsbiljetter)\s+(?:är\s+)?(?:nu\s+)?(?:till\s+salu|finns\s+att\s+köpa)/iu.test(currentSale)))
     add("ticketStatus", "available", `${heading[0]} ${currentSale}`);
   if (!candidate.ticketStatus) candidate.warnings.push("Sweden Rock current festival ticket availability requires review");
   return candidate;
