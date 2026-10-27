@@ -52,3 +52,50 @@ test('actual discovery fetches official article; 403 stays a source failure',asy
   const denied=await fetchSource(source,{maxAttempts:1,fetchImpl:async()=>new Response('blocked',{status:403})});assert.equal(denied.response.status,403);assert.equal(denied.attempts,1);
   await assert.rejects(()=>fetchSource(source,{maxAttempts:1,fetchImpl:async()=>new Response('<h3>No bill</h3>')}),/No current-edition/);
 });
+
+const astroNews=await readFile(new URL('./fixtures/official-markup/motocultor-astro-news.html',import.meta.url),'utf8');
+const astroNew=await readFile(new URL('./fixtures/official-markup/motocultor-astro-new-names.html',import.meta.url),'utf8');
+const astroFirst=await readFile(new URL('./fixtures/official-markup/motocultor-astro-first-names.html',import.meta.url),'utf8');
+const added=['Hypocrisy','I Am Morbid','Igorrr','1914','Get The Shot','Mucky Pup','Nile','Any Given Day','Blackwater Holylight','Conan','Glowsun','Heavy Lungs','Houle','Kanine','Sons of Arrakis','Sun','Sunborn'];
+test('2026-10-27 production failure: Astro cards discover latest nested article and parse all 17 new acts',async()=>{
+  assert.equal(discoverMotocultorAnnouncement(astroNews,source),'https://www.motocultor-festival.com/actualites/nouveaux-noms/');
+  const seen=[];
+  const home={...source,url:'https://www.motocultor-festival.com/'};
+  const r=await fetchSource(home,{maxAttempts:1,fetchImpl:async url=>{
+    seen.push(url);return new Response(seen.length===1?'<h1>Motocultor</h1>':seen.length===2?astroNews:astroNew);
+  }});
+  assert.deepEqual(seen,[home.url,source.url,'https://www.motocultor-festival.com/actualites/nouveaux-noms/']);
+  const c=parse(await r.response.text());assert.deepEqual(c.lineup,added);assert.deepEqual(c.warnings,[]);assert.equal(c.lineupScope,'announcement');
+  const result=evaluateCandidate(current,c);
+  assert.equal(result.changes.length,17);assert.ok(result.changes.every(x=>x.kind==='artist_added'));assert.deepEqual(result.reviewReasons,[]);
+  for(const field of ['headliners','startDate','endDate','city','ticketsUrl','ticketStatus'])assert.equal(c[field],undefined);
+  const alreadyUpdated={...current,lineup:[...current.lineup,...added]};
+  assert.deepEqual(evaluateCandidate(alreadyUpdated,c).changes,[]);
+});
+test('Astro first announcement still yields original 19, excludes contextual Anthrax and sibling new names',()=>{
+  const c=parse(astroFirst);assert.deepEqual(sorted(c.lineup),sorted(expected));assert.deepEqual(c.warnings,[]);
+  assert.deepEqual(evaluateCandidate(current,c).changes,[]);
+});
+test('Astro first announcement with multiple headline acts never merges them into one artist',()=>{
+  const c=parse(astroFirst.replace('<strong>Helloween</strong>','<strong>Gojira et Helloween</strong>'));
+  assert.deepEqual(sorted(c.lineup),sorted(['Gojira',...expected]));assert.deepEqual(c.warnings,[]);
+  assert.deepEqual(evaluateCandidate(current,c).changes.map(x=>[x.kind,x.after]),[['artist_added','Gojira']]);
+});
+test('Astro later names, changed counts and edition rollover are not frozen to one announcement',()=>{
+  const later=astroNew.replace('17 nouveaux noms','18 nouveaux noms').replace('Sun et Sunborn.','Sun, Sunborn et Gojira.');
+  assert.deepEqual(parse(later).lineup,[...added,'Gojira']);
+  const next=extractFestivalCandidate(later.replaceAll('2027','2028'),{...source,editionYear:2028},at);
+  assert.deepEqual(next.lineup,[...added,'Gojira']);assert.deepEqual(next.warnings,[]);
+});
+test('Astro discovery requires current-edition card, rejects foreign links and stops on cancellations',()=>{
+  assert.equal(discoverMotocultorAnnouncement(astroNews.replaceAll('2027','2026'),source),undefined);
+  assert.equal(discoverMotocultorAnnouncement(astroNews.replaceAll('2027',''),source),undefined);
+  const offsite=astroNews.replace('href="/actualites/nouveaux-noms/"','href="https://evil.example/actualites/nouveaux-noms/"');
+  assert.equal(discoverMotocultorAnnouncement(offsite,source),'https://www.motocultor-festival.com/actualites/premiers-noms/');
+  assert.equal(discoverMotocultorAnnouncement(astroNews.replace('17 nouveaux noms','Groupes annulés 2027'),source),undefined);
+});
+test('Astro year must be in the article, not siblings; wrong years, incomplete lists and cancellation prose fail closed',()=>{
+  for(const h of [astroNew.replaceAll('2027','2026'),astroNew.replaceAll("Affiche de l'édition 2027 avec les nouveaux noms","Poster"),astroNew.replace('17 nouveaux noms','18 nouveaux noms'),astroNew.replace('Sun et Sunborn.','Sun et Sun.'),astroNew.replace('Et ce n’est pas fini','Nile ne jouera pas. Et ce n’est pas fini'),astroNew.replace('https://www.motocultor-festival.com/actualites/nouveaux-noms/','https://evil.example/actualites/nouveaux-noms/')]) {
+    const c=parse(h);assert.equal(c.lineup,undefined);assert.ok(c.warnings.length);
+  }
+});
