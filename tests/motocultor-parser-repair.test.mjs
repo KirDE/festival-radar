@@ -76,6 +76,11 @@ test('Astro first announcement still yields original 19, excludes contextual Ant
   const c=parse(astroFirst);assert.deepEqual(sorted(c.lineup),sorted(expected));assert.deepEqual(c.warnings,[]);
   assert.deepEqual(evaluateCandidate(current,c).changes,[]);
 });
+test('Astro first announcement with multiple headline acts never merges them into one artist',()=>{
+  const c=parse(astroFirst.replace('<strong>Helloween</strong>','<strong>Gojira et Helloween</strong>'));
+  assert.deepEqual(sorted(c.lineup),sorted(['Gojira',...expected]));assert.deepEqual(c.warnings,[]);
+  assert.deepEqual(evaluateCandidate(current,c).changes.map(x=>[x.kind,x.after]),[['artist_added','Gojira']]);
+});
 test('Astro later names, changed counts and edition rollover are not frozen to one announcement',()=>{
   const later=astroNew.replace('17 nouveaux noms','18 nouveaux noms').replace('Sun et Sunborn.','Sun, Sunborn et Gojira.');
   assert.deepEqual(parse(later).lineup,[...added,'Gojira']);

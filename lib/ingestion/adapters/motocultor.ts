@@ -56,7 +56,7 @@ function astroAnnouncement(article: string, source: FestivalSource) {
     if (!billed || !rest) return undefined;
     const ranked = billed.match(/^En tête d[’']affiche\s*:\s*(.+?)\.\s*À leurs côtés\s*:\s*(.+)\.$/i);
     if (!ranked) return undefined;
-    names = [ranked[1], ...ranked[2].split(/,\s*|\s+et\s+/i), ...rest.replace(/^Et aussi\s*:\s*/i, "").replace(/\.$/, "")
+    names = [...ranked[1].split(/,\s*|\s+et\s+/i), ...ranked[2].split(/,\s*|\s+et\s+/i), ...rest.replace(/^Et aussi\s*:\s*/i, "").replace(/\.$/, "")
       .replace(/\s*\(celebrating the songs of Anthrax,\s*\d{4}[-–]\d{4}\)/i, "").split(/,\s*|\s+et\s+/i)];
   }
   const lineup = names.map(n => /^peeling\s*flesh$/i.test(n.trim()) ? "PeelingFlesh" : n.trim());
