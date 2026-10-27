@@ -1,3 +1,4 @@
+import { pinkpop } from "./pinkpop.ts";
 import { leyendas } from "./leyendas.ts";
 import { graspop } from "./graspop.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
@@ -252,12 +253,6 @@ function fkpLineup(html: string): AdapterResult | undefined {
   };
 }
 
-function pinkpop(html: string): AdapterResult | undefined {
-  const date = html.match(/(\d{1,2})\s*[•·]\s*(\d{1,2})\s*[•·]\s*(\d{1,2})\s+(januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december)\s+(20\d{2})/i);
-  if (!date) return undefined;
-  const location = html.match(/class=["'][^"']*location[^"']*["'][^>]*>[\s\S]{0,200}?<strong[^>]*>[^<]+<\/strong>\s*([^<]+)/i);
-  return { startDate: `${date[5]}-${months[date[4].toLowerCase()]}-${pad(date[1])}`, endDate: `${date[5]}-${months[date[4].toLowerCase()]}-${pad(date[3])}`, city: location?.[1].trim(), excerpt: date[0] };
-}
 
 function tuska(html: string): AdapterResult | undefined {
   const date = html.match(/Tuska Festival\s*[-–—]\s*(\d{1,2})\.[–-](\d{1,2})\.(\d{1,2})\.(20\d{2})/i);
