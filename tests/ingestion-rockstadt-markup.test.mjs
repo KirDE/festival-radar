@@ -15,6 +15,8 @@ const artists = ["Slash featuring Myles Kennedy and The Conspirators", "Overkill
 const current = { slug: "rockstadt", name: "Rockstadt Extreme Fest", editionYear: 2027, country: "RO", officialUrl: "https://rockstadtextremefest.ro/", status: "announced", headliners: [], lineup: [] };
 const announcement = `First confirmed names: <strong>${artists.join(", ")}</strong>`;
 const desc = fixture.match(/<div class="event-short-desc">[\s\S]*?<\/div>/)[0];
+const updatedDescription = (await readFile(new URL("./fixtures/official-markup/rockstadt-first-wave-20261028.html", import.meta.url), "utf8")).match(/<div class="event-short-desc">[\s\S]*?<\/div>/)[0];
+const updatedArtists = ["Lake of Tears", ...artists, "Therion", "Six Feet Under", "Embryonic Autopsy", "Triptykon"];
 
 function noEvidence(html, overrides) {
   const candidate = extract(html, overrides);
@@ -103,6 +105,34 @@ test("dynamic first-wave names are extracted without hardcoded identities or rem
     if (names.some(name => !artists.includes(name))) assert.equal(result.publishable, false);
   }
   assert.deepEqual(extract(fixture.replace("A new name. The same heartbeat.", "More names to come this autumn.")).lineup, artists);
+});
+
+test("2026-10-28 live mixed-case Strong announcement extracts all eleven names and retains review", () => {
+  const candidate = extract(fixture.replace(desc, updatedDescription));
+  assert.deepEqual(candidate.lineup, updatedArtists);
+  assert.deepEqual(candidate.observedEditionYears, [2027]);
+  assert.equal(candidate.status, "partial");
+  assert.equal(candidate.ticketStatus, "available");
+  const result = evaluateCandidate({ ...current, lineup: artists, city: "Ghimbav (Brașov)",
+    startDate: "2027-07-26", endDate: "2027-07-30", status: "partial",
+    ticketStatus: "available", ticketsUrl: url }, candidate);
+  assert.equal(result.publishable, false);
+  assert.deepEqual(result.reviewReasons, ["Agent review required before lineup-triggered provider activity"]);
+  assert.deepEqual(result.changes.map(change => [change.kind, change.after]),
+    updatedArtists.filter(name => !artists.includes(name)).map(name => ["artist_added", name]));
+});
+
+test("HTML emphasis casing and later names do not relax ambiguity, edition or cancellation guards", () => {
+  for (const [open, close] of [["STRONG", "STRONG"], ["sTrOnG", "StRoNg"], ["strong", "strong"]]) {
+    const description = updatedDescription.replace("<Strong>", `<${open}>`).replace("</strong>", `</${close}>`);
+    const html = fixture.replace(desc, description);
+    assert.deepEqual(extract(html).lineup, updatedArtists);
+    assert.deepEqual(extract(html.replace("Triptykon", "Triptykon, Future Act")).lineup, [...updatedArtists, "Future Act"]);
+    noEvidence(html.replace("Triptykon", "Triptykon, OVERKILL"));
+    noEvidence(html.replace("First confirmed names:", "First confirmed names: <em>Extra Act</em><br>first confirmed names:"));
+    noEvidence(html.replace("One community.", "Jinjer cancelled. One community."));
+    noEvidence(html.replace("Starting with the 2027 edition", "Starting with the 2026 edition"));
+  }
 });
 
 test("ambiguous, duplicate or malformed announcements fail closed", () => {

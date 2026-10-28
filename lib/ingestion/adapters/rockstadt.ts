@@ -73,10 +73,11 @@ export function rockstadt(html: string, source: FestivalSource) {
   const details = div(box, (tag) => attr(tag, "id") === "details");
   if (!details) return undefined;
   const description = div(details, (tag) => hasClass(tag, "event-short-desc"));
-  if (!description || (box.match(/First confirmed names:/g) ?? []).length !== 1 || (box.match(/\bevent-short-desc\b/g) ?? []).length !== 1) return undefined;
+  if (!description || (box.match(/First confirmed names:/gi) ?? []).length !== 1 || (box.match(/\bevent-short-desc\b/g) ?? []).length !== 1) return undefined;
   // This first-wave article is additive, not a complete billing grid. Extract
   // its actual names so later additions do not depend on a frozen six-act bill.
-  const announcement = description.match(/First confirmed names:\s*<strong>([^<>]+)<\/strong>/);
+  // HTML tag names are case-insensitive; the live article also uses <Strong>.
+  const announcement = description.match(/First confirmed names:\s*<strong>([^<>]+)<\/strong>/i);
   if (!announcement) return undefined;
   const names = text(announcement[1]).split(/,\s*/);
   if (!names.length || names.some(name => !name || name.length > 160 || !/\p{L}/u.test(name)) ||
