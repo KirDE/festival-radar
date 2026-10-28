@@ -656,18 +656,23 @@ footer {
   margin-top: 15px;
 }
 .actionGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
 }
 .actionGrid > a,
 .actionGrid > div {
+  flex: 1 1 200px;
+  min-width: 0;
   padding: 24px;
   min-height: 96px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
 }
 .actionGrid > a:hover {
   background: var(--acid);
@@ -1106,8 +1111,9 @@ footer {
     grid-column: 1/-1;
     padding: 8px;
   }
-  .actionGrid {
-    grid-template-columns: repeat(2, 1fr);
+  .actionGrid > a,
+  .actionGrid > div {
+    flex-basis: 50%;
   }
   .headlinerGrid {
     grid-template-columns: repeat(2, 1fr);
@@ -1190,13 +1196,9 @@ footer {
   .detailHero h1 {
     font-size: 45px;
   }
-  .actionGrid {
-    grid-template-columns: 1fr;
-  }
   .actionGrid > a,
   .actionGrid > div {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
+    flex-basis: 100%;
   }
   .sectionHeading h2 {
     font-size: 38px;
