@@ -4,7 +4,7 @@ import { isPolandrockSource, polandrockAnnouncementUrl } from "./adapters/poland
 import { handlesBrutalAssault, fetchBrutalAssaultDocuments } from "./adapters/brutal-assault.ts";
 import { isCopenhellCurrentSource, copenhellUrl, copenhellNews, copenhellArtistLinks, copenhellEnvelope, type CopenhellDocument } from "./adapters/copenhell-current.ts";
 import { isLeyendasSource, leyendasLinkedRoute, leyendasNewsLinks, LEYENDAS_ORIGIN, LEYENDAS_DOCUMENTS } from "./adapters/leyendas.ts";
-import { isRockInRomaSource } from "./adapters/rock-in-roma.ts";
+import { isRockInRomaSource, rockInRomaConcerts, ROCK_IN_ROMA_DOCUMENTS, type RockInRomaDocument } from "./adapters/rock-in-roma.ts";
 import { isAlpenFlairSource, alpenAnnouncements, alpenEnvelope } from './adapters/alpen-flair.ts';
 import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
 import { discoverMotocultorAnnouncement } from "./adapters/motocultor.ts";
@@ -204,19 +204,34 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
     return { response: new Response(JSON.stringify({ kind: copenhellEnvelope, documents }), { headers: { "content-type": "application/json" } }), attempts };
   }
 
-  // The home page mixes old concert news with current navigation. Discover
-  // only the linked same-origin lineup for the configured edition.
-  if (initial.response.ok && isRockInRomaSource(source) && source.strategies.includes("html_fallback") && !source.fetchUrl && !source.followLinkPattern && new URL(source.url).pathname === "/") {
-    if (initial.response.url && new URL(initial.response.url).origin !== "https://rockinroma.com") throw Object.assign(new Error("Rock in Roma homepage redirected away from its trusted origin"), { attempts: initial.attempts });
-    const html = await initial.response.text();
-    const path = `/lineup-${source.editionYear}/`;
-    const linked = [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)].some(match => {
-      try { const url = new URL(match[1], source.url); return url.origin === "https://rockinroma.com" && url.pathname === path && !url.search && !url.hash; } catch { return false; }
-    });
-    if (!linked) return { response: new Response(html, { status: initial.response.status, headers: initial.response.headers }), attempts: initial.attempts };
-    const lineup = await fetchWithRetry(new URL(path, source.url).href);
-    if (lineup.response.ok && lineup.response.url && lineup.response.url !== new URL(path, source.url).href) throw Object.assign(new Error("Rock in Roma lineup redirected away from its trusted edition page"), { attempts: initial.attempts + lineup.attempts });
-    return { response: lineup.response, attempts: initial.attempts + lineup.attempts };
+  // Rock in Roma is a series: only concerts linked by the current-edition
+  // grid define the range. Never crawl archive/news or third-party ticket sites.
+  if (initial.response.ok && isRockInRomaSource(source) && source.strategies.includes("html_fallback") && !source.followLinkPattern) {
+    const initialUrl = source.fetchUrl ?? source.url;
+    if (initial.response.url && initial.response.url !== initialUrl) throw Object.assign(new Error("Rock in Roma source redirected away from its trusted origin or edition page"), { attempts: initial.attempts });
+    let html = await initial.response.text(), attempts = initial.attempts;
+    if (new URL(initialUrl).pathname === "/") {
+      const path = `/lineup-${source.editionYear}/`;
+      const linked = [...html.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi)].some(match => {
+        try { const url = new URL(match[1], source.url); return url.origin === "https://rockinroma.com" && url.pathname === path && !url.username && !url.password && !url.search && !url.hash; } catch { return false; }
+      });
+      if (!linked) return { response: new Response(html, { headers: initial.response.headers }), attempts };
+      const url = new URL(path, source.url).href;
+      const lineup = await fetchWithRetry(url, "error"); attempts += lineup.attempts;
+      if (!lineup.response.ok) return {response: lineup.response, attempts};
+      if (lineup.response.url && lineup.response.url !== url) throw Object.assign(new Error("Rock in Roma lineup redirected away from its trusted edition page"), { attempts });
+      html = await lineup.response.text();
+    }
+    const links = rockInRomaConcerts(html, source);
+    if (links.length > 80) throw Object.assign(new Error("Rock in Roma concert discovery exceeds its bounded limit"), { attempts });
+    const concerts: RockInRomaDocument[] = [];
+    for (const {url} of links) {
+      const detail = await fetchWithRetry(url, "error"); attempts += detail.attempts;
+      if (!detail.response.ok) return {response: detail.response, attempts};
+      if (detail.response.url && detail.response.url !== url) throw Object.assign(new Error("Rock in Roma concert redirected away from its trusted identity"), { attempts });
+      concerts.push({url, html: await detail.response.text()});
+    }
+    return {response: new Response(JSON.stringify({kind: ROCK_IN_ROMA_DOCUMENTS, lineup: html, concerts}), {headers: {"content-type": "application/json"}}), attempts};
   }
   if (isPolandrockSource(source) && initial.response.ok) {
     if (initial.response.url && new URL(initial.response.url).origin !== new URL(source.url).origin) throw Object.assign(new Error("Pol'and'Rock homepage redirected off official origin"), { attempts: initial.attempts });
