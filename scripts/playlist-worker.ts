@@ -7,6 +7,7 @@ import { stagePlaylistPlan } from '../lib/catalog/playlist-queue.ts';
 import { runPlaylistWorker, publishSpotifyCheckpoint } from '../lib/catalog/playlist-worker.ts';
 import { stageYoutubePlan, validateYoutubePlan, YOUTUBE_URL } from '../lib/catalog/youtube-playlist-queue.ts';
 import { executePlaylistJson } from '../lib/catalog/python-playlist-rpc.ts';
+import { spotifyRepertoiresForArtists } from '../lib/catalog/spotify-repertoire.ts';
 // Activation requires explicit stop/drain/reconciliation of legacy consumers.
 let release: (() => Promise<void>) | undefined;
 const root = process.cwd();
@@ -33,7 +34,9 @@ try {
     const [queued] = await db.$queryRaw<{ desiredPlan: import('@prisma/client').Prisma.JsonValue | null }[]>`SELECT "desiredPlan" FROM "CatalogPlaylistRefresh" WHERE id = ${claim.id}`;
     let plan: unknown = queued.desiredPlan;
     if (plan === null) {
-      const discovered = await execute('discover-spotify', { season: festival.editionYear, festivals: [{ ...festival, artists: [...festival.headliners, ...festival.lineup], playlistUrl: creating ? '' : playlistUrl }] }, {}, 6_000_000);
+      const lineupNames = new Set([...festival.headliners, ...festival.lineup]);
+      const spotifyRepertoireProfiles = await spotifyRepertoiresForArtists(db, snapshot.artists.filter(a => lineupNames.has(a.name)));
+      const discovered = await execute('discover-spotify', { season: festival.editionYear, festivals: [{ ...festival, spotifyRepertoireProfiles, artists: [...festival.headliners, ...festival.lineup], playlistUrl: creating ? '' : playlistUrl }] }, {}, 6_000_000);
       plan = await stagePlaylistPlan(db, claim, discovered as import('@prisma/client').Prisma.InputJsonValue);
     }
     const candidate = plan as { playlist_url?: string; edition_year?: number };

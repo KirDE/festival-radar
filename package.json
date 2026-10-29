@@ -29,7 +29,7 @@
     "test:logo-serving-db": "node --import tsx --test tests/logo-serving.e2e.test.ts",
     "test:due-worker": "node --import tsx --test --test-concurrency=1 tests/ingestion-due-worker.e2e.test.mjs tests/db-due-health.e2e.test.mjs",
     "test:sources": "node --import tsx --test tests/source-configuration.test.ts tests/source-repository.e2e.test.ts",
-    "test:catalog-db": "node --import tsx --test --test-concurrency=1 tests/catalog-repository.e2e.test.ts tests/catalog-publication.e2e.test.ts tests/ingestion-lease.e2e.test.ts",
+    "test:catalog-db": "node --import tsx --test --test-concurrency=1 tests/catalog-repository.e2e.test.ts tests/catalog-publication.e2e.test.ts tests/ingestion-lease.e2e.test.ts tests/spotify-repertoire.e2e.test.mjs",
     "test:integration": "node --test --test-concurrency=1 tests/integration/account-routes.test.mjs tests/integration/notification-routes.test.mjs tests/integration/admin-workflows.test.mjs",
     "test:notifications:e2e": "node tests/notification-e2e.mjs",
     "test:admin:integration": "node --test --test-concurrency=1 tests/integration/admin-workflows.test.mjs",

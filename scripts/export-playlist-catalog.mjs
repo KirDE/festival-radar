@@ -1,6 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readCatalog } from "../lib/catalog/repository.ts";
+import { db } from "../lib/db.ts";
+import { spotifyRepertoiresForArtists } from "../lib/catalog/spotify-repertoire.ts";
 
 const snapshot = await readCatalog();
 const festivals = snapshot.festivals.map((festival) => ({ ...festival, playlistUrl: snapshot.playlists[festival.slug]?.spotifyUrl }));
@@ -22,6 +24,10 @@ const catalog = {
     playlistUrl: festival.playlistUrl,
   })),
 };
+for (const festival of catalog.festivals) {
+  const names = new Set(festival.artists);
+  festival.spotifyRepertoireProfiles = await spotifyRepertoiresForArtists(db, snapshot.artists.filter(a => names.has(a.name)));
+}
 await mkdir(path.dirname(output), { recursive: true });
 await writeFile(output, `${JSON.stringify(catalog, null, 2)}\n`);
 console.log(`Exported ${catalog.festivals.length} festivals for ${catalog.season} to ${output}`);

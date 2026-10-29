@@ -14,6 +14,7 @@ from typing import Callable
 import requests
 
 from spotify_auth import auth_headers
+from spotify_repertoire import validate_profile, select_tracks as select_repertoire_tracks
 
 SETLIST_API_KEY = os.environ.get('SETLIST_API_KEY')
 REPORT_DIR = Path('outputs/festival_playlists')
@@ -82,6 +83,7 @@ class Festival:
     mbids: dict[str, str] | None = None
     extra_excludes: set[str] | None = None
     edition_year: int | None = None
+    spotify_repertoire_profiles: dict[str, dict] | None = None
 
 
 def load_report_mbid_cache(report_dir: Path) -> dict[str, str]:
@@ -687,6 +689,7 @@ def build_playlist(festival: Festival, user_id: str, *, persist_report=True):
     artists_raw, headliners = festival.lineup_fn()
     aliases = festival.aliases or {}
     spotify_artist_ids = festival.spotify_artist_ids or {}
+    repertoire_profiles = festival.spotify_repertoire_profiles or {}
     artists = [a for a in artists_raw if not should_exclude(a, festival)]
     selected_keys = selected_artist_keys()
     if selected_keys:
@@ -700,7 +703,7 @@ def build_playlist(festival: Festival, user_id: str, *, persist_report=True):
     if not fast_sort:
         for artist in artists:
             query = aliases.get(artist, artist)
-            followers[artist] = get_followers(query, spotify_artist_ids.get(artist))
+            followers[artist] = 0 if artist in repertoire_profiles else get_followers(query, spotify_artist_ids.get(artist))
     ordered_artists = [a for a in headliners if a in artists]
     rest = [a for a in artists if a not in ordered_artists]
     if not fast_sort:
@@ -721,82 +724,101 @@ def build_playlist(festival: Festival, user_id: str, *, persist_report=True):
         mbid = forced_mbid
         errors = []
         choice_log = []
-        try:
-            if not mbid:
-                mbid = search_artist_mbid(setlist_artist)
-            if mbid:
-                recent_song_counts = extract_recent_songs(recent_setlists(mbid))
-                if recent_song_counts:
-                    source = 'setlist.fm'
-                    matched_tracks = []
-                    for song, play_count in sorted(recent_song_counts.items(), key=lambda item: (-item[1], item[0].lower())):
-                        track = spotify_search_track(setlist_artist, song, artist)
-                        if not track:
-                            choice_log.append({'source': 'setlist.fm', 'trigger': song, 'skip': 'no_spotify_match'})
-                            continue
-                        skip_reason = should_skip_track_for_artist(query_artist, track, artist)
-                        if skip_reason:
-                            choice_log.append({'source': 'setlist.fm', 'trigger': song, 'skip': skip_reason, 'matched': track['name']})
-                            continue
-                        matched_tracks.append((track.get('popularity', 0), play_count, song, track))
-                    matched_tracks.sort(key=setlist_track_sort_key)
-                    for _, play_count, song, track in matched_tracks:
-                        song_key = canonical_track_key(track['name'])
-                        if song_key in seen_song_keys:
-                            choice_log.append({'source': 'setlist.fm', 'trigger': song, 'skip': 'duplicate_song_key', 'matched': track['name']})
-                            continue
-                        if track['uri'] in seen_uris:
-                            choice_log.append({'source': 'setlist.fm', 'trigger': song, 'skip': 'duplicate_uri', 'matched': track['name']})
-                            continue
-                        seen_uris.add(track['uri'])
-                        seen_song_keys.add(song_key)
-                        selected.append(track)
-                        info = explain_track_choice(track, 'setlist.fm', artist, song)
-                        info['recent_setlist_plays'] = play_count
-                        choice_log.append(info)
-                        if len(selected) >= 5:
-                            break
-        except Exception as exc:
-            errors.append(f'setlist lookup failed: {exc}')
+        profile = repertoire_profiles.get(artist)
+        if profile is not None:
+            validate_profile(profile)
+            setlist_artist = profile['setlistArtist']
+            source = 'spotify-repertoire'
+            song_counts = {}
+            try:
+                mbid = forced_mbid or search_artist_mbid(setlist_artist)
+                if mbid:
+                    song_counts = extract_recent_songs(recent_setlists(mbid))
+            except Exception:
+                errors.append('repertoire setlist unavailable; reviewed releases used')
+            selected, choice_log = select_repertoire_tracks(
+                profile, song_counts, spotify_get, canonical_track_key,
+                is_short_or_non_song, track_version_penalty, seen_uris, seen_song_keys,
+            )
+            if not selected:
+                raise RuntimeError('Reviewed repertoire produced no eligible tracks')
+        else:
+            try:
+                if not mbid:
+                    mbid = search_artist_mbid(setlist_artist)
+                if mbid:
+                    recent_song_counts = extract_recent_songs(recent_setlists(mbid))
+                    if recent_song_counts:
+                        source = 'setlist.fm'
+                        matched_tracks = []
+                        for song, play_count in sorted(recent_song_counts.items(), key=lambda item: (-item[1], item[0].lower())):
+                            track = spotify_search_track(setlist_artist, song, artist)
+                            if not track:
+                                choice_log.append({'source': 'setlist.fm', 'trigger': song, 'skip': 'no_spotify_match'})
+                                continue
+                            skip_reason = should_skip_track_for_artist(query_artist, track, artist)
+                            if skip_reason:
+                                choice_log.append({'source': 'setlist.fm', 'trigger': song, 'skip': skip_reason, 'matched': track['name']})
+                                continue
+                            matched_tracks.append((track.get('popularity', 0), play_count, song, track))
+                        matched_tracks.sort(key=setlist_track_sort_key)
+                        for _, play_count, song, track in matched_tracks:
+                            song_key = canonical_track_key(track['name'])
+                            if song_key in seen_song_keys:
+                                choice_log.append({'source': 'setlist.fm', 'trigger': song, 'skip': 'duplicate_song_key', 'matched': track['name']})
+                                continue
+                            if track['uri'] in seen_uris:
+                                choice_log.append({'source': 'setlist.fm', 'trigger': song, 'skip': 'duplicate_uri', 'matched': track['name']})
+                                continue
+                            seen_uris.add(track['uri'])
+                            seen_song_keys.add(song_key)
+                            selected.append(track)
+                            info = explain_track_choice(track, 'setlist.fm', artist, song)
+                            info['recent_setlist_plays'] = play_count
+                            choice_log.append(info)
+                            if len(selected) >= 5:
+                                break
+            except Exception as exc:
+                errors.append(f'setlist lookup failed: {exc}')
 
-        if len(selected) < 5:
-            fallback_names = list(dict.fromkeys([query_artist, artist]))
-            for fallback_name in fallback_names:
-                try:
-                    _, tracks = spotify_top_tracks(fallback_name, 10, artist_id=spotify_artist_id)
-                    for track in tracks:
-                        artist_names = [a['name'] for a in track.get('artists', [])]
-                        if max(token_overlap(query_artist, candidate) for candidate in artist_names) < 0.45:
-                            choice_log.append({'source': 'spotify-fallback', 'trigger': fallback_name, 'skip': 'artist_mismatch', 'matched': track['name']})
-                            continue
-                        skip_reason = should_skip_track_for_artist(query_artist, track, artist)
-                        if skip_reason:
-                            choice_log.append({'source': 'spotify-fallback', 'trigger': fallback_name, 'skip': skip_reason, 'matched': track['name']})
-                            continue
-                        song_key = canonical_track_key(track['name'])
-                        if song_key in seen_song_keys:
-                            choice_log.append({'source': 'spotify-fallback', 'trigger': fallback_name, 'skip': 'duplicate_song_key', 'matched': track['name']})
-                            continue
-                        if track['uri'] in seen_uris:
-                            choice_log.append({'source': 'spotify-fallback', 'trigger': fallback_name, 'skip': 'duplicate_uri', 'matched': track['name']})
-                            continue
-                        seen_uris.add(track['uri'])
-                        seen_song_keys.add(song_key)
-                        selected.append(track)
-                        choice_log.append(explain_track_choice(track, 'spotify-fallback', artist, fallback_name))
-                        if len(selected) >= 5:
-                            break
-                except Exception as exc:
-                    errors.append(f'spotify fallback failed for {fallback_name}: {exc}')
-                if len(selected) >= 5:
-                    break
-
+            if len(selected) < 5:
+                fallback_names = list(dict.fromkeys([query_artist, artist]))
+                for fallback_name in fallback_names:
+                    try:
+                        _, tracks = spotify_top_tracks(fallback_name, 10, artist_id=spotify_artist_id)
+                        for track in tracks:
+                            artist_names = [a['name'] for a in track.get('artists', [])]
+                            if max(token_overlap(query_artist, candidate) for candidate in artist_names) < 0.45:
+                                choice_log.append({'source': 'spotify-fallback', 'trigger': fallback_name, 'skip': 'artist_mismatch', 'matched': track['name']})
+                                continue
+                            skip_reason = should_skip_track_for_artist(query_artist, track, artist)
+                            if skip_reason:
+                                choice_log.append({'source': 'spotify-fallback', 'trigger': fallback_name, 'skip': skip_reason, 'matched': track['name']})
+                                continue
+                            song_key = canonical_track_key(track['name'])
+                            if song_key in seen_song_keys:
+                                choice_log.append({'source': 'spotify-fallback', 'trigger': fallback_name, 'skip': 'duplicate_song_key', 'matched': track['name']})
+                                continue
+                            if track['uri'] in seen_uris:
+                                choice_log.append({'source': 'spotify-fallback', 'trigger': fallback_name, 'skip': 'duplicate_uri', 'matched': track['name']})
+                                continue
+                            seen_uris.add(track['uri'])
+                            seen_song_keys.add(song_key)
+                            selected.append(track)
+                            choice_log.append(explain_track_choice(track, 'spotify-fallback', artist, fallback_name))
+                            if len(selected) >= 5:
+                                break
+                    except Exception as exc:
+                        errors.append(f'spotify fallback failed for {fallback_name}: {exc}')
+                    if len(selected) >= 5:
+                        break
         final_tracks = selected[:5]
         playlist_uris.extend(track['uri'] for track in final_tracks)
         report.append({
             'artist': artist,
             'query_artist': query_artist,
-            'followers': followers.get(artist, 0),
+            'followers': None if profile else followers.get(artist, 0),
+            **({'repertoire_profile': profile['key']} if profile else {}),
             'source': source,
             'count': len(final_tracks),
             'headliner': artist in headliners,
@@ -894,12 +916,19 @@ def parse_canonical_festivals(catalog):
             skipped.append({'slug': slug, 'edition_year': season, 'reason': 'empty_lineup'})
             continue
         headliners = [artist for artist in entry.get('headliners', []) if artist in eligible]
+        profiles = entry.get('spotifyRepertoireProfiles', {})
+        if not isinstance(profiles, dict) or any(name not in eligible for name in profiles):
+            raise ValueError('Repertoire profile must name one eligible lineup act')
+        for profile in profiles.values():
+            validate_profile(profile)
+
         festivals.append(Festival(
             key=slug, display_name=f'{entry["name"]} {season}',
             playlist_name=f'{entry["name"]} {season}: Festival Crash Course',
             description=f'Current {season} lineup from Festival Radar.',
             lineup_fn=lambda artists=eligible, headliners=headliners: (artists, headliners),
             edition_year=season,
+            spotify_repertoire_profiles=profiles,
             existing_playlist_id=(entry.get('playlistUrl') or '').rstrip('/').split('/')[-1] or None,
         ))
     return season, festivals, skipped
