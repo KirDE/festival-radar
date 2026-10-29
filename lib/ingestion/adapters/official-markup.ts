@@ -1,4 +1,5 @@
 import { pinkpop } from "./pinkpop.ts";
+import { tuska } from "./tuska.ts";
 import { leyendas } from "./leyendas.ts";
 import { graspop } from "./graspop.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
@@ -254,12 +255,6 @@ function fkpLineup(html: string): AdapterResult | undefined {
 }
 
 
-function tuska(html: string): AdapterResult | undefined {
-  const date = html.match(/Tuska Festival\s*[-–—]\s*(\d{1,2})\.[–-](\d{1,2})\.(\d{1,2})\.(20\d{2})/i);
-  if (!date) return undefined;
-  return { startDate: `${date[4]}-${pad(date[3])}-${pad(date[1])}`, endDate: `${date[4]}-${pad(date[3])}-${pad(date[2])}`, excerpt: date[0] };
-}
-
 function tonsOfRockDayBill(html: string, source: FestivalSource): AdapterResult | undefined {
   // Later announcements carry the provisional bill by day, not a fixed artist
   // count. Ignore hydration scripts, navigation and the separate new-act blurbs.
@@ -506,7 +501,7 @@ export function extractOfficialMarkupCandidate(html: string, source: FestivalSou
     if (!value || (Array.isArray(value) && value.length === 0)) continue;
     Object.assign(candidate, { [field]: value });
     const ticketEvidence = (field === "ticketsUrl" || field === "ticketStatus") && result.ticketsExcerpt;
-    const sourceUrl = ticketEvidence ? result.ticketsUrl! : field === "lineup" ? result.lineupSourceUrl ?? source.url : source.url;
+    const sourceUrl = ticketEvidence ? result.ticketsUrl! : ["lineup", "headliners"].includes(field) ? result.lineupSourceUrl ?? source.url : source.url;
     candidate.evidence.push({ field: field as FieldEvidence["field"], sourceUrl, observedAt: fetchedAt, excerpt: (ticketEvidence || result.excerpt).slice(0, 500) });
   }
   // These edition-bound announcements are valuable review evidence, but their

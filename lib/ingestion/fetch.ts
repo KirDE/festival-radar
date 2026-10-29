@@ -8,6 +8,7 @@ import { isRockInRomaSource } from "./adapters/rock-in-roma.ts";
 import { isAlpenFlairSource, alpenAnnouncements, alpenEnvelope } from './adapters/alpen-flair.ts';
 import { isInfernoSource, isInfernoResponse } from "./adapters/inferno.ts";
 import { discoverMotocultorAnnouncement } from "./adapters/motocultor.ts";
+import { isTuskaHomepage, discoverTuskaAnnouncement, tuskaTicketsUrl, TUSKA_DOCUMENTS } from "./adapters/tuska.ts";
 import { isFrequencySource, frequencyTicketLink, frequencyDocuments } from "./adapters/frequency.ts";
 import { isPaleoSource, paleoTicketLink, isPaleoTicketUrl } from "./adapters/paleo.ts";
 import { isLeedsSource } from "./adapters/leeds.ts";
@@ -64,6 +65,22 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && isTuskaHomepage(source)) {
+    if (initial.response.url && initial.response.url !== source.url) throw new Error("Tuska homepage redirected away from its trusted route");
+    const home = await initial.response.text();
+    const articleUrl = discoverTuskaAnnouncement(home, source.editionYear);
+    const ticketsUrl = tuskaTicketsUrl(home, source);
+    let attempts = initial.attempts;
+    const documents: Record<string, {url: string; html: string}> = {};
+    for (const [kind, url] of [["article", articleUrl], ["tickets", ticketsUrl]] as const) {
+      if (!url) continue;
+      const linked = await fetchWithRetry(url, "error"); attempts += linked.attempts;
+      if (!linked.response.ok) return {response: linked.response, attempts};
+      if (linked.response.url && linked.response.url !== url) throw new Error("Tuska document changed its official identity");
+      documents[kind] = {url, html: await linked.response.text()};
+    }
+    return {response: new Response(JSON.stringify({kind: TUSKA_DOCUMENTS, home, ...documents}), {headers: {"content-type": "application/json"}}), attempts};
+  }
   if (initial.response.ok && isImpericonCurrentSource(source)) {
     if (initial.response.url && initial.response.url !== source.url) throw new Error("Impericon festival page redirected away from its trusted route");
     const home = await initial.response.text(), articles = [];
