@@ -23,6 +23,41 @@ export function isTuskaHomepage(source: FestivalSource): boolean {
     !source.fetchUrl && !source.followLinkPattern && [origin + "/", origin + "/en/"].includes(source.url);
 }
 
+export function tuskaTicketsUrl(home: string, source: FestivalSource): string | undefined {
+  const expected = source.url.endsWith("/en/") ? origin + "/en/tickets/" : origin + "/liput/";
+  return [...clean(home).matchAll(/<a\b([^>]*)>/gi)].some(a => {
+    try { return new URL(attr(a[1], "href") ?? "", source.url).href === expected; } catch { return false; }
+  }) ? expected : undefined;
+}
+
+function ticketFacts(document: {url: string; html: string} | undefined, source: FestivalSource) {
+  if (!document) return {};
+  const html = clean(document.html);
+  const canonical = [...html.matchAll(/<link\b[^>]*>/gi)].find(m => attr(m[0], "rel") === "canonical");
+  const section = html.match(/<section\b[^>]*\bdata-ticket-info-title=["'][^"']+["'][^>]*>([\s\S]*?)<\/section>/i)?.[0] ?? "";
+  const title = text(attr(section.split(">", 1)[0], "data-ticket-info-title") ?? "");
+  const lead = text(section.match(/<div\b[^>]*class=["']ticket-info__lead entry-content["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? "");
+  const fail = () => ({warning: "Tuska ticket page has no trustworthy current sale status; review required"});
+  if (!canonical || attr(canonical[0], "href") !== document.url ||
+      ![`Liput vuoden ${source.editionYear} Tuskaan`, `Tickets to Tuska ${source.editionYear}`].includes(title)) return fail();
+  const ticketsUrl = document.url;
+  if ([`Tuska ${source.editionYear} is sold out!`, `Tuska ${source.editionYear} on loppuunmyyty!`].includes(lead))
+    return {ticketsUrl, ticketStatus: "unavailable" as const, ticketsExcerpt: lead};
+  if (![ `Kaikki lipputyypit vuoden ${source.editionYear} Tuskaan ovat nyt myynnissä!`, `All tickets for Tuska ${source.editionYear} are now on sale!` ].includes(lead)) return fail();
+  const weekend = [...section.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article>/gi)]
+    .find(m => /^(?:3 PÄIVÄÄ|3 DAYS)$/i.test(text(m[1].match(/<h3\b[^>]*>([\s\S]*?)<\/h3>/i)?.[1] ?? "")))?.[1];
+  if (!weekend || /sold out|loppuunmyyty|aria-disabled=["']true["']/i.test(weekend)) return fail();
+  const liveLink = [...weekend.matchAll(/<a\b([^>]*)>/gi)].some(a => {
+    try {
+      const url = new URL(attr(a[1], "href") ?? "");
+      return attr(a[1], "class")?.split(/\s+/).includes("ticket-info__ticket-link") &&
+        url.origin === "https://www.tiketti.fi" && !url.username && !url.password && !url.search && !url.hash &&
+        new RegExp(`^/tuska-festival-${source.editionYear}-suvilahti-helsinki-(?:lippuja|tickets)/[0-9]+/?$`).test(url.pathname);
+    } catch { return false; }
+  });
+  return liveLink ? {ticketsUrl, ticketStatus: "available" as const, ticketsExcerpt: `${lead} Current official weekend ticket card links to Tiketti.`} : fail();
+}
+
 export function discoverTuskaAnnouncement(html: string, year: number): string | undefined {
   const visible = clean(html).replace(/<(nav|header|footer)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
   const main = [...visible.matchAll(/<section\b([^>]*)>([\s\S]*?)<\/section>/gi)]
@@ -41,21 +76,24 @@ export function discoverTuskaAnnouncement(html: string, year: number): string | 
 export function tuska(input: string, source: FestivalSource) {
   let home = input;
   let article: { url: string; html: string } | undefined;
+  let tickets: { url: string; html: string } | undefined;
   if (input.trimStart().startsWith("{")) {
     try {
       const envelope = JSON.parse(input);
       if (envelope.kind !== TUSKA_DOCUMENTS || typeof envelope.home !== "string" ||
-          !envelope.article || typeof envelope.article.html !== "string" ||
-          !tuskaArticleUrl(envelope.article.url, source.editionYear) || !isTuskaHomepage(source) ||
-          discoverTuskaAnnouncement(envelope.home, source.editionYear) !== envelope.article.url) return undefined;
-      home = envelope.home; article = envelope.article;
+          !isTuskaHomepage(source) || (envelope.article && (typeof envelope.article.html !== "string" ||
+          !tuskaArticleUrl(envelope.article.url, source.editionYear) ||
+          discoverTuskaAnnouncement(envelope.home, source.editionYear) !== envelope.article.url)) ||
+          (envelope.tickets && (typeof envelope.tickets.html !== "string" ||
+            tuskaTicketsUrl(envelope.home, source) !== envelope.tickets.url))) return undefined;
+      home = envelope.home; article = envelope.article; tickets = envelope.tickets;
     } catch { return undefined; }
   }
   const date = text(clean(home).match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "")
     .match(/Tuska Festival\s*[-–—]\s*(\d{1,2})\.[–-](\d{1,2})\.(\d{1,2})\.(20\d{2})/i);
   if (!date) return undefined;
   const result = {startDate: `${date[4]}-${date[3].padStart(2, "0")}-${date[1].padStart(2, "0")}`,
-    endDate: `${date[4]}-${date[3].padStart(2, "0")}-${date[2].padStart(2, "0")}`, excerpt: date[0]};
+    endDate: `${date[4]}-${date[3].padStart(2, "0")}-${date[2].padStart(2, "0")}`, excerpt: date[0], ...ticketFacts(tickets, source)};
   if (!article) return result; // Preserve the older date-only landing page.
   const fail = () => ({...result, warning: "Tuska announcement has no trustworthy current-edition day bill; review required"});
   if (Number(date[4]) !== source.editionYear) return fail();

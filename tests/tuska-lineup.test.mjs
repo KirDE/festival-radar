@@ -5,7 +5,7 @@ import { parserSource } from "./support/parser-source.ts";
 import { extractFestivalCandidate } from "../lib/ingestion/extract.ts";
 import { evaluateCandidate } from "../lib/ingestion/policy.ts";
 import { fetchSource } from "../lib/ingestion/fetch.ts";
-import { discoverTuskaAnnouncement, TUSKA_DOCUMENTS } from "../lib/ingestion/adapters/tuska.ts";
+import { discoverTuskaAnnouncement, tuskaTicketsUrl, TUSKA_DOCUMENTS } from "../lib/ingestion/adapters/tuska.ts";
 
 const observedAt = "2026-10-29T08:17:00.000Z";
 const fixture = name => readFile(new URL(`./fixtures/official-markup/tuska-${name}-20261029.html`, import.meta.url), "utf8");
@@ -16,18 +16,21 @@ const expected = ["Heaven Shall Burn", "Stratovarius", "Smash Into Pieces", "Gui
 
 for (const lang of ["fi", "en"]) {
   test(`Tuska ${lang}: actual news cards discover and parse the current 29-act daily bill`, async () => {
-    const home = await fixture(`home-${lang}`), article = await fixture(`news-${lang}`);
+    const home = await fixture(`home-${lang}`), article = await fixture(`news-${lang}`), tickets = await fixture(`tickets-${lang}`);
     const calls = [];
     const result = await fetchSource(source(lang), {maxAttempts: 1, fetchImpl: async (url, options) => {
       calls.push([url, options.redirect]);
-      return new Response(calls.length === 1 ? home : article);
+      return new Response(calls.length === 1 ? home : calls.length === 2 ? article : tickets);
     }});
     const candidate = extractFestivalCandidate(await result.response.text(), source(lang), observedAt);
-    assert.equal(result.attempts, 2);
-    assert.deepEqual(calls, [[source(lang).url, "follow"], [discoverTuskaAnnouncement(home, 2027), "error"]]);
+    assert.equal(result.attempts, 3);
+    assert.deepEqual(calls, [[source(lang).url, "follow"], [discoverTuskaAnnouncement(home, 2027), "error"], [tuskaTicketsUrl(home, source(lang)), "error"]]);
     assert.deepEqual(candidate.headliners, ["Children Of Bodom", "Judas Priest", "Lorna Shore"]);
     assert.deepEqual(candidate.lineup, expected);
     assert.deepEqual(candidate.warnings, []);
+    assert.equal(candidate.ticketStatus, "available");
+    assert.equal(candidate.ticketsUrl, calls[2][0]);
+    assert.ok(candidate.evidence.filter(e => ["ticketStatus", "ticketsUrl"].includes(e.field)).every(e => e.sourceUrl === calls[2][0]));
     assert.deepEqual(candidate.observedEditionYears, [2027]);
     assert.equal(candidate.artistListMode, "additive");
     assert.equal(candidate.lineupScope, "announcement");
@@ -80,6 +83,29 @@ test("Tuska linked HTTP failures stay failures; redirected documents are refused
     Object.defineProperty(response, "url", {value: n === 1 ? source("fi").url : "https://evil.test/"});
     return response;
   }}), /official identity/);
+});
+
+for (const [label, mutate] of [
+  ["past-edition sales", html => html.replaceAll("2027", "2026")],
+  ["future sales", html => html.replace("are now on sale!", "will go on sale tomorrow!")],
+  ["sold-out weekend", html => html.replace('class="ticket-info__ticket"', 'class="ticket-info__ticket sold-out"').replace("€259", "SOLD OUT")],
+  ["disabled purchase link", html => html.replaceAll('class="ticket-info__ticket-link"', 'class="ticket-info__ticket-link" aria-disabled="true"')],
+  ["foreign vendor", html => html.replaceAll("https://www.tiketti.fi/", "https://evil.test/")],
+  ["wrong canonical", html => html.replace('rel="canonical" href="https://tuska.fi/', 'rel="canonical" href="https://evil.test/')],
+]) test(`Tuska ticket status is not inferred from ${label}`, async () => {
+  const home = await fixture("home-en");
+  const body = JSON.stringify({kind: TUSKA_DOCUMENTS, home, tickets: {url: tuskaTicketsUrl(home, source("en")), html: mutate(await fixture("tickets-en"))}});
+  const candidate = extractFestivalCandidate(body, source("en"), observedAt);
+  assert.equal(candidate.ticketStatus, undefined);
+  assert.ok(candidate.warnings.length);
+});
+
+test("Tuska current sold-out declaration overrides stale buy links", async () => {
+  const home = await fixture("home-en");
+  const html = (await fixture("tickets-en")).replace("All tickets for Tuska 2027 are now on sale!", "Tuska 2027 is sold out!");
+  const candidate = extractFestivalCandidate(JSON.stringify({kind: TUSKA_DOCUMENTS, home, tickets: {url: tuskaTicketsUrl(home, source("en")), html}}), source("en"), observedAt);
+  assert.equal(candidate.ticketStatus, "unavailable");
+  assert.deepEqual(candidate.warnings, []);
 });
 
 test("Tuska preserves legacy date-only pages and does not follow explicit source overrides", async () => {
