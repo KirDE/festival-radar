@@ -1,0 +1,292 @@
+{
+  "capturedAt": "2026-10-29",
+  "description": "Read-only Spotify API artist/track/release metadata, with reviewed selection profile. No credentials or user data.",
+  "profile": {
+    "schemaVersion": 1,
+    "key": "slash-myles-kennedy-conspirators:v1",
+    "artistSlugs": [
+      "slash-feat-myles-kennedy-the-conspirators",
+      "slash-featuring-myles-kennedy-and-the-conspirators"
+    ],
+    "setlistArtist": "Slash",
+    "searchArtists": [
+      {
+        "id": "4Cqia9vrAbm7ANXbJGXsTE",
+        "name": "Slash"
+      },
+      {
+        "id": "2YZOQlBE1v44RxPEAVSdVR",
+        "name": "Myles Kennedy"
+      },
+      {
+        "id": "1J0FSEQhWSMHcYqaapIjY6",
+        "name": "Myles Kennedy & The Conspirators"
+      },
+      {
+        "id": "2InxuNbggJRrU3sORD4Dzc",
+        "name": "The Conspirators"
+      }
+    ],
+    "anchorArtistIds": [
+      "4Cqia9vrAbm7ANXbJGXsTE"
+    ],
+    "collaborationArtistIds": [
+      "2YZOQlBE1v44RxPEAVSdVR",
+      "1J0FSEQhWSMHcYqaapIjY6",
+      "2InxuNbggJRrU3sORD4Dzc"
+    ],
+    "albumIds": [
+      "078ZH1xDl03nocG21ouCgV",
+      "2nlnkNWYZt8zzwU3QJKTcN",
+      "7uaLqs2tRTJnPJPj3VmNsI",
+      "0HBgPC1vbZUmQziDZS78Rg",
+      "1813RzxdZZLBOJ86l7yYyI"
+    ],
+    "sourceUrls": [
+      "https://open.spotify.com/album/078ZH1xDl03nocG21ouCgV",
+      "https://open.spotify.com/album/2nlnkNWYZt8zzwU3QJKTcN",
+      "https://open.spotify.com/album/7uaLqs2tRTJnPJPj3VmNsI",
+      "https://open.spotify.com/album/0HBgPC1vbZUmQziDZS78Rg",
+      "https://open.spotify.com/album/1813RzxdZZLBOJ86l7yYyI",
+      "https://open.spotify.com/track/6lvQzrVGg9i8vzz71WWSF2",
+      "https://open.spotify.com/track/3LqWKbOdMK4jB3NPcMIvJt",
+      "https://open.spotify.com/track/3jaJeSphs7bS5Gt3i5LJL3"
+    ]
+  },
+  "tracks": [
+    {
+      "id": "50XuBmcV8THyLBczxD0c2k",
+      "name": "World on Fire",
+      "album": "World on Fire",
+      "albumId": "0HBgPC1vbZUmQziDZS78Rg",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash"
+        }
+      ]
+    },
+    {
+      "id": "5LGadx8JpfI8VNUSy8oxC1",
+      "name": "World on Fire",
+      "album": "World on Fire",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash",
+          "url": "https://open.spotify.com/artist/4Cqia9vrAbm7ANXbJGXsTE"
+        }
+      ],
+      "url": "https://open.spotify.com/track/5LGadx8JpfI8VNUSy8oxC1"
+    },
+    {
+      "id": "3XKGdc17YZlAG2oGEBLSRV",
+      "name": "World On Fire - Live",
+      "album": "Living The Dream Tour (Live)",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash",
+          "url": "https://open.spotify.com/artist/4Cqia9vrAbm7ANXbJGXsTE"
+        },
+        {
+          "id": "1J0FSEQhWSMHcYqaapIjY6",
+          "name": "Myles Kennedy & The Conspirators",
+          "url": "https://open.spotify.com/artist/1J0FSEQhWSMHcYqaapIjY6"
+        }
+      ],
+      "url": "https://open.spotify.com/track/3XKGdc17YZlAG2oGEBLSRV"
+    },
+    {
+      "id": "4wpgba1jNI97PyYvaixOWz",
+      "name": "World On Fire - Live",
+      "album": "Live At The Roxy 25.09.14",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash",
+          "url": "https://open.spotify.com/artist/4Cqia9vrAbm7ANXbJGXsTE"
+        },
+        {
+          "id": "1J0FSEQhWSMHcYqaapIjY6",
+          "name": "Myles Kennedy & The Conspirators",
+          "url": "https://open.spotify.com/artist/1J0FSEQhWSMHcYqaapIjY6"
+        }
+      ],
+      "url": "https://open.spotify.com/track/4wpgba1jNI97PyYvaixOWz"
+    },
+    {
+      "id": "3LqWKbOdMK4jB3NPcMIvJt",
+      "name": "The River Is Rising (feat. Myles Kennedy and The Conspirators)",
+      "album": "4 (feat. Myles Kennedy and The Conspirators)",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash",
+          "url": "https://open.spotify.com/artist/4Cqia9vrAbm7ANXbJGXsTE"
+        },
+        {
+          "id": "1J0FSEQhWSMHcYqaapIjY6",
+          "name": "Myles Kennedy & The Conspirators",
+          "url": "https://open.spotify.com/artist/1J0FSEQhWSMHcYqaapIjY6"
+        }
+      ],
+      "url": "https://open.spotify.com/track/3LqWKbOdMK4jB3NPcMIvJt"
+    },
+    {
+      "id": "6lvQzrVGg9i8vzz71WWSF2",
+      "name": "Starlight (feat. Myles Kennedy and The Conspirators) - Live at Spotify, London",
+      "album": "Spotify Sessions",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash",
+          "url": "https://open.spotify.com/artist/4Cqia9vrAbm7ANXbJGXsTE"
+        },
+        {
+          "id": "2YZOQlBE1v44RxPEAVSdVR",
+          "name": "Myles Kennedy",
+          "url": "https://open.spotify.com/artist/2YZOQlBE1v44RxPEAVSdVR"
+        },
+        {
+          "id": "1J0FSEQhWSMHcYqaapIjY6",
+          "name": "Myles Kennedy & The Conspirators",
+          "url": "https://open.spotify.com/artist/1J0FSEQhWSMHcYqaapIjY6"
+        }
+      ],
+      "url": "https://open.spotify.com/track/6lvQzrVGg9i8vzz71WWSF2"
+    },
+    {
+      "id": "3B46Lf1MB9GJcZuEJobvqd",
+      "name": "Starlight (feat. Myles Kennedy)",
+      "album": "Slash",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash",
+          "url": "https://open.spotify.com/artist/4Cqia9vrAbm7ANXbJGXsTE"
+        },
+        {
+          "id": "2YZOQlBE1v44RxPEAVSdVR",
+          "name": "Myles Kennedy",
+          "url": "https://open.spotify.com/artist/2YZOQlBE1v44RxPEAVSdVR"
+        }
+      ],
+      "url": "https://open.spotify.com/track/3B46Lf1MB9GJcZuEJobvqd"
+    },
+    {
+      "id": "2t9s7ClOA37D8VIymaB5R5",
+      "name": "Starlight (feat. Myles Kennedy)",
+      "album": "Slash (Special Edition)",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash",
+          "url": "https://open.spotify.com/artist/4Cqia9vrAbm7ANXbJGXsTE"
+        },
+        {
+          "id": "2YZOQlBE1v44RxPEAVSdVR",
+          "name": "Myles Kennedy",
+          "url": "https://open.spotify.com/artist/2YZOQlBE1v44RxPEAVSdVR"
+        }
+      ],
+      "url": "https://open.spotify.com/track/2t9s7ClOA37D8VIymaB5R5"
+    },
+    {
+      "id": "5HRZ505qEQ6VdQxHcsSHvm",
+      "name": "Starlight - Live",
+      "album": "Made In Stoke 24.7.11 (Live)",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash",
+          "url": "https://open.spotify.com/artist/4Cqia9vrAbm7ANXbJGXsTE"
+        },
+        {
+          "id": "2YZOQlBE1v44RxPEAVSdVR",
+          "name": "Myles Kennedy",
+          "url": "https://open.spotify.com/artist/2YZOQlBE1v44RxPEAVSdVR"
+        }
+      ],
+      "url": "https://open.spotify.com/track/5HRZ505qEQ6VdQxHcsSHvm"
+    },
+    {
+      "id": "0c96wJuvIlIZ8YHiRQHV1H",
+      "name": "Starlight - Live",
+      "album": "Living The Dream Tour (Live)",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash",
+          "url": "https://open.spotify.com/artist/4Cqia9vrAbm7ANXbJGXsTE"
+        },
+        {
+          "id": "1J0FSEQhWSMHcYqaapIjY6",
+          "name": "Myles Kennedy & The Conspirators",
+          "url": "https://open.spotify.com/artist/1J0FSEQhWSMHcYqaapIjY6"
+        }
+      ],
+      "url": "https://open.spotify.com/track/0c96wJuvIlIZ8YHiRQHV1H"
+    },
+    {
+      "id": "2gr15powgTdD6gu3fIXiH8",
+      "name": "Flying Blind",
+      "album": "Flying Blind",
+      "albumId": "2TRZscmuwsGYck2XmT8CwC",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash"
+        },
+        {
+          "id": "1J0FSEQhWSMHcYqaapIjY6",
+          "name": "Myles Kennedy & The Conspirators"
+        }
+      ]
+    },
+    {
+      "id": "3jaJeSphs7bS5Gt3i5LJL3",
+      "name": "Anastasia",
+      "album": "Apocalyptic Love",
+      "albumId": "1813RzxdZZLBOJ86l7yYyI",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash"
+        },
+        {
+          "id": "2YZOQlBE1v44RxPEAVSdVR",
+          "name": "Myles Kennedy"
+        },
+        {
+          "id": "2InxuNbggJRrU3sORD4Dzc",
+          "name": "The Conspirators"
+        }
+      ]
+    },
+    {
+      "id": "0GFYwFDhvlRSvMQLEQ4rg1",
+      "name": "Bent to Fly",
+      "album": "World on Fire",
+      "albumId": "0HBgPC1vbZUmQziDZS78Rg",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash"
+        }
+      ]
+    },
+    {
+      "id": "3XY6uRWwdvIgbhJUp7oN0C",
+      "name": "Shadow Life",
+      "album": "World on Fire",
+      "albumId": "0HBgPC1vbZUmQziDZS78Rg",
+      "artists": [
+        {
+          "id": "4Cqia9vrAbm7ANXbJGXsTE",
+          "name": "Slash"
+        }
+      ]
+    }
+  ]
+}
