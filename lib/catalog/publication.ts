@@ -10,6 +10,7 @@ import {
 import { uniqueNotificationEvents, type PublishedNotificationEvent } from "../ingestion/notification-events.ts";
 import type { IngestionResult } from "../ingestion/types.ts";
 import type { AgentDecision } from "../ingestion/agent-contract.ts";
+import { isIdaysAnnouncement } from "../ingestion/adapters/idays.ts";
 
 type Database = PrismaClient | Prisma.TransactionClient;
 type CatalogChange = { field: string; before?: unknown; after?: unknown };
@@ -247,10 +248,25 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
         candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl) &&
         input.result.candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl))))
       throw new Error("Impericon publication requires matching persisted official announcement evidence");
+    const idaysLineup = input.result.festivalSlug === "idays" &&
+      input.result.changes.some(({ field }) => field === "lineup" || field === "headliners");
+    if (idaysLineup && !(isIdaysAnnouncement(input.result.candidate, applied.edition.year) &&
+      candidate.festivalSlug === "idays" && candidate.attempt.requestedUrl === input.result.sourceUrl &&
+      input.result.candidate.sourceUrl === input.result.sourceUrl &&
+      input.result.changes.every(({ field, kind }) =>
+        (!["lineup", "headliners"].includes(field) || ["artist_added", "headliner_added"].includes(kind)) &&
+        candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl) &&
+        input.result.candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl))))
+      throw new Error("I-Days publication requires matching persisted official addition evidence");
+    const playlistRefreshDeferral = idaysLineup ? {
+      policy: "explicit-refresh-only", reason: "Verified I-Days catalog additions do not authorize provider activity",
+    } : undefined;
     const publication = await createPublication(db, {
       source: CatalogPublicationSource.INGESTION, sourceId, festivalSlug: input.result.festivalSlug,
       editionYear: applied.edition.year, actorLabel: "automatic-ingestion", fields: applied.changedFields,
-      evidence: { candidateId: candidate.id, sourceCommit: input.sourceCommit, sourceUrl: input.result.sourceUrl, evidenceIds: candidate.evidence.map(({ id }) => id) },
+      evidence: { candidateId: candidate.id, sourceCommit: input.sourceCommit, sourceUrl: input.result.sourceUrl, evidenceIds: candidate.evidence.map(({ id }) => id),
+        ...(playlistRefreshDeferral ? { playlistRefresh: playlistRefreshDeferral } : {}) },
+      playlistRefreshDeferral,
     });
     // The due-worker event batch is committed atomically with the catalogue.
     if (publication && input.notificationEvents?.length) {

@@ -68,8 +68,9 @@ async function persist(value: IngestionResult) {
 
 test.before(async () => {
   const rockharz = { ...catalogSeed.festivals[0], slug: "rockharz", name: "Synthetic Rockharz", city: "Ballenstedt", headliners: [], lineup: [], startDate: "2027-07-07", endDate: "2027-07-10" };
-  await seedCatalog(db, { ...catalogSeed, festivals: [...catalogSeed.festivals, rockharz], editions: [...catalogSeed.editions,
-    { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, recordState: "current" as const }],
+  await seedCatalog(db, { ...catalogSeed, festivals: [...catalogSeed.festivals, rockharz, {...rockharz,slug:"idays",name:"Synthetic I-Days"}], editions: [...catalogSeed.editions,
+    { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, recordState: "current" as const },
+    { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, slug:"idays", recordState: "current" as const }],
   });
   initialRockharzJobs = await db.catalogPlaylistRefresh.count({ where: { festivalSlug: "rockharz" } });
 });
@@ -360,4 +361,52 @@ test("Rockharz scoped publication collision rolls back partial rows and retains 
   assert.equal(candidate.reviewState, "PENDING");
   assert.equal(await db.catalogPublication.count({ where: { sourceId: "ingestion:" + candidate.id } }), 0);
   assert.equal(await db.catalogPlaylistRefresh.count({ where: { festivalSlug: "rockharz" } }), initialRockharzJobs + 2);
+});
+
+function idaysResult(name: string): IngestionResult {
+  const value = result(name, { festivalSlug: "idays", sourceUrl: "https://www.idays.it/" });
+  value.changes = [{kind: "headliner_added", field: "headliners", after: name, reviewRequired: false}];
+  value.candidate = {...value.candidate, festivalSlug: value.festivalSlug, sourceUrl: value.sourceUrl,
+    artistListMode: "additive", headliners: [name], lineup: undefined,
+    evidence: [{field:"headliners", sourceUrl:value.sourceUrl, observedAt:value.fetchedAt, excerpt:name}]};
+  return value;
+}
+
+test("verified I-Days additions publish atomically without provider jobs, including replay", async () => {
+  const value = idaysResult(`Synthetic Idays Headliner ${suffix}`);
+  const attempt = await persist(value);
+  const before = await db.catalogPlaylistRefresh.count();
+  const publication = await publishIngestionResult(db, {attemptId:attempt.id, result:value, sourceCommit:suffix});
+  assert.ok(publication);assert.equal(publication.playlistRefreshRequested,false);
+  const stored = await db.ingestionCandidate.findUniqueOrThrow({where:{attemptId:attempt.id}});
+  assert.equal(stored.reviewState,"PUBLISHED");assert.equal(stored.catalogueVersion,publication.id);
+  assert.ok(await db.lineupEntry.findFirst({where:{edition:{festival:{slug:"idays"}},artist:{name:value.changes[0].after!},billing:"HEADLINER"}}));
+  assert.equal((publication.evidence as {playlistRefresh:{policy:string}}).playlistRefresh.policy,"explicit-refresh-only");
+  assert.equal((await publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix}))?.playlistRefreshRequested,false);
+  assert.equal(await db.catalogPlaylistRefresh.count(),before);
+});
+
+test("I-Days provenance drift and identity collisions roll back without catalog or provider writes",async()=>{
+  for(const drift of ["host","edition","mode","evidence","persisted-evidence","requested-url","billing","identity"]) {
+    const name=`Synthetic Idays Drift ${drift} ${suffix}`;
+    const value=idaysResult(name);
+    if(drift==="host") {value.sourceUrl="https://evil.test/";value.candidate.sourceUrl=value.sourceUrl;value.candidate.evidence.forEach(e=>e.sourceUrl=value.sourceUrl);}
+    if(drift==="edition") value.candidate.observedEditionYears=[];
+    if(drift==="mode") value.candidate.artistListMode=undefined;
+    if(drift==="evidence") value.candidate.evidence=[];
+    if(drift==="billing") {
+      const edition=await db.festivalEdition.findFirstOrThrow({where:{festival:{slug:"idays"},recordState:"CURRENT"}});
+      const artist=await db.artist.create({data:{slug:name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""),name,identityState:"UNRESOLVED",aliases:[],genres:[],topTracks:[],recentSetlists:[],freshness:{}}});
+      await db.lineupEntry.create({data:{editionId:edition.id,artistId:artist.id,billing:"LINEUP",position:0}});
+    }
+    if(drift==="identity") await db.artist.create({data:{slug:name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""),name:name+" Other",identityState:"UNRESOLVED",aliases:[],genres:[],topTracks:[],recentSetlists:[],freshness:{}}});
+    const persisted=structuredClone(value);
+    if(drift==="persisted-evidence") persisted.candidate.evidence=[];
+    if(drift==="requested-url") persisted.sourceUrl="https://www.idays.it/line-up";
+    const attempt=await persist(persisted);
+    const before={artists:await db.artist.count(),entries:await db.lineupEntry.count(),jobs:await db.catalogPlaylistRefresh.count(),publications:await db.catalogPublication.count()};
+    await assert.rejects(publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix}),/I-Days publication requires|Ambiguous billing|Artist slug collision/);
+    assert.deepEqual({artists:await db.artist.count(),entries:await db.lineupEntry.count(),jobs:await db.catalogPlaylistRefresh.count(),publications:await db.catalogPublication.count()},before);
+    assert.equal((await db.ingestionCandidate.findUniqueOrThrow({where:{attemptId:attempt.id}})).reviewState,"PENDING");
+  }
 });
