@@ -19,10 +19,10 @@ test('actual line-up image headings give explicit headliner vs special-guest bil
 test('current general-admission sales, not disability-area exhaustion, prove available; no off-host URL published',()=>{
  const c=parse(tickets,{url:'https://www.idays.it/tickets'});assert.equal(c.ticketStatus,'available');assert.equal(c.ticketsUrl,current.ticketsUrl);assert.equal(c.status,undefined);assert.equal(c.lineup,undefined);assert.deepEqual(c.warnings,[]);
 });
-test('future artist changes and new identities retain review/provider gate, not a frozen bill',()=>{
+test('future official artist additions are publishable without a provider review gate',()=>{
  const c=parse(home.replaceAll('Sombr','New Artist').replace('Pierce The Veil, and more...','Pierce The Veil, Future Support, and more...'));
  assert.ok(c.headliners.includes('New Artist'));assert.ok(c.lineup.includes('Future Support'));
- const r=evaluateCandidate(current,c);assert.ok(r.reviewReasons.length);assert.equal(r.publishable,false);assert.ok(r.changes.some(x=>x.after==='New Artist'));assert.ok(r.changes.some(x=>x.after==='Future Support'));assert.ok(!r.changes.some(x=>x.kind.endsWith('_removed')));
+ const r=evaluateCandidate(current,c);assert.deepEqual(r.reviewReasons,[]);assert.equal(r.publishable,true);assert.ok(r.changes.some(x=>x.after==='New Artist'));assert.ok(r.changes.some(x=>x.after==='Future Support'));assert.ok(!r.changes.some(x=>x.kind.endsWith('_removed')));
 });
 test('partial extraction preserves extra verified artists and cannot downgrade full bill',()=>{
  const r=evaluateCandidate({...current,status:'confirmed',headliners:[...current.headliners,'Later Headliner'],lineup:[...current.lineup,'Later Support']},parse());assert.deepEqual(r.changes,[]);assert.deepEqual(r.reviewReasons,[]);
@@ -40,4 +40,23 @@ test('expired/disabled/merch/untrusted purchases and CTA-only pages cannot inven
 test('semantic warnings survive the unchanged-case gate and cancellations do not become automatic additions',()=>{
  assert.ok(evaluateCandidate(current,{...parse(),warnings:['Cancellation needs review']}).reviewReasons.length);
  assert.ok(parse(home.replace('Pierce The Veil, and more...','Pierce The Veil cancelled, and more...')).warnings.some(x=>x.includes('cancellation')));
+});
+
+test('real Noah Kahan announcement is an automatic additive change; persisted repeat is quiet',()=>{
+ const c=parse(fixture('home-noah'));
+ const r=evaluateCandidate(current,c);
+ assert.deepEqual(r.changes,[{kind:'headliner_added',field:'headliners',after:'Noah Kahan',reviewRequired:false}]);
+ assert.equal(r.publishable,true);assert.deepEqual(r.reviewReasons,[]);assert.deepEqual(c.warnings,[]);
+ const saved={...current,headliners:[...current.headliners,'Noah Kahan']};
+ assert.deepEqual(evaluateCandidate(saved,c).changes,[]);
+ assert.deepEqual(evaluateCandidate(saved,c).reviewReasons,[]);
+});
+test('safe additions still require official provenance and retain billing/semantic review',()=>{
+ const c=parse(home.replaceAll('Sombr','Future Headliner'));
+ for(const extra of [{sourceUrl:'https://evil.test/'},{observedEditionYears:[]},{artistListMode:undefined},{evidence:[]},{warnings:['Cancellation needs review']}]) {
+  const r=evaluateCandidate(current,{...c,...extra});assert.equal(r.publishable,false);assert.ok(r.reviewReasons.length);
+ }
+ for(const candidate of [parse(home.replaceAll('Sombr','Pierce The Veil')),{...parse(),lineup:[...current.lineup,'SOMBR']}]) {
+  assert.ok(evaluateCandidate(current,candidate).reviewReasons.some(r=>r.includes('billing')));
+ }
 });

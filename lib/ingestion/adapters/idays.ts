@@ -1,7 +1,17 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
-export const IDAYS_ARTIST_REVIEW = "Agent review required before I-Days lineup-triggered provider activity";
+// This source permits catalog-only additions. Provider refreshes are a separate,
+// explicit operation; removing their blanket gate must not authorize billing edits.
+export function isIdaysAnnouncement(candidate: FestivalCandidate, year: number | undefined): boolean {
+  return candidate.festivalSlug === "idays" &&
+    ["https://www.idays.it/", "https://www.idays.it/line-up"].includes(candidate.sourceUrl) &&
+    candidate.artistListMode === "additive" && candidate.warnings.length === 0 &&
+    candidate.observedEditionYears.length === 1 && candidate.observedEditionYears[0] === year &&
+    !!candidate.headliners?.length &&
+    (["headliners", "lineup"] as const).every(field => candidate[field] === undefined ||
+      candidate.evidence.some(e => e.field === field && e.sourceUrl === candidate.sourceUrl));
+}
 const decode = (value: string) => value.replace(/&amp;/gi, "&").replace(/&nbsp;/gi, " ").replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"').replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n))).replace(/&#x([\da-f]+);/gi, (_, n: string) => String.fromCodePoint(parseInt(n, 16)));
 const text = (value: string) => decode(value.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
 const attr = (tag: string, name: string) => decode(tag.match(new RegExp(`\\b${name}=["']([^"']*)["']`, "i"))?.[1] ?? "");
@@ -85,11 +95,11 @@ export function extractIdaysCandidate(html: string, source: FestivalSource, fetc
     }
   } catch { return fail("artist/card structure changed"); }
   if (/\b(?:cancelled|canceled|annullat[oa]|cancellat[oa])\b/i.test(excerpts.join(" "))) return fail("cancellation announcement");
+  if (lineup.some(name => headliners.some(head => head.toLowerCase() === name.toLowerCase()))) return fail("ambiguous headline/support billing");
   add("headliners", headliners, excerpts.join("; "));
   if (lineup.length) add("lineup", lineup.filter(n => !headliners.some(h => h.toLowerCase() === n.toLowerCase())), excerpts.join("; "));
   if (/and more\.{0,3}/i.test(excerpts.join(" "))) add("status", "partial", excerpts.join("; "));
   if (/<a\b[^>]*href=["']\/tickets(?:#[^"']*)?["']/i.test(visible)) add("ticketsUrl", "https://www.idays.it/tickets", "Official current edition concert ticket links");
   candidate.observedEditionYears = [year];
-  candidate.warnings.push(IDAYS_ARTIST_REVIEW);
   return candidate;
 }
