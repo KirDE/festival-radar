@@ -3,6 +3,7 @@ import { ALPEN_ARTIST_REVIEW } from './adapters/alpen-flair.ts';
 import { isCopenhellCurrentSource, COPENHELL_REVIEW } from "./adapters/copenhell-current.ts";
 import { LEYENDAS_ARTIST_REVIEW, LEYENDAS_ORIGIN } from "./adapters/leyendas.ts";
 import { isIdaysAnnouncement } from "./adapters/idays.ts";
+import { MYSTIC_ARTIST_REVIEW } from "./adapters/mystic.ts";
 import type { Festival } from "../domain/festival.ts";
 import type { FestivalCandidate, IngestionResult } from "./types.ts";
 import { INGESTION_SCHEMA_VERSION } from "./types.ts";
@@ -33,6 +34,11 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     lineup: candidate.lineup?.filter(name => !reviewedHeadliners.has(name.toLocaleLowerCase())),
     warnings } : candidate;
   const changes = diffFestival(current, effective);
+  const unchangedMystic = current.slug === "mystic" && candidate.festivalSlug === current.slug &&
+    candidate.sourceUrl === "https://www.mysticfestival.pl/" && candidate.lineupScope === "announcement" &&
+    candidate.headliners === undefined && candidate.observedEditionYears.length === 1 &&
+    candidate.observedEditionYears[0] === current.editionYear && candidate.evidence.some(e => e.field === "lineup") &&
+    !changes.some(change => ["lineup", "headliners"].includes(change.field));
   const unchangedLeyendas = candidate.festivalSlug === "leyendas-del-rock" && current.slug === candidate.festivalSlug &&
     candidate.sourceUrl === LEYENDAS_ORIGIN + "/" && candidate.artistListMode === "additive" &&
     candidate.lineupScope === "announcement" && candidate.observedEditionYears.length === 1 &&
@@ -46,6 +52,7 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     isCopenhellCurrentSource({ festivalSlug: candidate.festivalSlug, url: candidate.sourceUrl, editionYear: current.editionYear, strategies: ["official_markup"], enabled: true, refreshPolicy: "weekly" }) &&
     !changes.some(change => ["lineup", "headliners"].includes(change.field));
   const reviewReasons = new Set(warnings.filter(warning =>
+    !(unchangedMystic && warning === MYSTIC_ARTIST_REVIEW) &&
     !(unchangedRoadburn && warning === ROADBURN_ARTIST_REVIEW) &&
     !(candidate.festivalSlug === "alpen-flair" && !changes.some(change => ["lineup", "headliners"].includes(change.field)) && warning === ALPEN_ARTIST_REVIEW) &&
     !(unchangedCopenhell && warning === COPENHELL_REVIEW) &&

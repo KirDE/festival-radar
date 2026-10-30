@@ -1,6 +1,8 @@
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "../types.ts";
 import { INGESTION_SCHEMA_VERSION } from "../types.ts";
 
+export const MYSTIC_ARTIST_REVIEW = "New unranked Mystic artists require review before provider activity";
+
 const plain = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/&nbsp;|&#160;/gi, " ")
   .replace(/&amp;/gi, "&").replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"')
   .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
@@ -52,7 +54,25 @@ export function extractMysticCandidate(document: string, source: FestivalSource,
     // A list of first announcements is not a complete festival bill.
     const complete = headings.some(text => text === `Pełny skład Mystic Festival ${source.editionYear}` || text === `Mystic Festival ${source.editionYear} full line-up`);
     add("status", complete ? "confirmed" : "partial", complete ? headings.join("; ") : banners.join("; "));
-  } else c.warnings.push("Mystic current artist list or explicit headliner billing is missing");
+  } else {
+    // The current home replaces ranked news banners with artist cards and an
+    // unranked text list. Even its hp-headliners widget contains support acts:
+    // neither card order nor that DOM ID is evidence of headline billing.
+    const cards = [...html.matchAll(/<a\b[^>]*\bclass=["'][^"']*\bartist-inner\b[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi)];
+    const cardNames = cards.flatMap(a => {
+      let target: URL; try { target = new URL(href(a[0]) ?? "", source.url); } catch { return []; }
+      if (target.protocol !== "https:" || !/^(?:www\.)?mysticfestival\.pl$/.test(target.hostname) || !/^\/artist\/[^/]+\/$/.test(target.pathname)) return [];
+      const title = a[1].match(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/i)?.[1];
+      return title ? [plain(title)] : [];
+    });
+    const textList = blocks.some(b => /\bclass=["'][^"']*\bpure-artists-list\b[^"']*["']/i.test(b[0]));
+    if (names.length && names.length <= 150 && textList && cardNames.length &&
+      cardNames.every(name => names.some(n => n.toLocaleLowerCase() === name.toLocaleLowerCase()))) {
+      c.lineupScope = "announcement";
+      add("lineup", names, blocks.map(b => plain(b[1])).join("; "));
+      c.warnings.push(MYSTIC_ARTIST_REVIEW);
+    } else c.warnings.push("Mystic current artist list or explicit headliner billing is missing");
+  }
   const purchase = [...html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)].find(a => {
     const link = href(a[0]); if (!link) return false;
     let target: URL; try { target = new URL(link, source.url); } catch { return false; }
