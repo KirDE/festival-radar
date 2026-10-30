@@ -6,8 +6,46 @@ import { LanguageProvider, translate, type Language } from "../components/Langua
 import { LocalPlannerProvider } from "../components/LocalPlanner";
 import { festival } from "./support/catalog";
 import { hasAvailableTickets } from "../lib/tickets";
+import { festivalSetlistHistoryUrl } from "../lib/setlist-history";
 
 const similar = { ...festival, slug: "similar-fest", name: "Similar Fest" };
+
+for (const language of ["en", "de", "ru"] as const) {
+  test(`live history links to all festival editions, not a future-year search, in ${language}`, () => {
+    for (const year of [2026, 2027, 2028]) {
+      const item = { ...festival, slug: "wacken-open-air", name: "Wacken Open Air", editionYear: year, startDate: `${year}-07-28` };
+      const before = structuredClone(item);
+      const html = renderToStaticMarkup(
+        <LanguageProvider initialLanguage={language}><LocalPlannerProvider>
+          <FestivalDetail item={item} festivals={[item]} artistSlugs={{}} />
+        </LocalPlannerProvider></LanguageProvider>,
+      );
+      assert.match(html, /<a href="https:\/\/www\.setlist\.fm\/festivals\/wacken-open-air-bd6bd66\.html" target="_blank" rel="noreferrer">/);
+      assert.ok(html.includes(translate(language, "liveHistory")));
+      assert.doesNotMatch(html, /setlist\.fm\/search|date%3A|festival%3A/);
+      assert.deepEqual(item, before);
+    }
+  });
+
+  test(`a new festival without a verified history page has no invented setlist.fm URL in ${language}`, () => {
+    const html = renderToStaticMarkup(
+      <LanguageProvider initialLanguage={language}><LocalPlannerProvider>
+        <FestivalDetail item={festival} festivals={[festival]} artistSlugs={{}} />
+      </LocalPlannerProvider></LanguageProvider>,
+    );
+    assert.ok(html.includes(`<small>${translate(language, "liveHistory")}</small><strong>${translate(language, "unavailable")}</strong>`));
+    assert.doesNotMatch(html, /href="https:\/\/www\.setlist\.fm\//);
+  });
+}
+
+test("history resolves canonical series independently of display-name aliases", () => {
+  assert.equal(festivalSetlistHistoryUrl("hellfest"), "https://www.setlist.fm/festivals/hellfest-1bd6bd44.html");
+  assert.equal(festivalSetlistHistoryUrl("impericon"), "https://www.setlist.fm/festivals/impericon-festival-leipzig-63d6eabf.html");
+  assert.equal(festivalSetlistHistoryUrl("2000trees"), "https://www.setlist.fm/festivals/2000-trees-festival-63d6b6a3.html");
+  for (const slug of ["unknown-festival", "constructor", "toString", "__proto__", "https://example.test/"]) {
+    assert.equal(festivalSetlistHistoryUrl(slug), undefined);
+  }
+});
 
 for (const language of ["en", "de", "ru"] as const) {
   for (const ticketStatus of ["available", "unavailable", "unknown"] as const) {
