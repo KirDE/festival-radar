@@ -8,6 +8,7 @@ import { useLanguage } from "./LanguageProvider";
 import { PlanningTools } from "./PlanningTools";
 import type { PlaylistStatus } from "@/lib/domain/festival";
 import { ticketPresentation } from "@/lib/tickets";
+import { festivalSetlistHistoryUrl } from "@/lib/setlist-history";
 import { announcedArtists, hasAnnouncedLineup, sortFestivalLineup, type LineupSort } from "@/lib/festival-lineup";
 import {
   FavoriteButton,
@@ -40,7 +41,7 @@ export function FestivalDetail({
       year: "numeric",
       timeZone: "UTC",
     }).format(new Date(`${value}T12:00:00Z`));
-  const setlistUrl = `https://www.setlist.fm/search?query=${encodeURIComponent(`festival:${item.name} date:2027`)}`;
+  const setlistUrl = festivalSetlistHistoryUrl(item.slug);
   const tickets = ticketPresentation(item);
   const status =
     item.status === "tba"
@@ -133,10 +134,17 @@ export function FestivalDetail({
             <strong>{t("youtubeMusicPlaylist")}</strong>
           </a>
         ) : null}
-        <a href={setlistUrl} target="_blank" rel="noreferrer">
-          <small>{t("liveHistory")}</small>
-          <strong>setlist.fm ↗</strong>
-        </a>
+        {setlistUrl ? (
+          <a href={setlistUrl} target="_blank" rel="noreferrer">
+            <small>{t("liveHistory")}</small>
+            <strong>setlist.fm ↗</strong>
+          </a>
+        ) : (
+          <div className="disabled">
+            <small>{t("liveHistory")}</small>
+            <strong>{t("unavailable")}</strong>
+          </div>
+        )}
       </div>
       <section className="lineupSection">
         <div className="sectionHeading">
