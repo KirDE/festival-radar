@@ -323,7 +323,8 @@ footer {
 }
 .hero h1 {
   max-width: 1000px;
-  font-size: clamp(56px, 8.4vw, 126px);
+  /* Let long translated words scale down on phones instead of overflowing. */
+  font-size: clamp(28px, 8.4vw, 126px);
 }
 .hero h1 em {
   color: var(--orange);
