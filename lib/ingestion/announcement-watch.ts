@@ -24,10 +24,16 @@ export function announcementCoverageWarning(html: string, source: FestivalSource
     const announced=/\b(?:first|new|more)\b.{0,55}\b(?:names|bands|artists|headliners?)\b.{0,35}\b(?:announced|confirmed|revealed|released|added)\b|\b(?:first|new|more)\s+headliner\b|\bheadliner\s+(?:number\s+)?\d+\b|\bline[ -]?up\b.{0,35}\b(?:announced|confirmed|revealed|released|here)\b|\b(?:eerste namen|erste (?:bands|namen)|premiers noms)\b/i.test(title);
     if (!announced) continue;
     let link='';
-    const href=entry.attributes.match(/(?:^|\s)href\s*=\s*["']([^"']*)["']/i)?.[1];
-    if (href) {
-      try {const u=new URL(href,source.url),base=new URL(source.url);if(u.origin!==base.origin||u.username||u.password||/^(?:javascript|data):/.test(u.protocol)||!/^https?:$/.test(u.protocol))continue;u.hash='';link=u.href;} catch {continue;}
+    // A heading can contain its own anchors; validating only the outer tag
+    // would incorrectly promote a linked third-party announcement to official.
+    const outer=entry.attributes.match(/(?:^|\s)href\s*=\s*["']([^"']*)["']/i)?.[1];
+    const hrefs=[...(outer?[outer]:[]),...[...entry.body.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']/gi)].map(a=>a[1])];
+    const links:string[]=[];let invalid=false;
+    for(const href of hrefs){
+      try {const u=new URL(href,source.url),base=new URL(source.url);if(u.origin!==base.origin||u.username||u.password||!/^https?:$/.test(u.protocol)){invalid=true;break;}u.hash='';links.push(u.href);} catch {invalid=true;break;}
     }
+    if(invalid)continue;
+    link=[...new Set(links)].sort().join(' ');
     const years=[...(title+' '+link).matchAll(/\b20\d{2}\b/g)].map(m=>Number(m[0]));
     if (!years.includes(source.editionYear) || years.some(y=>y!==source.editionYear)) continue;
     cues.push(title.toLowerCase()+' '+link);

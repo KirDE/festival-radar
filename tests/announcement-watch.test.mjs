@@ -23,3 +23,7 @@ test('recognized artist fields suppress the coverage alert; harmless whitespace 
  assert.equal(watch(html),watch('<main><h2>First  names 2027 announced!</h2><h2>First names 2027 announced!</h2></main>'));
  assert.notEqual(watch(html),watch('<main><h2>More names 2027 announced!</h2></main>'));
 });
+test('nested heading anchors retain same-origin validation before accepting their title or poster',()=>{
+ for(const body of ['<h2><a href="https://other.example/2027">First names 2027 announced!</a></h2>','<h2><a href="https://other.example/2027"><img alt="First names 2027 announced!" src="poster.png"></a></h2>','<h2><a href="javascript:alert(2027)">First headliner 2027</a></h2>'])assert.equal(watch('<main>'+body+'</main>'),undefined);
+ assert.match(watch('<main><h2><a href="/news/2027-first-names">First names announced!</a></h2></main>'),/parser review required/);
+});
