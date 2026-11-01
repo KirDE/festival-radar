@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { db } from '../lib/db.ts';
 import { readPlaylistMode } from '../lib/catalog/playlist-cutover.ts';
 import { acquirePlaylistProcessLock } from '../lib/catalog/playlist-process-lock.ts';
+import { dispatchedPlaylistFailure } from '../lib/catalog/playlist-failure.ts';
 const execute = promisify(execFile);
 let release: (() => Promise<void>) | undefined;
 try {
@@ -16,5 +17,8 @@ try {
   } else {
     await execute('bash', ['scripts/deploy/run-legacy-playlists.sh', process.argv[2] ?? ''], { env, timeout: 2_650_000, maxBuffer: 10 * 1024 * 1024 });
   }
-} catch { console.error('playlist_dispatch_failed'); process.exitCode = 1; }
+} catch (error) {
+  console.error(dispatchedPlaylistFailure(error));
+  process.exitCode = 1;
+}
 finally { await release?.(); await db.$disconnect(); }

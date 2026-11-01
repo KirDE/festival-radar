@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import requests
 from spotify_auth import auth_headers
 
@@ -65,7 +66,11 @@ def ensure_playlist(plan, request, guard, creation_state):
     plan['playlist_url'] = f'https://open.spotify.com/playlist/{playlist_id}'
 
 
-def apply_plan(plan, request, guard):
+class SpotifyReadbackMismatch(ValueError):
+    pass
+
+
+def apply_plan(plan, request, guard, sleep=time.sleep):
     validate_tracks(plan)
     playlist_id = plan['playlist_id']
     uris = plan['track_uris']
@@ -92,8 +97,14 @@ def apply_plan(plan, request, guard):
     for offset in range(0, len(uris), 100):
         guard()
         request('PUT' if offset == 0 else 'POST', endpoint, json={'uris': uris[offset:offset + 100]})
-    if read_back() != uris:
-        raise ValueError('Playlist read-back mismatch')
+    # Successful writes may be visible late. Retry reads only, never PUT/POST.
+    for attempt in range(3):
+        if read_back() == uris:
+            return
+        if attempt < 2:
+            guard()
+            sleep(attempt + 1)
+    raise SpotifyReadbackMismatch('Playlist read-back mismatch')
 
 
 def run_plan(plan):

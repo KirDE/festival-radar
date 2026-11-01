@@ -217,7 +217,42 @@ class PlanTests(unittest.TestCase):
             result = request(method, url, **kwargs)
             if method == 'GET': return {'items': [], 'next': None}
             return result
-        with self.assertRaisesRegex(ValueError, 'read-back mismatch'): apply_plan(plan, wrong_readback, lambda: None)
+        with self.assertRaisesRegex(ValueError, 'read-back mismatch'): apply_plan(plan, wrong_readback, lambda: None, sleep=lambda _: None)
+
+    def test_delayed_readback_retries_only_reads_after_one_replacement_and_append(self):
+        plan = self.plan(110)
+        state, request = self.provider([])
+        stale_reads = []
+        waits = []
+        def delayed(method, url, **kwargs):
+            if method == 'GET' and len(state['writes']) == 2 and len(stale_reads) < 2:
+                stale_reads.append(1)
+                return {'items': [], 'next': None}
+            return request(method, url, **kwargs)
+        apply_plan(plan, delayed, lambda: None, sleep=waits.append)
+        self.assertEqual(state['writes'], ['PUT', 'POST'])
+        self.assertEqual(state['uris'], plan['track_uris'])
+        self.assertEqual(waits, [1, 2])
+
+    def test_readback_retry_is_bounded_and_lease_loss_stops_it(self):
+        plan = self.plan(1)
+        for lease_lost in [False, True]:
+            state, request = self.provider([])
+            reads = []
+            waits = []
+            def stale(method, url, **kwargs):
+                if method == 'GET':
+                    reads.append(1)
+                    return {'items': [], 'next': None}
+                return request(method, url, **kwargs)
+            def guard():
+                if lease_lost and waits:
+                    raise RuntimeError('lease lost during delayed read')
+            with self.assertRaisesRegex((RuntimeError, ValueError), 'lease lost|read-back mismatch'):
+                apply_plan(plan, stale, guard, sleep=waits.append)
+            self.assertEqual(state['writes'], ['PUT'])
+            self.assertEqual(len(reads), 2 if lease_lost else 4)
+            self.assertEqual(waits, [1] if lease_lost else [1, 2])
 
     def test_loss_before_append_stops_following_effects(self):
         plan = self.plan()

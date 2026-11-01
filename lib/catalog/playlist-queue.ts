@@ -4,6 +4,16 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 export type PlaylistLease = { id: string; publicationId: string; festivalSlug: string; attempts: number; leaseOwner: string; leaseExpiresAt: Date };
 export type PlaylistClaimCursor = { requestedAt: Date; id: string };
 export type PlaylistClaimPage = { claim: PlaylistLease; nextCursor: null } | { claim: null; nextCursor: PlaylistClaimCursor | null };
+
+/** A newer staged Spotify plan supersedes old content even if YouTube is pending. */
+export async function assertSpotifyPlanCurrent(db: PrismaClient | Prisma.TransactionClient, claim: Pick<PlaylistLease, 'festivalSlug' | 'publicationId'>) {
+  const publication = await db.catalogPublication.findUniqueOrThrow({ where: { id: claim.publicationId }, select: { createdAt: true, editionYear: true } });
+  if (await db.catalogPlaylistRefresh.count({ where: {
+    festivalSlug: claim.festivalSlug,
+    desiredPlan: { not: Prisma.DbNull },
+    publication: { editionYear: publication.editionYear, createdAt: { gt: publication.createdAt } },
+  } })) throw new Error('Spotify plan superseded');
+}
 const CLAIM_PAGE_SIZE = 16;
 const MAX_LEASE_LIFETIME_MS = 7_200_000;
 
