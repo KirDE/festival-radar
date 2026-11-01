@@ -8,6 +8,8 @@ import { requireLocalDisposableDatabase } from './support/disposable-db.ts';
 import { persistAttempt, createIngestionRun } from '../lib/ingestion/repository.ts';
 import { drainImportEvents, prepareImportEvent, verifyDispatchEvent } from '../lib/ingestion/import-events.ts';
 import { enqueueParserRepair } from '../lib/ingestion/parser-repairs.ts';
+import {extractFestivalCandidate} from '../lib/ingestion/extract.ts';
+import {evaluateCandidate} from '../lib/ingestion/policy.ts';
 requireLocalDisposableDatabase(process.env.DATABASE_URL);
 let sourceId: string, runId: string, url: string;
 test.beforeEach(async () => {
@@ -77,6 +79,26 @@ test('repair creation is transactional, deduplicated and completion never wakes 
 });
 test('empty/healthy idle importer and missing attempts do not dispatch', async () => {
   assert.deepEqual(await drainImportEvents(db, async () => { throw new Error('must not send'); }), { delivered: 0, failed: 0 });
+});
+test('a real extraction coverage gap commits one actionable event; repeated daily observations do not call the model again',async()=>{
+  const beforeJobs=await db.catalogPlaylistRefresh.count();
+  const observe=async(title:string)=>{
+    const fetchedAt=new Date().toISOString();
+    const candidate=extractFestivalCandidate(`<main><h2>${title}</h2></main>`,{festivalSlug:'synthetic-fest',url,editionYear:2027,strategies:['json_ld_event'],enabled:true,refreshPolicy:'daily'},fetchedAt);
+    const result=evaluateCandidate({slug:'synthetic-fest',editionYear:2027,headliners:[],lineup:[],status:'tba'} as any,candidate);
+    assert.ok(result.reviewReasons.some(x=>x.includes('announcement:')));
+    assert.equal(result.changes.length,0);assert.equal(result.publishable,false);
+    return persistAttempt(db,{runId,festivalSlug:'synthetic-fest',requestedUrl:url,httpStatus:200,durationMs:1,startedAt:new Date(),endedAt:new Date(),result});
+  };
+  const sent:any[]=[];
+  await observe('First names for 2027 announced!');
+  assert.equal((await drainImportEvents(db,async event=>{sent.push(event);})).delivered,1);
+  assert.deepEqual(Object.keys(sent[0]).sort(),['eventId','issueId','kind','sourceId']);
+  await observe('First names for 2027 announced!');
+  assert.equal((await drainImportEvents(db,async event=>{sent.push(event);})).delivered,0);assert.equal(sent.length,1);
+  await observe('More names for 2027 announced!');
+  assert.equal((await drainImportEvents(db,async event=>{sent.push(event);})).delivered,1);assert.equal(sent.length,2);
+  assert.equal(await db.catalogPlaylistRefresh.count(),beforeJobs);
 });
 test('successful recognized empty manual result stays silent end-to-end', async () => {
   await db.festivalSource.update({ where: { id: sourceId }, data: { strategies: ['manual_review'], parserKey: 'manual_review' } });

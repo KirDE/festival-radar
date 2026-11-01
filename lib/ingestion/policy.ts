@@ -4,6 +4,7 @@ import { isCopenhellCurrentSource, COPENHELL_REVIEW } from "./adapters/copenhell
 import { LEYENDAS_ARTIST_REVIEW, LEYENDAS_ORIGIN } from "./adapters/leyendas.ts";
 import { isIdaysAnnouncement } from "./adapters/idays.ts";
 import { MYSTIC_ARTIST_REVIEW } from "./adapters/mystic.ts";
+import {isGraspopAnnouncement} from './adapters/graspop.ts';
 import type { Festival } from "../domain/festival.ts";
 import type { FestivalCandidate, IngestionResult } from "./types.ts";
 import { INGESTION_SCHEMA_VERSION } from "./types.ts";
@@ -65,6 +66,10 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
   if (candidate.festivalSlug === "impericon" && candidate.sourceUrl === "https://www.impericon.com/pages/festival" &&
     candidate.headliners?.some(name => current.lineup.some(old => old.toLowerCase() === name.toLowerCase())))
     reviewReasons.add("Impericon billing promotion requires reviewed reclassification");
+  if(candidate.festivalSlug==='graspop' && changes.some(change=>['lineup','headliners'].includes(change.field))) {
+    if(!isGraspopAnnouncement(candidate,current.editionYear ?? Number(current.startDate?.slice(0,4))))reviewReasons.add('Graspop additions require verified current official announcement evidence');
+    if(candidate.headliners?.some(name=>current.lineup.some(old=>old.toLowerCase()===name.toLowerCase())))reviewReasons.add('Graspop billing promotion requires reviewed reclassification');
+  }
   if (candidate.festivalSlug !== current.slug) reviewReasons.add("Candidate slug does not match the current festival");
   if (candidate.festivalSlug === "idays" && changes.some(change => ["lineup", "headliners"].includes(change.field))) {
     if (!isIdaysAnnouncement(candidate, current.editionYear)) reviewReasons.add("I-Days additions require verified official edition evidence");

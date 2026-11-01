@@ -8,9 +8,10 @@ import {
   type PrismaClient,
 } from "@prisma/client";
 import { uniqueNotificationEvents, type PublishedNotificationEvent } from "../ingestion/notification-events.ts";
-import type { IngestionResult } from "../ingestion/types.ts";
+import type { FestivalCandidate, IngestionResult } from "../ingestion/types.ts";
 import type { AgentDecision } from "../ingestion/agent-contract.ts";
 import { isIdaysAnnouncement } from "../ingestion/adapters/idays.ts";
+import {isGraspopAnnouncement,GRASPOP_FAQ} from '../ingestion/adapters/graspop.ts';
 
 type Database = PrismaClient | Prisma.TransactionClient;
 type CatalogChange = { field: string; before?: unknown; after?: unknown };
@@ -258,8 +259,19 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
         candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl) &&
         input.result.candidate.evidence.some(e => e.field === field && e.sourceUrl === input.result.sourceUrl))))
       throw new Error("I-Days publication requires matching persisted official addition evidence");
-    const playlistRefreshDeferral = idaysLineup ? {
-      policy: "explicit-refresh-only", reason: "Verified I-Days catalog additions do not authorize provider activity",
+    const graspopLineup=input.result.festivalSlug==='graspop' && input.result.changes.some(({field})=>['lineup','headliners'].includes(field));
+    if(graspopLineup && !(isGraspopAnnouncement(input.result.candidate,applied.edition.year) &&
+      isGraspopAnnouncement(candidate.normalized as unknown as FestivalCandidate,applied.edition.year) &&
+      candidate.festivalSlug==='graspop' && candidate.attempt.requestedUrl===GRASPOP_FAQ && input.result.sourceUrl===GRASPOP_FAQ &&
+      input.result.changes.every(({field,kind})=>['startDate','endDate','headliners','status'].includes(field) &&
+        (field!=='headliners'||kind==='headliner_added') &&
+        candidate.evidence.some(e=>e.field===field && e.sourceUrl===GRASPOP_FAQ && same(e.observedValue,(input.result.candidate as unknown as Record<string,unknown>)[field])))))throw new Error('Graspop publication requires matching persisted official addition evidence');
+    if(graspopLineup && applied.edition.completeness==='TBA') {
+      await db.festivalEdition.update({where:{id:applied.edition.id},data:{completeness:'PARTIAL'}});
+      applied.changedFields.push('completeness');
+    }
+    const playlistRefreshDeferral = idaysLineup || graspopLineup ? {
+      policy: "explicit-refresh-only", reason: `Verified ${graspopLineup?'Graspop':'I-Days'} catalog additions do not authorize provider activity`,
     } : undefined;
     const publication = await createPublication(db, {
       source: CatalogPublicationSource.INGESTION, sourceId, festivalSlug: input.result.festivalSlug,

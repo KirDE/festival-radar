@@ -17,10 +17,17 @@ import { extractOfficialMarkupCandidate } from "./adapters/official-markup.ts";
 import { isArchivedRockEnSeineDocument } from "./adapters/rock-en-seine.ts";
 import type { FestivalCandidate, FestivalSource, FieldEvidence } from "./types.ts";
 import { INGESTION_SCHEMA_VERSION } from "./types.ts";
+import {announcementCoverageWarning} from './announcement-watch.ts';
 
 const supportedFields: FieldEvidence["field"][] = ["startDate", "endDate", "city", "headliners", "lineup", "ticketsUrl", "status", "ticketStatus"];
 
 export function extractFestivalCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  const candidate=extractConfiguredCandidate(html,source,fetchedAt);
+  const warning=announcementCoverageWarning(html,source,candidate);
+  return warning ? {...candidate,warnings:[...new Set([...candidate.warnings,warning])]} : candidate;
+}
+
+function extractConfiguredCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
   const roadburn = extractRoadburnCandidate(html, source, fetchedAt);
   if (roadburn) return roadburn;
   const copenhell = extractCopenhellCurrent(html, source, fetchedAt);
