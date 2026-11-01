@@ -68,10 +68,14 @@ async function persist(value: IngestionResult) {
 
 test.before(async () => {
   const rockharz = { ...catalogSeed.festivals[0], slug: "rockharz", name: "Synthetic Rockharz", city: "Ballenstedt", headliners: [], lineup: [], startDate: "2027-07-07", endDate: "2027-07-10" };
-  await seedCatalog(db, { ...catalogSeed, festivals: [...catalogSeed.festivals, rockharz, {...rockharz,slug:"idays",name:"Synthetic I-Days"}], editions: [...catalogSeed.editions,
+  const graspop={...rockharz,slug:'graspop',name:'Synthetic Graspop',status:'tba' as const,startDate:'2027-06-17',endDate:'2027-06-20'};
+  await seedCatalog(db, { ...catalogSeed, festivals: [...catalogSeed.festivals, rockharz, {...rockharz,slug:"idays",name:"Synthetic I-Days"},graspop], editions: [...catalogSeed.editions,
     { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, recordState: "current" as const },
-    { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, slug:"idays", recordState: "current" as const }],
+    { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, slug:"idays", recordState: "current" as const },
+    { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...graspop, completeness:'tba' as const, recordState: "current" as const }],
   });
+  // The shared fixture seeder deliberately defaults records to confirmed.
+  await db.festivalEdition.updateMany({where:{festival:{slug:'graspop'},recordState:'CURRENT'},data:{status:'TBA',completeness:'TBA'}});
   initialRockharzJobs = await db.catalogPlaylistRefresh.count({ where: { festivalSlug: "rockharz" } });
 });
 test.after(async () => {
@@ -409,4 +413,38 @@ test("I-Days provenance drift and identity collisions roll back without catalog 
     assert.deepEqual({artists:await db.artist.count(),entries:await db.lineupEntry.count(),jobs:await db.catalogPlaylistRefresh.count(),publications:await db.catalogPublication.count()},before);
     assert.equal((await db.ingestionCandidate.findUniqueOrThrow({where:{attemptId:attempt.id}})).reviewState,"PENDING");
   }
+});
+
+function graspopResult(name:string):IngestionResult {
+ const value=result(name,{festivalSlug:'graspop',sourceUrl:'https://www.graspop.be/en/info/festival-essentials'});
+ value.changes=[{kind:'headliner_added',field:'headliners',after:name,reviewRequired:false},{kind:'status_changed',field:'status',before:'tba',after:'partial',reviewRequired:false}];
+ value.candidate={...value.candidate,festivalSlug:'graspop',sourceUrl:value.sourceUrl,startDate:'2027-06-17',endDate:'2027-06-20',status:'partial',headliners:[name],lineup:undefined,artistListMode:'additive',lineupScope:'announcement',evidence:['startDate','endDate','headliners','status'].map(field=>({field:field as 'startDate'|'endDate'|'headliners'|'status',sourceUrl:value.sourceUrl,observedAt:value.fetchedAt,excerpt:'Synthetic independently corroborated announcement'}))};
+ return value;
+}
+test('verified Graspop additions publish catalogue/status/completeness atomically, never provider jobs, including replay',async()=>{
+ const value=graspopResult(`Synthetic Graspop Head ${suffix}`);const attempt=await persist(value);const jobs=await db.catalogPlaylistRefresh.count();
+ const publication=await publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix});
+ assert.ok(publication);assert.equal(publication.playlistRefreshRequested,false);assert.equal(await db.catalogPlaylistRefresh.count(),jobs);
+ const edition=await db.festivalEdition.findFirstOrThrow({where:{festival:{slug:'graspop'},recordState:'CURRENT'},include:{lineup:true}});
+ assert.equal(edition.status,'PARTIAL');assert.equal(edition.completeness,'PARTIAL');assert.equal(edition.lineup.length,1);
+ assert.equal((publication.evidence as any).playlistRefresh.policy,'explicit-refresh-only');
+ const replay=await publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix});assert.equal(replay?.id,publication.id);assert.equal(await db.catalogPlaylistRefresh.count(),jobs);
+});
+test('Graspop provenance, edition, mode, persisted-value, requested-source and removal drift roll back without provider effects',async()=>{
+ for(const drift of ['host','edition','mode','evidence','persisted-value','persisted-mode','requested-source','removal']) {
+  const value=graspopResult(`Synthetic Graspop ${drift} ${suffix}`);
+  if(drift==='host'){value.sourceUrl='https://evil.test/';value.candidate.sourceUrl=value.sourceUrl;value.candidate.evidence.forEach(e=>e.sourceUrl=value.sourceUrl);}
+  if(drift==='edition')value.candidate.observedEditionYears=[2026];
+  if(drift==='mode')value.candidate.artistListMode=undefined;
+  if(drift==='evidence')value.candidate.evidence=[];
+  if(drift==='removal')value.changes[0].kind='headliner_removed';
+  const stored=structuredClone(value);
+  if(drift==='persisted-value')stored.candidate.headliners=['Different synthetic name'];
+  if(drift==='persisted-mode')stored.candidate.lineupScope=undefined;
+  if(drift==='requested-source')stored.sourceUrl='https://www.graspop.be/en/';
+  const attempt=await persist(stored);
+  const counts=async()=>({artists:await db.artist.count(),entries:await db.lineupEntry.count(),jobs:await db.catalogPlaylistRefresh.count(),publications:await db.catalogPublication.count()});const before=await counts();
+  await assert.rejects(publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix}),/Graspop publication requires|Candidate edition 2026 does not match catalogue edition 2027/);
+  assert.deepEqual(await counts(),before);assert.equal((await db.ingestionCandidate.findUniqueOrThrow({where:{attemptId:attempt.id}})).reviewState,'PENDING');
+ }
 });

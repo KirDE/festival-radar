@@ -1,0 +1,32 @@
+{
+  "kind": "graspop-current-announcements-v1",
+  "articles": [
+    {
+      "url": "https://www.graspop.be/en/news/headliner-number-6-for-gmm-2027",
+      "file": "article-0.html"
+    },
+    {
+      "url": "https://www.graspop.be/en/news/the-first-headliner-for-sunday-20-june",
+      "file": "article-1.html"
+    },
+    {
+      "url": "https://www.graspop.be/en/news/a-new-headliner-for-saturday-19-june",
+      "file": "article-2.html"
+    },
+    {
+      "url": "https://www.graspop.be/en/news/the-first-announcement-for-friday-18-june",
+      "file": "article-3.html"
+    },
+    {
+      "url": "https://www.graspop.be/en/news/discover-our-second-headliner-for-the-30th-edition-of-graspop-metal-meeting",
+      "file": "article-4.html"
+    },
+    {
+      "url": "https://www.graspop.be/en/news/first-headliner-for-the-30th-edition-of-graspop-metal-meeting-announced",
+      "file": "article-5.html"
+    }
+  ],
+  "faq": "faq.html",
+  "home": "home.html",
+  "roster": "roster.html"
+}

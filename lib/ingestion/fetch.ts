@@ -18,6 +18,7 @@ import { novarockDocuments, novarockTicketsUrl } from "./adapters/novarock.ts";
 import type { FestivalSource } from "./types.ts";
 import { discoverDynamoTickets } from "./adapters/dynamo-tickets.ts";
 import { discoverDynamoBands, isDynamoAnnouncement } from "./adapters/dynamo.ts";
+import {isGraspopSource, discoverGraspopAnnouncements, GRASPOP_HOME, GRASPOP_ROSTER, GRASPOP_DOCUMENTS} from './adapters/graspop.ts';
 
 export type FetchAttempt = { response: Response; attempts: number };
 export type FetchOptions = {
@@ -65,6 +66,33 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   };
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (initial.response.ok && isGraspopSource(source)) {
+    if (initial.response.url && initial.response.url !== source.url) throw new Error('Graspop FAQ changed its official identity');
+    const faq = await initial.response.text();
+    let attempts = initial.attempts;
+    const document = async (url: string) => {
+      const r = await fetchWithRetry(url, 'error'); attempts += r.attempts;
+      if (r.response.url && r.response.url !== url) throw new Error('Graspop document changed its official identity');
+      return r.response;
+    };
+    const homeResponse = await document(GRASPOP_HOME);
+    if (!homeResponse.ok) return {response:homeResponse,attempts};
+    const home = await homeResponse.text();
+    const urls = discoverGraspopAnnouncements(home);
+    let roster = '';
+    const articles = [];
+    if (urls.length) {
+      const rosterResponse = await document(GRASPOP_ROSTER);
+      if (!rosterResponse.ok) return {response:rosterResponse,attempts};
+      roster = await rosterResponse.text();
+      for (const url of urls) {
+        const article = await document(url);
+        if (!article.ok) return {response:article,attempts};
+        articles.push({url,html:await article.text()});
+      }
+    }
+    return {response:new Response(JSON.stringify({kind:GRASPOP_DOCUMENTS,faq,home,roster,articles}),{headers:{'content-type':'application/json'}}),attempts};
+  }
   if (initial.response.ok && isTuskaHomepage(source)) {
     if (initial.response.url && initial.response.url !== source.url) throw new Error("Tuska homepage redirected away from its trusted route");
     const home = await initial.response.text();
