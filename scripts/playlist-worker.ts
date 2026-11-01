@@ -3,14 +3,16 @@ import { readPlaylistMode } from '../lib/catalog/playlist-cutover.ts';
 import { acquirePlaylistProcessLock } from '../lib/catalog/playlist-process-lock.ts';
 import { db } from '../lib/db.ts';
 import { readCatalog } from '../lib/catalog/repository.ts';
-import { stagePlaylistPlan } from '../lib/catalog/playlist-queue.ts';
+import { stagePlaylistPlan, assertSpotifyPlanCurrent } from '../lib/catalog/playlist-queue.ts';
 import { runPlaylistWorker, publishSpotifyCheckpoint } from '../lib/catalog/playlist-worker.ts';
 import { stageYoutubePlan, validateYoutubePlan, YOUTUBE_URL } from '../lib/catalog/youtube-playlist-queue.ts';
 import { executePlaylistJson } from '../lib/catalog/python-playlist-rpc.ts';
 import { spotifyRepertoiresForArtists } from '../lib/catalog/spotify-repertoire.ts';
+import { playlistFailure, type PlaylistStage } from '../lib/catalog/playlist-failure.ts';
 // Activation requires explicit stop/drain/reconciliation of legacy consumers.
 let release: (() => Promise<void>) | undefined;
 const root = process.cwd();
+let stage: PlaylistStage = 'setup';
 try {
   if (process.env.PLAYLIST_LOCK_HELD !== 'true') release = await acquirePlaylistProcessLock();
   if (await readPlaylistMode(db) !== 'database') throw new Error('Validated DB playlist activation required');
@@ -34,6 +36,7 @@ try {
     const [queued] = await db.$queryRaw<{ desiredPlan: import('@prisma/client').Prisma.JsonValue | null }[]>`SELECT "desiredPlan" FROM "CatalogPlaylistRefresh" WHERE id = ${claim.id}`;
     let plan: unknown = queued.desiredPlan;
     if (plan === null) {
+      stage = 'spotify_discovery';
       const lineupNames = new Set([...festival.headliners, ...festival.lineup]);
       const spotifyRepertoireProfiles = await spotifyRepertoiresForArtists(db, snapshot.artists.filter(a => lineupNames.has(a.name)));
       const discovered = await execute('discover-spotify', { season: festival.editionYear, festivals: [{ ...festival, spotifyRepertoireProfiles, artists: [...festival.headliners, ...festival.lineup], playlistUrl: creating ? '' : playlistUrl }] }, {}, 6_000_000);
@@ -42,11 +45,15 @@ try {
     const candidate = plan as { playlist_url?: string; edition_year?: number };
     if (candidate.playlist_url !== (creating ? '' : playlistUrl) || candidate.edition_year !== publication.editionYear) throw new Error('Durable plan binding mismatch');
     await guard();
+    stage = 'spotify_apply';
+    await assertSpotifyPlanCurrent(db, claim);
     const report = await execute('apply-spotify', plan, {
       PLAYLIST_PROVIDER: 'spotify', PLAYLIST_LEASE: JSON.stringify(claim), PLAYLIST_EXPECTED_URL: playlistUrl,
       PLAYLIST_GUARD_NODE: process.execPath, PLAYLIST_GUARD_SCRIPT: path.join(root, 'scripts/playlist-lease-guard.ts'),
     }) as { playlist_url: string; artists_count: number; track_count: number };
+    stage = 'spotify_checkpoint';
     const spotify = await publishSpotifyCheckpoint(db, claim, { url: report.playlist_url, artists: report.artists_count, tracks: report.track_count, expectedUrl: playlistUrl });
+    stage = 'youtube_discovery';
     const [youtubeJob] = await db.$queryRaw<{ youtubePlan: unknown }[]>`SELECT "youtubePlan" FROM "CatalogPlaylistRefresh" WHERE id = ${claim.id}`;
     let youtubePlan = youtubeJob.youtubePlan;
     if (youtubePlan === null) {
@@ -55,12 +62,17 @@ try {
     }
     validateYoutubePlan(youtubePlan);
     if (youtubePlan.expectedUrl !== youtubeUrl || youtubePlan.slug !== claim.festivalSlug || youtubePlan.editionYear !== publication.editionYear) throw new Error('Durable YouTube plan binding mismatch');
+    stage = 'youtube_apply';
     const youtubeMusic = await execute('apply-youtube', youtubePlan, {
       PLAYLIST_PROVIDER: 'youtube_music', PLAYLIST_LEASE: JSON.stringify(claim), YOUTUBE_EXPECTED_URL: youtubeUrl,
       PLAYLIST_GUARD_NODE: process.execPath, YOUTUBE_GUARD_SCRIPT: path.join(root, 'scripts/playlist-lease-guard.ts'),
     }) as { url: string; expectedUrl: string; artists: number; tracks: number };
+    stage = 'commit';
     return { ...spotify, youtubeMusic };
   });
   console.log(JSON.stringify(result));
-} catch { console.error('playlist_worker_failed'); process.exitCode = 1; }
+} catch (error) {
+  console.error(playlistFailure(stage, error));
+  process.exitCode = 1;
+}
 finally { await release?.(); await db.$disconnect(); }

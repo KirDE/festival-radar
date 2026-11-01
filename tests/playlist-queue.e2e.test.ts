@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { PrismaClient } from "@prisma/client";
-import { claimPlaylistRefresh as claimPage, enqueuePlaylistRefresh, finishPlaylistRefresh, assertPlaylistRefreshLease, commitPlaylistRefresh, PlaylistLeaseLostError, renewPlaylistRefreshLease } from "../lib/catalog/playlist-queue.ts";
+import { claimPlaylistRefresh as claimPage, enqueuePlaylistRefresh, finishPlaylistRefresh, assertPlaylistRefreshLease, assertSpotifyPlanCurrent, commitPlaylistRefresh, PlaylistLeaseLostError, renewPlaylistRefreshLease } from "../lib/catalog/playlist-queue.ts";
 import type { PlaylistClaimCursor } from "../lib/catalog/playlist-queue.ts";
 
 const url = process.env.DATABASE_URL;
@@ -32,6 +32,28 @@ async function claimPlaylistRefresh(
 }
 let publicationId: string;
 let jobId: string;
+
+test('newer staged Spotify plan fences the old plan while both YouTube jobs remain failed', async () => {
+  const slug = `spotify-supersession-${randomUUID()}`;
+  const create = (year: number, createdAt: Date) => first.catalogPublication.create({ data: {
+    source: 'ADMIN', sourceId: randomUUID(), festivalSlug: slug, editionYear: year,
+    actorLabel: 'test', fields: ['lineup'], lineupChanged: true, createdAt,
+  } });
+  const old = await create(2027, new Date('2027-01-01'));
+  const newer = await create(2027, new Date('2027-01-02'));
+  const otherYear = await create(2028, new Date('2027-01-03'));
+  const claim = {festivalSlug: slug, publicationId: old.id};
+  for (const publication of [old, newer, otherYear]) {
+    await first.catalogPlaylistRefresh.create({data:{publicationId:publication.id,festivalSlug:slug,status:'FAILED',retryAt:new Date('2099-01-01')}});
+  }
+  await first.catalogPlaylistRefresh.update({where:{publicationId:otherYear.id},data:{desiredPlan:{edition_year:2028}}});
+  await assertSpotifyPlanCurrent(first, claim); // no plan in newer current-year job
+  await first.catalogPlaylistRefresh.update({where:{publicationId:newer.id},data:{desiredPlan:{edition_year:2027,track_count:110}}});
+  await assert.rejects(assertSpotifyPlanCurrent(first,claim), /Spotify plan superseded/);
+  await assertSpotifyPlanCurrent(second,{festivalSlug:slug,publicationId:newer.id});
+  const jobs=await first.catalogPlaylistRefresh.findMany({where:{festivalSlug:slug}});
+  assert.ok(jobs.every(job=>job.status==='FAILED' && job.leaseOwner===null));
+});
 
 test.before(async () => {
   const publication = await first.catalogPublication.create({ data: {

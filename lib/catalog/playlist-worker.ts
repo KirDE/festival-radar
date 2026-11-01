@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { claimPlaylistRefresh, assertPlaylistRefreshLease, renewPlaylistRefreshLease, finishPlaylistRefresh, commitPlaylistRefresh, withPlaylistRefreshLease, type PlaylistLease } from './playlist-queue.ts';
+import { claimPlaylistRefresh, assertPlaylistRefreshLease, assertSpotifyPlanCurrent, renewPlaylistRefreshLease, finishPlaylistRefresh, commitPlaylistRefresh, withPlaylistRefreshLease, type PlaylistLease } from './playlist-queue.ts';
 import { YOUTUBE_URL, validateYoutubePlan, type YoutubeState, type YoutubeProgress } from './youtube-playlist-queue.ts';
 
 export type ProviderPlaylistResult = { url: string; artists: number; tracks: number; expectedUrl?: string };
@@ -16,6 +16,7 @@ export async function publishSpotifyCheckpoint(db: PrismaClient, claim: Playlist
     || !Number.isSafeInteger(result.tracks) || result.tracks < 1
     || !Number.isSafeInteger(result.artists) || result.artists < 1) throw new Error('Invalid Spotify read-back');
   return withPlaylistRefreshLease(db, claim, async tx => {
+    await assertSpotifyPlanCurrent(tx, claim);
     const publication = await tx.catalogPublication.findUniqueOrThrow({ where: { id: claim.publicationId } });
     const edition = await tx.festivalEdition.findFirstOrThrow({ where: { festival: { slug: claim.festivalSlug }, year: publication.editionYear, recordState: 'CURRENT' }, select: { id: true } });
     if (await tx.catalogPlaylistRefresh.count({ where: { festivalSlug: claim.festivalSlug, status: 'SUCCEEDED', publication: { createdAt: { gt: publication.createdAt } } } })) throw new Error('Newer playlist publication completed');
@@ -81,6 +82,7 @@ export async function runPlaylistWorker(db: PrismaClient, execute: PlaylistExecu
       || !Number.isSafeInteger(result.youtubeMusic.tracks) || result.youtubeMusic.tracks < 1
       || !Number.isSafeInteger(result.youtubeMusic.artists) || result.youtubeMusic.artists < 1)) throw new Error('Invalid YouTube read-back');
     await commitPlaylistRefresh(db, active, async (tx, scope) => {
+      await assertSpotifyPlanCurrent(tx, active);
       const edition = await tx.festivalEdition.findFirstOrThrow({ where: { festival: { slug: scope.festivalSlug }, year: scope.editionYear, recordState: 'CURRENT' }, select: { id: true } });
       const publication = await tx.catalogPublication.findUniqueOrThrow({ where: { id: scope.publicationId } });
       if (await tx.catalogPlaylistRefresh.count({ where: { festivalSlug: scope.festivalSlug, status: 'SUCCEEDED', publication: { createdAt: { gt: publication.createdAt } } } })) throw new Error('Newer playlist publication completed');

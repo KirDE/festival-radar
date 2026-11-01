@@ -1,5 +1,5 @@
 import { db } from '../lib/db.ts';
-import { renewPlaylistRefreshLease, spotifyCreationState } from '../lib/catalog/playlist-queue.ts';
+import { renewPlaylistRefreshLease, spotifyCreationState, assertSpotifyPlanCurrent } from '../lib/catalog/playlist-queue.ts';
 import { youtubeProviderState, saveYoutubeProgress } from '../lib/catalog/youtube-playlist-queue.ts';
 import { readPlaylistMode } from '../lib/catalog/playlist-cutover.ts';
 import { acquirePlaylistProcessLock } from '../lib/catalog/playlist-process-lock.ts';
@@ -11,6 +11,7 @@ async function guardSpotify() {
   const claim = JSON.parse(process.env.PLAYLIST_LEASE ?? 'null');
   claim.leaseExpiresAt = new Date(claim.leaseExpiresAt);
   const renewed = await renewPlaylistRefreshLease(db, claim, 120_000);
+  await assertSpotifyPlanCurrent(db, claim);
   const publication = await db.catalogPublication.findUniqueOrThrow({ where: { id: claim.publicationId }, select: { createdAt: true, editionYear: true } });
   const expectedUrl = process.env.PLAYLIST_EXPECTED_URL ?? '';
   const creating = ['', 'NEW'].includes(expectedUrl);

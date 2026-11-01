@@ -51,6 +51,10 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as error:
+        from apply_playlist_plan import SpotifyReadbackMismatch
+        if isinstance(error, SpotifyReadbackMismatch):
+            sys.stderr.write('spotify_readback_mismatch\n')
+            sys.exit(1)
         from youtube_playlist_plan import QuotaBoundReached, ReconciliationRequired, ProviderWriteRejected, failure_diagnostic
         if isinstance(error, QuotaBoundReached):
             sys.stderr.write('youtube_quota_bound_reached\n')
