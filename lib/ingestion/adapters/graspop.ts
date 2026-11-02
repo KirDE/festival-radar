@@ -13,6 +13,9 @@ const attr = (tag: string, name: string) => tag.match(new RegExp(`(?:^|\\s)${nam
 const main = (html: string) => clean(html).match(/<main\b[^>]*>([\s\S]*?)<\/main>/i)?.[1];
 const canonical = (html: string) => [...clean(html).matchAll(/<link\b[^>]*>/gi)].find(m => attr(m[0], 'rel') === 'canonical')?.[0];
 const picture = (value: string) => value.split('/').at(-1)?.replace(/\.(?:jpg|jpeg|webp|png)$/i, '');
+// Official roster/news copy may abbreviate the same featuring credit differently.
+// Keep the roster spelling in the candidate; do not alias artists or collaborators.
+const announcementName = (value: string) => value.toLowerCase().replace(/\b(?:ft|feat)\.?(?=\s)/g, 'featuring');
 
 export function isGraspopSource(source: FestivalSource) {
   return source.festivalSlug === 'graspop' && source.url === GRASPOP_FAQ && source.strategies.includes('official_markup') && !source.fetchUrl && !source.followLinkPattern;
@@ -98,7 +101,7 @@ export function graspop(input: string, source: FestivalSource) {
         if (!body || attr(canonical(a.html) ?? '', 'href') !== a.url) return false;
         const intro = plain(body.match(/<p\b[^>]*class=["']intro["'][^>]*>([\s\S]*?)<\/p>/i)?.[1] ?? '');
         const headings = [...body.matchAll(/<h[12]\b[^>]*>([\s\S]*?)<\/h[12]>/gi)].map(h => plain(h[1])).join(' ');
-        if (!intro || !/headlin(?:e|er|ing)|top the bill/i.test(headings + ' ' + intro) || !intro.toLowerCase().includes(name.toLowerCase()) || /(?:has|have|is|are)\s+(?:cancelled|canceled|withdrawn)|will not (?:play|perform)/i.test(intro)) return false;
+        if (!intro || !/headlin(?:e|er|ing)|top the bill/i.test(headings + ' ' + intro) || !announcementName(intro).includes(announcementName(name)) || /(?:has|have|is|are)\s+(?:cancelled|canceled|withdrawn)|will not (?:play|perform)/i.test(intro)) return false;
         const text = plain(body);
         const range = [...text.matchAll(/\bFrom\s+(\d{1,2})\s*[-–—]\s*(\d{1,2})\s+(June|July|August)\s+(20\d{2})\b/gi)];
         if (!range.length || range.some(d => `${d[4]}-${String(months.findIndex(m => m.toLowerCase() === d[3].toLowerCase()) + 1).padStart(2,'0')}-${d[1].padStart(2,'0')}` !== dates.startDate || `${d[4]}-${String(months.findIndex(m => m.toLowerCase() === d[3].toLowerCase()) + 1).padStart(2,'0')}-${d[2].padStart(2,'0')}` !== dates.endDate)) return false;
