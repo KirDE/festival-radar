@@ -13,6 +13,41 @@ const at='2026-11-01T13:00:00Z';
 const parse=e=>extractFestivalCandidate(JSON.stringify(e),source,at);
 const names=['blink-182','Evanescence','Faith No More','Marilyn Manson','Mötley Crüe','Parkway Drive'];
 const current={slug:'graspop',editionYear:2027,startDate:'2027-06-17',endDate:'2027-06-20',headliners:names,lineup:[],status:'partial',ticketStatus:'unknown'};
+const slash=JSON.parse(fixture('slash-announcement.json'));
+const slashName='Slash ft. Myles Kennedy & The Conspirators';
+const withSlash=()=>{
+ const e=envelope();
+ e.home=e.home.replace('</main>',slash.newsCard+'</main>');
+ e.roster=e.roster.replace('</ol>',slash.artistCard+'</ol>');
+ e.articles.push({url:slash.url,html:slash.article});
+ return e;
+};
+
+test('real seventh headline announcement matches roster ft. to article feat. without renaming the official act',()=>{
+ const c=parse(withSlash());
+ assert.deepEqual(c.headliners,[...names,slashName]);assert.deepEqual(c.warnings,[]);
+ const r=evaluateCandidate(current,c);
+ assert.deepEqual(r.reviewReasons,[]);assert.equal(r.publishable,true);
+ assert.equal(r.changes.length,1);assert.equal(r.changes[0].kind,'headliner_added');
+ assert.equal(c.ticketStatus,undefined);assert.equal(c.ticketsUrl,undefined);
+});
+test('featuring abbreviations generalize, while collaborator, image, day and edition mismatches stay gated',()=>{
+ for(const marker of ['ft.','ft','feat','featuring']){
+  const e=withSlash();e.articles.at(-1).html=e.articles.at(-1).html.replace('Slash feat. Myles','Slash '+marker+' Myles');
+  assert.deepEqual(parse(e).headliners,[...names,slashName]);
+ }
+ for(const mutate of [
+  e=>e.articles.at(-1).html=e.articles.at(-1).html.replace('Slash feat. Myles Kennedy','Slash feat. Another Singer'),
+  e=>e.roster=e.roster.replaceAll('1d6cb52f2c6b08c28759c4740ac8806634175b32','b'.repeat(40)),
+  e=>e.articles.at(-1).html=e.articles.at(-1).html.replaceAll('Sunday 20 June','Saturday 19 June'),
+  e=>e.articles.at(-1).html=e.articles.at(-1).html.replaceAll('2027','2026'),
+  e=>e.articles.at(-1).html=e.articles.at(-1).html.replace('are set to headline','will not perform; are set to headline'),
+ ]){
+  const e=withSlash();mutate(e);const c=parse(e);
+  assert.equal(c.headliners,undefined);assert.ok(c.warnings.length);
+  assert.ok(evaluateCandidate(current,c).reviewReasons.length);
+ }
+});
 
 test('real FAQ, homepage, roster and six own-edition news excerpts give explicitly corroborated headlines',()=>{
  const c=parse(envelope());assert.deepEqual(c.headliners,names);assert.equal(c.startDate,'2027-06-17');assert.equal(c.endDate,'2027-06-20');assert.equal(c.artistListMode,'additive');assert.equal(c.lineupScope,'announcement');assert.equal(c.status,'partial');assert.deepEqual(c.observedEditionYears,[2027]);assert.deepEqual(c.warnings,[]);
