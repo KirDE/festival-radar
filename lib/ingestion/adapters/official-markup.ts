@@ -1,3 +1,4 @@
+import { heavyWeekEnd } from "./heavy-weekend.ts";
 import { pinkpop } from "./pinkpop.ts";
 import { tuska } from "./tuska.ts";
 import { leyendas } from "./leyendas.ts";
@@ -474,6 +475,7 @@ const adapters: Record<string, (html: string, source: FestivalSource, fetchedAt:
   "pinkpop": pinkpop,
   "rock-am-ring": ringAndPark,
   "rock-for-people": rockForPeople,
+  "heavy-weekend": heavyWeekEnd,
   "rock-im-park": ringAndPark,
   "southside": fkpLineup,
   "tons-of-rock": tonsOfRock,

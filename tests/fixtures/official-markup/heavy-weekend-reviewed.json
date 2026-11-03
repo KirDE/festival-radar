@@ -1,0 +1,23 @@
+{
+  "startDate": "2027-06-04",
+  "endDate": "2027-06-06",
+  "status": "partial",
+  "ticketStatus": "available",
+  "ticketsUrl": "https://widget.weezevent.com/ticket/734dcd1a-6e7c-4465-b353-3bd5dcddd20b?locale=fr-fr",
+  "headliners": [],
+  "lineup": [
+    "Helloween",
+    "Amon Amarth",
+    "Kreator",
+    "British Lion",
+    "Falling In Reverse",
+    "Blue Medusa",
+    "Escape The Fate",
+    "Marilyn Manson",
+    "Slash featuring Myles Kennedy and The Conspirators",
+    "The Cult",
+    "Jayler"
+  ],
+  "slug": "heavy-weekend",
+  "editionYear": 2027
+}
