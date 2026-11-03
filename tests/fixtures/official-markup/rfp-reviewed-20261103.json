@@ -1,0 +1,29 @@
+{
+  "startDate": "2027-06-02",
+  "endDate": "2027-06-05",
+  "status": "partial",
+  "ticketStatus": "unknown",
+  "headliners": [
+    "blink-182",
+    "Faith No More"
+  ],
+  "lineup": [
+    "Architects",
+    "Billy Talent",
+    "Killswitch Engage",
+    "Motionless In White",
+    "Napalm Death",
+    "Neck Deep",
+    "Beach Bunny",
+    "Blue Medusa",
+    "Fat Dog",
+    "From Ashes To New",
+    "Guilt Trip",
+    "Holding Absence",
+    "Sleeping With Sirens",
+    "Static-X",
+    "Wage War"
+  ],
+  "slug": "rock-for-people",
+  "editionYear": 2027
+}

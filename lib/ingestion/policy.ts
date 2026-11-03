@@ -59,9 +59,9 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     !(unchangedCopenhell && warning === COPENHELL_REVIEW) &&
     !(unchangedLeyendas && warning === LEYENDAS_ARTIST_REVIEW) &&
     !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
-  // Known, unchanged Dynamo/Tons of Rock facts are successful quiet checks. New performers
+  // Known, unchanged Dynamo/Tons of Rock/Rock for People facts are successful quiet checks. New performers
   // still need agent review: their publication would enqueue provider work.
-  if (["dynamo-metal-fest", "tons-of-rock"].includes(current.slug) && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))
+  if (["dynamo-metal-fest", "tons-of-rock", "rock-for-people"].includes(current.slug) && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))
     reviewReasons.add("Agent review required before lineup-triggered provider activity");
   if (candidate.festivalSlug === "impericon" && candidate.sourceUrl === "https://www.impericon.com/pages/festival" &&
     candidate.headliners?.some(name => current.lineup.some(old => old.toLowerCase() === name.toLowerCase())))

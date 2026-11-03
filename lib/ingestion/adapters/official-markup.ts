@@ -146,7 +146,9 @@ function rockForPeople(html: string): AdapterResult | undefined {
 
     let pathname: string;
     try {
-      pathname = new URL(href, "https://rockforpeople.cz/").pathname;
+      const target = new URL(href, "https://rockforpeople.cz/");
+      if (target.origin !== "https://rockforpeople.cz" || target.username || target.password || target.search || target.hash) continue;
+      pathname = target.pathname;
     } catch {
       continue;
     }
@@ -161,7 +163,9 @@ function rockForPeople(html: string): AdapterResult | undefined {
     if (excerpt === edition?.[0]) excerpt = `${edition?.[0]} ${match[0]}`;
   }
   if (headliners.length === 0 || lineup.length === 0) return undefined;
-  return { editionYear, headliners, lineup, status: "partial", excerpt };
+  // This is a rolling partial announcement, not proof that an absent
+  // reviewed booking has been cancelled or that the final bill is complete.
+  return { editionYear, headliners, lineup, status: "partial", artistListMode: "additive", lineupScope: "announcement", excerpt };
 }
 
 function meraLuna(html: string): AdapterResult | undefined {
