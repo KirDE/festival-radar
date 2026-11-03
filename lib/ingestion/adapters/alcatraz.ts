@@ -17,7 +17,7 @@ export function extractAlcatrazCandidate(html: string, source: FestivalSource, f
       !/^\/(?:[a-z]{2}\/(?:index|tickets)?\/?)?$/.test(page.pathname)) return fail("unsupported official page");
   const document = html.replace(/<!--[\s\S]*?-->/g, " ").replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ");
   const title = plain(document.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "");
-  const titleYear = title.match(/\bAlcatraz Open Air\s+(20\d{2})\b/i)?.[1];
+  const titleYear = title.match(/\bAlcatraz(?: Open Air)?\s+(20\d{2})\b/i)?.[1];
   const banners = [...document.matchAll(/<section\b[^>]*class=["'][^"']*\btop-banner\b[^"']*["'][^>]*>([\s\S]*?)<\/section>/gi)];
   const dates = banners.flatMap(banner => [...banner[1].matchAll(/<span\b[^>]*class=["'][^"']*\bnavbar-text\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi)])
     .map(match => plain(match[1])).filter(text => /\b20\d{2}\b/.test(text));
