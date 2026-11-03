@@ -63,3 +63,23 @@ test("corrected catalogue stays unchanged with verified partial artists preserve
   assert.deepEqual(result.changes, []);
   assert.deepEqual(result.reviewReasons, []);
 });
+
+const shortTitle = await readFile(new URL('./fixtures/official-markup/alcatraz-short-title.html', import.meta.url), 'utf8');
+test('November official short title retains verified dates and tickets without inventing lineup or stock', () => {
+  const c=parse(shortTitle);
+  assert.equal(c.startDate,'2027-08-05');assert.equal(c.endDate,'2027-08-08');
+  assert.equal(c.ticketsUrl,'https://www.alcatraz.be/en/tickets');
+  assert.deepEqual(c.observedEditionYears,[2027]);assert.deepEqual(c.warnings,[]);
+  for(const field of ['lineup','headliners','status','ticketStatus'])assert.equal(c[field],undefined);
+  const current={slug:'alcatraz',editionYear:2027,startDate:'2027-08-05',endDate:'2027-08-08',status:'tba',ticketStatus:'unknown',ticketsUrl:'https://www.alcatraz.be/en/tickets',headliners:[],lineup:[]};
+  const evaluated=evaluateCandidate(current,c);
+  assert.deepEqual(evaluated.changes,[]);assert.deepEqual(evaluated.reviewReasons,[]);assert.equal(evaluated.publishable,false);
+});
+test('short title remains edition-bound and future edition dates are not hardcoded', () => {
+  const later=shortTitle.replaceAll('2027','2028').replace('August 5.6.7.8','July 12.13.14.15');
+  const c=parse(later,{editionYear:2028});
+  assert.equal(c.startDate,'2028-07-12');assert.equal(c.endDate,'2028-07-15');assert.deepEqual(c.warnings,[]);
+  for(const html of [shortTitle.replace('Alcatraz 2027','Alcatraz 2026'),shortTitle.replace('Alcatraz 2027','Other Festival 2027'),shortTitle.replace('top-banner','archive-banner'),shortTitle.replace('August 5.6.7.8','August 5.7.8'),later]){
+    assert.equal(parse(html).startDate,undefined);assert.ok(parse(html).warnings.length>0);
+  }
+});
