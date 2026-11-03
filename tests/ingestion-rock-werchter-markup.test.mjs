@@ -104,3 +104,8 @@ test('current carousel remains dynamic but rejects stale years, invalid dates, f
   assert.ok(!extract(html.replaceAll('splide__slide','archived-slide')).lineup);
   assert.equal(extract(html + fixture('home-en').replaceAll('2027','2028')).startDate,undefined);
 });
+
+test('carousel day announcements cannot inherit an explicitly archived URL', () => {
+ const html=fixture('current-en').replace('sam-fender-closes-the-main-stage-on-saturday-3-july', 'sam-fender-closes-the-main-stage-2026');
+ assert.ok(!extract(html).lineup.includes('Sam Fender'));
+});

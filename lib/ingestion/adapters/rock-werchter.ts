@@ -48,7 +48,7 @@ export function rockWerchter(html: string, source: FestivalSource, fetchedAt: st
     const currentSlide = bannerDates && /data-current-slide="true"/.test(card[1]);
     const slideTitle = currentSlide && !/20\d{2}/.test(title) && (!/20\d{2}/.test(url.pathname) || url.pathname.endsWith(String(source.editionYear)))
       ? title.replace(/[!]+$/, "").match(/^(.+?)\s+(?:at Rock Werchter|op Rock Werchter|make their return at Rock Werchter|maakt zijn return op Rock Werchter|confirmed for Rock Werchter|komt naar Rock Werchter)$/i) : null;
-    const dayTitle = currentSlide && !/20\d{2}/.test(title)
+    const dayTitle = currentSlide && !/20\d{2}/.test(title) && (!/20\d{2}/.test(url.pathname) || url.pathname.endsWith(String(source.editionYear)))
       ? title.match(/^(.+?)\s+(?:closes the Main Stage on|sluit de Main Stage af op|at Rock Werchter on)\s+\w+\s+(\d{1,2})\s+(\w+)$/i) : null;
     const validDay = dayTitle && days.includes(Number(dayTitle[2])) && monthNumber(dayTitle[3]) === month;
     const name = matched && Number(matched[2]) === source.editionYear && url.pathname.endsWith(String(source.editionYear))
