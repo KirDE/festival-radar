@@ -79,3 +79,33 @@ test("legacy generic source still reviews genuinely unsupported documents", () =
   assert.deepEqual(c.evidence, []);
   assert.ok(c.warnings.includes("No JSON-LD Event was found"));
 });
+
+for (const lang of ['en', 'nl']) test(`November ${lang} homepage: header dates and rotating current carousel`, () => {
+  const c = extract(fixture(`current-${lang}`), '2026-11-03T12:00:00Z', {...source, strategies:['json_ld_event','html_fallback']});
+  assert.equal(c.startDate, '2027-07-01');
+  assert.equal(c.endDate, '2027-07-04');
+  assert.deepEqual(c.headliners, ['Tame Impala']);
+  assert.deepEqual(c.lineup.map(x=>x.toLowerCase()).sort(), ['nothing but thieves','massive attack','turnstile','sam fender','angèle','muse','sombr'].sort());
+  assert.equal(c.artistListMode, 'additive');
+  assert.equal(c.status, 'partial');
+  assert.deepEqual(c.warnings, []);
+  assert.equal(c.ticketStatus, undefined);
+  const result = evaluateCandidate({slug:source.festivalSlug,editionYear:2027,startDate:'2027-07-01',endDate:'2027-07-04',status:'partial',ticketStatus:'unavailable',headliners:['Tame Impala'],lineup:['SOMBR','Earlier Artist']},c);
+  assert.equal(result.changes.filter(x=>x.kind==='artist_added').length, 6);
+  assert.ok(!result.changes.some(x=>x.kind.includes('removed')));
+});
+test('current carousel remains dynamic but rejects stale years, invalid dates, foreign URLs and archived cards', () => {
+  const html=fixture('current-en');
+  assert.ok(extract(html.replaceAll('Massive Attack','Later Artist')).lineup.includes('Later Artist'));
+  assert.equal(extract(html.replace('1-2-3-4 July 2027','1-2-3-4 July 2026')).startDate,undefined);
+  assert.equal(extract(html.replace('1-2-3-4 July','1-3-4 July')).startDate,undefined);
+  assert.ok(!extract(html.replaceAll('https://www.rockwerchter.be/en/news/','https://evil.example/en/news/')).lineup);
+  assert.ok(!extract(html.replaceAll('Massive Attack make their return at Rock Werchter','Massive Attack at Rock Werchter 2026')).lineup.includes('Massive Attack'));
+  assert.ok(!extract(html.replaceAll('splide__slide','archived-slide')).lineup);
+  assert.equal(extract(html + fixture('home-en').replaceAll('2027','2028')).startDate,undefined);
+});
+
+test('carousel day announcements cannot inherit an explicitly archived URL', () => {
+ const html=fixture('current-en').replace('sam-fender-closes-the-main-stage-on-saturday-3-july', 'sam-fender-closes-the-main-stage-2026');
+ assert.ok(!extract(html).lineup.includes('Sam Fender'));
+});
