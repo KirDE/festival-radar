@@ -68,8 +68,14 @@ async function persist(value: IngestionResult) {
 
 test.before(async () => {
   const rockharz = { ...catalogSeed.festivals[0], slug: "rockharz", name: "Synthetic Rockharz", city: "Ballenstedt", headliners: [], lineup: [], startDate: "2027-07-07", endDate: "2027-07-10" };
+  const rfp = JSON.parse(await readFile(new URL('./fixtures/official-markup/rfp-reviewed-20261103.json', import.meta.url), 'utf8'));
+  const rfpFestival = {...rockharz, ...rfp, name:'Synthetic Rock for People'};
   const graspop={...rockharz,slug:'graspop',name:'Synthetic Graspop',status:'tba' as const,startDate:'2027-06-17',endDate:'2027-06-20'};
-  await seedCatalog(db, { ...catalogSeed, festivals: [...catalogSeed.festivals, rockharz, {...rockharz,slug:"idays",name:"Synthetic I-Days"},graspop], editions: [...catalogSeed.editions,
+  const rfpArtists = [...rfp.headliners, ...rfp.lineup].map((name: string) => ({
+    ...catalogSeed.artists[0], name, slug: name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+  }));
+  await seedCatalog(db, { ...catalogSeed, artists:[...catalogSeed.artists,...rfpArtists], festivals: [...catalogSeed.festivals, rfpFestival, rockharz, {...rockharz,slug:"idays",name:"Synthetic I-Days"},graspop], editions: [...catalogSeed.editions,
+    { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rfpFestival, recordState: "current" as const },
     { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, recordState: "current" as const },
     { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, slug:"idays", recordState: "current" as const },
     { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...graspop, completeness:'tba' as const, recordState: "current" as const }],
@@ -447,4 +453,24 @@ test('Graspop provenance, edition, mode, persisted-value, requested-source and r
   await assert.rejects(publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix}),/Graspop publication requires|Candidate edition 2026 does not match catalogue edition 2027/);
   assert.deepEqual(await counts(),before);assert.equal((await db.ingestionCandidate.findUniqueOrThrow({where:{attemptId:attempt.id}})).reviewState,'PENDING');
  }
+});
+
+
+test('RFP official additions publish once, retain Neck Deep and queue normal playlist work', async()=>{
+  const current=JSON.parse(await readFile(new URL('./fixtures/official-markup/rfp-reviewed-20261103.json',import.meta.url),'utf8'));
+  const html=await readFile(new URL('./fixtures/official-markup/rfp-current-20261103.html',import.meta.url),'utf8');
+  const candidate=extractFestivalCandidate(html,parserSource('rock-for-people',{url:'https://rockforpeople.cz/'}),new Date().toISOString());
+  const value=evaluateCandidate(current,candidate);
+  assert.equal(value.publishable,true);assert.equal(value.changes.length,46);
+  const attempt=await persist(value);
+  const publication=await publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix});
+  assert.ok(publication?.playlistRefreshRequested);
+  const edition=await db.festivalEdition.findFirstOrThrow({where:{festival:{slug:current.slug},recordState:'CURRENT'},include:{lineup:{include:{artist:true}}}});
+  assert.equal(edition.lineup.length,63);assert.ok(edition.lineup.some(x=>x.artist.name==='Neck Deep'));
+  assert.equal(await db.catalogPlaylistRefresh.count({where:{publicationId:publication.id}}),1);
+  const again=await publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix});
+  assert.equal(again?.id,publication.id);
+  assert.equal(await db.catalogPlaylistRefresh.count({where:{publicationId:publication.id}}),1);
+  const full={...current,headliners:edition.lineup.filter(x=>x.billing==='HEADLINER').map(x=>x.artist.name),lineup:edition.lineup.filter(x=>x.billing!=='HEADLINER').map(x=>x.artist.name)};
+  assert.deepEqual(evaluateCandidate(full,candidate).changes,[]);
 });

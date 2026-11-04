@@ -59,10 +59,26 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     !(unchangedCopenhell && warning === COPENHELL_REVIEW) &&
     !(unchangedLeyendas && warning === LEYENDAS_ARTIST_REVIEW) &&
     !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
-  // Known, unchanged Dynamo/Tons of Rock/Rock for People facts are successful quiet checks. New performers
-  // still need agent review: their publication would enqueue provider work.
-  if (["dynamo-metal-fest", "tons-of-rock", "rock-for-people", "heavy-weekend"].includes(current.slug) && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))
+  // Dynamo/Tons of Rock/Heavy Week-End retain their separate provider policy.
+  if (["dynamo-metal-fest", "tons-of-rock", "heavy-weekend"].includes(current.slug) && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))
     reviewReasons.add("Agent review required before lineup-triggered provider activity");
+  // Verified official RFP announcements may use normal publication/playlist
+  // processing. A successful parse alone is not enough: keep provenance,
+  // edition, additive semantics and ambiguous billing checks.
+  if (current.slug === "rock-for-people" && changes.some(change =>
+    change.kind === "artist_added" || change.kind === "headliner_added")) {
+    const official = candidate.sourceUrl === "https://rockforpeople.cz/" &&
+      candidate.festivalSlug === current.slug && candidate.artistListMode === "additive" &&
+      candidate.lineupScope === "announcement" && candidate.observedEditionYears.length === 1 &&
+      candidate.observedEditionYears[0] === current.editionYear &&
+      changes.filter(change => ["lineup", "headliners"].includes(change.field)).every(change =>
+        ["artist_added", "headliner_added"].includes(change.kind) &&
+        candidate.evidence.some(e => e.field === change.field && e.sourceUrl === candidate.sourceUrl));
+    if (!official) reviewReasons.add("Rock for People additions require verified current official announcement evidence");
+    const supports = new Set([...current.lineup, ...(candidate.lineup ?? [])].map(name => name.toLocaleLowerCase()));
+    if ([...current.headliners, ...(candidate.headliners ?? [])].some(name => supports.has(name.toLocaleLowerCase())))
+      reviewReasons.add("Rock for People billing changes require reviewed reclassification");
+  }
   if (candidate.festivalSlug === "impericon" && candidate.sourceUrl === "https://www.impericon.com/pages/festival" &&
     candidate.headliners?.some(name => current.lineup.some(old => old.toLowerCase() === name.toLowerCase())))
     reviewReasons.add("Impericon billing promotion requires reviewed reclassification");
