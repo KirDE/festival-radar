@@ -26,7 +26,7 @@ export async function sendEmailVerification(user: { email: string }, token: stri
   const response = await fetch(provider, {
     method: "POST",
     headers: { "content-type": "application/json", "idempotency-key": idempotencyKey },
-    body: JSON.stringify({ kind: "email-verification", to: user.email, subject: "Verify your Festival Radar email", text: `Verify this address within 30 minutes: ${confirmation}` }),
+    body: JSON.stringify({ kind: "email-verification", to: user.email, subject: "Verify your Loud Weekend email", text: `Verify this address within 30 minutes: ${confirmation}` }),
   });
   if (!response.ok) throw new Error(`Email provider returned ${response.status}`);
 }

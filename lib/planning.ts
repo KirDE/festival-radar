@@ -41,7 +41,7 @@ export function calendarFile(items: Festival[]) {
       "END:VEVENT",
     ];
   });
-  return ["BEGIN:VCALENDAR", "VERSION:2.0", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "PRODID:-//Festival Radar//European Festivals//EN", ...events, "END:VCALENDAR"].join("\r\n");
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "PRODID:-//Loud Weekend//European Festivals//EN", ...events, "END:VCALENDAR"].join("\r\n");
 }
 
 export function calendarUrls(item: Festival) {

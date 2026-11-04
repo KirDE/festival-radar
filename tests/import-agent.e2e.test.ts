@@ -558,7 +558,7 @@ test('correction atomically creates deduplicated parser repair; leased completio
  const claim=await claimParserRepair(db,repairId);
  await assert.rejects(claimParserRepair(db,repairId),/busy/);
  await assert.rejects(finishParserRepair(db,repairId,randomUUID(),{status:'retry',reason:'Synthetic stale worker retry'}),/busy/);
- const result={status:'completed' as const,reason:'Fixture reproduces corrected extraction and release verified',prUrl:'https://github.com/KirDE/festival-radar/pull/999',commit:'a'.repeat(40)};
+ const result={status:'completed' as const,reason:'Fixture reproduces corrected extraction and release verified',prUrl:'https://github.com/KirDE/loud-weekend/pull/999',commit:'a'.repeat(40)};
  assert.equal((await finishParserRepair(db,repairId,claim.leaseToken,result)).status,'completed');
  assert.equal((await finishParserRepair(db,repairId,claim.leaseToken,result)).status,'completed');
  assert.ok(!(await listParserRepairs(db)).issues.some((j:any)=>j.repairId===receipt.parserRepairId));

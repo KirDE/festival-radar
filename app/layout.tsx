@@ -10,15 +10,15 @@ import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://festivals.kir-it.de"),
-  title: { default: "Festival Radar 2027", template: "%s · Festival Radar" },
+  metadataBase: new URL("https://loudweekend.eu"),
+  title: { default: "Loud Weekend 2027", template: "%s · Loud Weekend" },
   description:
     "Europe's rock and metal festivals: dates, lineups, tickets, playlists and setlists.",
   manifest: "/manifest.webmanifest",
   alternates: { canonical: "/" },
   robots: { index: true, follow: true },
   openGraph: {
-    title: "Festival Radar 2027",
+    title: "Loud Weekend 2027",
     description: "50 European rock and metal festivals in one place.",
     type: "website",
   },

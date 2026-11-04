@@ -57,7 +57,7 @@ cleanup_install() {
 trap cleanup_install EXIT
 app_root="${APP_ROOT:-/opt/festival-radar}"
 service="${SERVICE_NAME:-festival-radar}"
-domain="${APP_DOMAIN:-festivals.kir-it.de}"
+domain="${APP_DOMAIN:-loudweekend.eu}"
 port="${PORT:-3100}"
 release="$app_root/releases/$commit"
 shared="$app_root/shared"
@@ -177,7 +177,7 @@ playlist_install_quiesce_other
 
 cat > "/etc/systemd/system/$service.service" <<UNIT
 [Unit]
-Description=Festival Radar Next.js application
+Description=Loud Weekend Next.js application
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -207,7 +207,7 @@ UNIT
 # security boundary. No timer or enablement.
 cat > "$db_due_unit" <<UNIT
 [Unit]
-Description=Manual Festival Radar DB due operation %i
+Description=Manual Loud Weekend DB due operation %i
 After=postgresql.service
 
 [Service]
@@ -233,7 +233,7 @@ install -o root -g root -m 0755 "$release/scripts/deploy/db-due-scheduler" /usr/
 install -o root -g root -m 0755 "$release/scripts/deploy/check-db-due-tick-ready" /usr/local/libexec/festival-radar/check-db-due-tick-ready
 cat > "/etc/systemd/system/$service-db-due-scheduler.service" <<UNIT
 [Unit]
-Description=Serialized bounded Festival Radar DB due tick
+Description=Serialized bounded Loud Weekend DB due tick
 After=postgresql.service
 [Service]
 Type=oneshot
@@ -248,7 +248,7 @@ StandardError=null
 UNIT
 cat > "/etc/systemd/system/$service-db-due.timer" <<UNIT
 [Unit]
-Description=Opt-in Festival Radar DB due schedule
+Description=Opt-in Loud Weekend DB due schedule
 [Timer]
 OnBootSec=10min
 OnUnitInactiveSec=10min
@@ -261,7 +261,7 @@ UNIT
 
 cat > "/etc/systemd/system/$service-collection@.service" <<UNIT
 [Unit]
-Description=Festival Radar production collection job %i
+Description=Loud Weekend production collection job %i
 After=network-online.target $service.service
 Requires=$service.service
 [Service]
@@ -287,7 +287,7 @@ install_collection_timer() {
   local job="$1" calendar="$2"
   cat > "/etc/systemd/system/$service-collection-$job.timer" <<UNIT
 [Unit]
-Description=Schedule Festival Radar collection job $job
+Description=Schedule Loud Weekend collection job $job
 [Timer]
 OnCalendar=$calendar
 Persistent=true
@@ -307,7 +307,7 @@ install_collection_timer source-monitor '*-*-01,04,07,10,13,16,19,22,25,28 04:17
 
 cat > "/etc/systemd/system/$service-notifications.service" <<UNIT
 [Unit]
-Description=Festival Radar notification dispatcher
+Description=Loud Weekend notification dispatcher
 After=$service.service
 Requires=$service.service
 
@@ -327,7 +327,7 @@ UNIT
 
 cat > "/etc/systemd/system/$service-notifications.timer" <<UNIT
 [Unit]
-Description=Dispatch Festival Radar notifications every ten minutes
+Description=Dispatch Loud Weekend notifications every ten minutes
 
 [Timer]
 OnBootSec=2min
@@ -342,7 +342,7 @@ UNIT
 
 cat > "/etc/systemd/system/$service-analytics-retention.service" <<UNIT
 [Unit]
-Description=Festival Radar privacy analytics retention
+Description=Loud Weekend privacy analytics retention
 After=$service.service
 Requires=$service.service
 
@@ -363,7 +363,7 @@ UNIT
 
 cat > "/etc/systemd/system/$service-analytics-retention.timer" <<UNIT
 [Unit]
-Description=Prune Festival Radar privacy analytics daily
+Description=Prune Loud Weekend privacy analytics daily
 
 [Timer]
 OnCalendar=*-*-* 03:17:00 UTC

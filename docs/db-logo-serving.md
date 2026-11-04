@@ -80,7 +80,7 @@ including MIME, bytes, ETag/304, invalid paths and missing-binding/static-fallba
 behavior. The revised E2E test passed again after a readiness-gated fresh restore;
 the disposable container was removed.
 
-Read-only production verify workflow [37332030276](https://github.com/KirDE/festival-radar/actions/runs/37332030276)
+Read-only production verify workflow [37332030276](https://github.com/KirDE/loud-weekend/actions/runs/37332030276)
 reported `mode=verify status=ok sourceFiles=47 existing=47` on exact deployed
 SHA `50402487d1fbb6a0d1fc5aa4526acaf664dc8e4f`. Production had not
 received this route at that milestone; this local UI change does not deploy it.

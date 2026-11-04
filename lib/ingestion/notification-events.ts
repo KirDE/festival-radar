@@ -41,7 +41,7 @@ export function notificationEventsForChanges(festival: Festival, changes: Festiv
       type,
       title: festival.name,
       message: `${type.replaceAll("_", " ").toLocaleLowerCase()}: ${subject}`,
-      url: `https://festivals.kir-it.de/festivals/${festival.slug}`,
+      url: `https://loudweekend.eu/festivals/${festival.slug}`,
       occurredAt,
       payload: { editionYear, change },
     }];

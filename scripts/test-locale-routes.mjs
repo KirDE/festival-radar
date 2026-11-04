@@ -35,8 +35,8 @@ try {
     const html = await response.text();
     assert.match(html, new RegExp(`<html lang="${lang}"`));
     assert.ok(html.includes(visible), `${lang} visible copy is missing`);
-    assert.ok(html.includes(`rel="canonical" href="https://festivals.kir-it.de/${lang}/"`));
-    for (const alternate of ["en", "de", "ru"]) assert.ok(html.includes(`hrefLang="${alternate}" href="https://festivals.kir-it.de/${alternate}/"`));
+    assert.ok(html.includes(`rel="canonical" href="https://loudweekend.eu/${lang}/"`));
+    for (const alternate of ["en", "de", "ru"]) assert.ok(html.includes(`hrefLang="${alternate}" href="https://loudweekend.eu/${alternate}/"`));
     assert.ok(html.includes(`class="brand" href="/"`), `${lang} brand must link to the bare root`);
     assert.ok(html.includes(`href="/planner/"`), `${lang} planner link should not add a locale prefix`);
     assert.ok(html.includes(`href="/submit/"`), `${lang} submission link should not add a locale prefix`);
@@ -61,7 +61,7 @@ try {
       assert.match(notificationsHtml, new RegExp(`<html lang="${lang}"`));
       assert.ok(notificationsHtml.includes(notificationsExpected[lang]), `${lang} notification heading is not localized`);
       assert.ok(notificationsHtml.includes(`href="/notifications/"`), `${lang} notification navigation should use a bare route`);
-      assert.ok(notificationsHtml.includes(`rel="canonical" href="https://festivals.kir-it.de/${lang}/notifications/"`), `${lang} notification canonical URL is missing`);
+      assert.ok(notificationsHtml.includes(`rel="canonical" href="https://loudweekend.eu/${lang}/notifications/"`), `${lang} notification canonical URL is missing`);
     }
 
     const enrichedArtist = await fetch(`${origin}/${lang}/artists/sample-artist/`);

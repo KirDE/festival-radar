@@ -22,10 +22,12 @@ export function ArtistDetail({
       : `${appearances.length} ${festivalWord} ${t("announcedFor")}`;
   return (
     <div className="artistPage">
-      <Link className="back" href="/">
-        ← {t("festivalDirectory")}
-      </Link>
-      <FavoriteButton kind="artist" value={artist.name} />
+      <div className="artistToolbar">
+        <Link className="back" href="/">
+          ← {t("festivalDirectory")}
+        </Link>
+        <FavoriteButton kind="artist" value={artist.name} />
+      </div>
       <div className="artistHero">
         {artist.image ? (
           <img className="artistPortrait" src={artist.image.url} alt={artist.image.alt} width={artist.image.width} height={artist.image.height} />

@@ -40,7 +40,7 @@ export async function createSelectionPlaylist(input: {
   if (!tracks.length) throw new Error("Spotify could not resolve any selected artists");
   const suffix = input.festivals.length === 1 ? input.festivals[0] : `${input.festivals.length} festivals`;
   const playlist = await spotifyJson<{ id: string; external_urls: { spotify: string } }>(request, `https://api.spotify.com/v1/users/${encodeURIComponent(input.spotifyUserId)}/playlists`, {
-    method: "POST", headers, body: JSON.stringify({ name: `Festival Radar · ${suffix}`, description: `One track per deduplicated artist selected in Festival Radar (${artists.length} artists).`, public: false }),
+    method: "POST", headers, body: JSON.stringify({ name: `Loud Weekend · ${suffix}`, description: `One track per deduplicated artist selected in Loud Weekend (${artists.length} artists).`, public: false }),
   });
   for (let index = 0; index < tracks.length; index += 100) {
     await spotifyJson(request, `https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, { method: "POST", headers, body: JSON.stringify({ uris: tracks.slice(index, index + 100) }) });

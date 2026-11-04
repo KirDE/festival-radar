@@ -34,7 +34,7 @@ export function passkeyConfig() {
   if (appUrl.protocol !== "https:" && !(local && appUrl.protocol === "http:")) {
     throw new Error("Passkey authentication requires HTTPS");
   }
-  return { origin: appUrl.origin, rpID: appUrl.hostname, rpName: "Festival Radar" };
+  return { origin: appUrl.origin, rpID: appUrl.hostname, rpName: "Loud Weekend" };
 }
 
 export async function setPasskeyCeremony(ceremony: PendingPasskeyCeremony) {

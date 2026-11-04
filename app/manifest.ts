@@ -4,8 +4,8 @@ export const dynamic = "force-static";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Festival Radar",
-    short_name: "Festival Radar",
+    name: "Loud Weekend",
+    short_name: "Loud Weekend",
     description: "European rock and metal festival dates, lineups and planning tools.",
     start_url: "/",
     display: "standalone",

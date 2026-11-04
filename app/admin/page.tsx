@@ -4,7 +4,7 @@ import { adminSnapshot } from "@/lib/admin-store";
 import { getCatalog } from "@/lib/catalog/repository";
 import { redirect } from "next/navigation";
 
-export const metadata = { title: "Administration | Festival Radar" };
+export const metadata = { title: "Administration | Loud Weekend" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {

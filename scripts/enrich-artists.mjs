@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { publishArtistEnrichment as publishPersistedEnrichment, exactArtistName, validateEnrichmentProfile } from "../lib/catalog/artist-enrichment-publication.ts";
 import { boundedEnrichmentEvidence, migrateEnrichmentState } from "../lib/catalog/artist-enrichment-state.ts";
 import { refreshSpotifyArtistStats, spotifyArtistFetcher } from "../lib/catalog/artist-spotify-stats.ts";
-const userAgent = process.env.MUSICBRAINZ_USER_AGENT || "FestivalRadar/1.0 (https://github.com/KirDE/festival-radar)";
+const userAgent = process.env.MUSICBRAINZ_USER_AGENT || "FestivalRadar/1.0 (https://github.com/KirDE/loud-weekend)";
 const sleep = (ms) => new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 
 function normalized(value) {

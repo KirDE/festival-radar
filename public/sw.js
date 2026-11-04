@@ -1,4 +1,4 @@
-/* Festival Radar public-only service worker. DB catalogue freshness uses its ETag. */
+/* Loud Weekend public-only service worker. DB catalogue freshness uses its ETag. */
 const CACHE_VERSION = "festival-radar-public-v4";
 const CATALOG = "/api/offline/catalog";
 const MAX_ENTRIES = 80;
