@@ -141,3 +141,14 @@ Synthetic checks (no database required):
 ```sh
 node --test tests/ingestion-review-queue.test.mjs
 ```
+
+## Rock for People automatic announcements
+
+Verified additions from the registered `https://rockforpeople.cz/` source now
+use ordinary ingestion publication and the existing playlist refresh queue,
+without an agent review solely because provider work follows. The current
+edition must match a single observed year, the candidate must be an additive
+announcement, and each changed artist field must have same-source evidence.
+Existing warnings, date-change/removal review and ambiguous billing protection
+remain. Missing bookings in partial announcements are retained; a repeated
+import is a no-op. This does not change other festivals' separate provider gates.

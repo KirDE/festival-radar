@@ -63,7 +63,7 @@ test("Rock for People records a mismatched edition marker for publication review
 
 const currentCapture=readFileSync(new URL('./fixtures/official-markup/rfp-current-20261103.html',import.meta.url),'utf8');
 const reviewed=JSON.parse(readFileSync(new URL('./fixtures/official-markup/rfp-reviewed-20261103.json',import.meta.url),'utf8'));
-const extractCurrent=(html=currentCapture)=>extractFestivalCandidate(html,getFestivalSource('rock-for-people'),'2026-11-03T17:47:21Z');
+const extractCurrent=(html=currentCapture)=>extractFestivalCandidate(html,getFestivalSource('rock-for-people',{url:'https://rockforpeople.cz/'}),'2026-11-03T17:47:21Z');
 test('real November62-card partial announcement cannot remove the reviewed missing Neck Deep',()=>{
   const saved=structuredClone(reviewed),c=extractCurrent(),r=evaluateCandidate(saved,c);
   assert.equal(c.headliners.length,3);assert.equal(c.lineup.length,59);
@@ -71,24 +71,49 @@ test('real November62-card partial announcement cannot remove the reviewed missi
   assert.ok(!r.changes.some(x=>x.kind.endsWith('_removed')));
   assert.equal(r.changes.filter(x=>x.kind==='headliner_added').length,1);
   assert.equal(r.changes.filter(x=>x.kind==='artist_added').length,45);
-  assert.equal(r.publishable,false);assert.deepEqual(r.reviewReasons,['Agent review required before lineup-triggered provider activity']);
+  assert.equal(r.publishable,true);assert.deepEqual(r.reviewReasons,[]);
   assert.deepEqual(saved,reviewed);assert.ok(saved.lineup.includes('Neck Deep'));
 });
-test('covered announcements are quiet even with omitted bookings; future names and billing remain reviewed',()=>{
+test('covered announcements are quiet even with omitted bookings; future official additions publish but billing remains reviewed',()=>{
   const c=extractCurrent();const full={...reviewed,headliners:c.headliners,lineup:[...c.lineup,'Neck Deep'],status:'confirmed'};
   const noop=evaluateCandidate(full,c);assert.deepEqual(noop.changes,[]);assert.deepEqual(noop.reviewReasons,[]);assert.equal(noop.publishable,false);
   const later=extractCurrent(currentCapture.replaceAll('Parkway Drive','Later Headliner').replaceAll('Evanescence','Later Artist'));
-  const r=evaluateCandidate(full,later);assert.ok(!r.changes.some(x=>x.kind.endsWith('_removed')));assert.ok(r.changes.some(x=>x.after==='Later Headliner'));assert.ok(r.changes.some(x=>x.after==='Later Artist'));assert.equal(r.publishable,false);
+  const r=evaluateCandidate(full,later);assert.ok(!r.changes.some(x=>x.kind.endsWith('_removed')));assert.ok(r.changes.some(x=>x.after==='Later Headliner'));assert.ok(r.changes.some(x=>x.after==='Later Artist'));assert.equal(r.publishable,true);
   const promotion={...c,headliners:[...c.headliners,'Architects'],lineup:c.lineup.filter(x=>x!=='Architects')};
   assert.equal(evaluateCandidate(full,promotion).publishable,false);
 });
 test('partial card counts are dynamic, official origin is required and default removals stay reviewed',()=>{
   for(const count of [1,4,9]){
     const html=markup.slice(0,markup.indexOf('</a>')+4)+Array.from({length:count},(_,i)=>card('future-'+i,'Future Artist '+i,'UK')).join('');
-    const c=extractCurrent(html);assert.equal(c.lineup.length,count);const r=evaluateCandidate(reviewed,c);assert.ok(!r.changes.some(x=>x.kind.endsWith('_removed')));assert.equal(r.publishable,false);
+    const c=extractCurrent(html);assert.equal(c.lineup.length,count);const r=evaluateCandidate(reviewed,c);assert.ok(!r.changes.some(x=>x.kind.endsWith('_removed')));assert.equal(r.publishable,true);
   }
   const invalid=extractCurrent(currentCapture.replaceAll('https://rockforpeople.cz/lineup/','https://foreign.example/lineup/'));assert.deepEqual(invalid.evidence,[]);
   const c=extractCurrent();delete c.artistListMode;delete c.lineupScope;
   const r=evaluateCandidate(reviewed,c);assert.ok(r.changes.some(x=>x.kind==='artist_removed'&&x.before==='Neck Deep'&&x.reviewRequired));assert.equal(r.publishable,false);
   assert.ok(evaluateCandidate(reviewed,extractCurrent(currentCapture.replaceAll('2027','2026'))).reviewReasons.some(x=>x.includes('does not match catalogue edition')));
+});
+
+
+test('RFP auto-publication retains provenance, edition and destructive-change gates',()=>{
+  const c=extractCurrent();
+  for(const mutate of [
+    x=>{x.sourceUrl='https://foreign.example/';},
+    x=>{x.evidence=x.evidence.filter(e=>e.field!=='lineup');},
+    x=>{x.evidence=x.evidence.map(e=>({...e,sourceUrl:'https://foreign.example/'}));},
+    x=>{x.observedEditionYears=[2026];},
+    x=>{x.observedEditionYears=[];},
+    x=>{x.observedEditionYears=[2027,2028];},
+    x=>{delete x.artistListMode;},
+    x=>{delete x.lineupScope;},
+    x=>{x.warnings.push('Unverified announcement coverage');},
+    x=>{x.startDate='2027-06-01';},
+  ]){
+    const invalid=structuredClone(c);mutate(invalid);
+    assert.equal(evaluateCandidate({...reviewed,startDate:'2027-06-09'},invalid).publishable,false);
+  }
+  const normal=evaluateCandidate(reviewed,c);
+  const accepted={...reviewed,headliners:[...reviewed.headliners,...normal.changes.filter(x=>x.kind==='headliner_added').map(x=>x.after)],lineup:[...reviewed.lineup,...normal.changes.filter(x=>x.kind==='artist_added').map(x=>x.after)]};
+  assert.equal(accepted.headliners.length+accepted.lineup.length,63);
+  assert.ok(accepted.lineup.includes('Neck Deep'));
+  const rerun=evaluateCandidate(accepted,c);assert.deepEqual(rerun.changes,[]);assert.deepEqual(rerun.reviewReasons,[]);
 });
