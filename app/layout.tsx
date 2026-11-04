@@ -17,9 +17,10 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   alternates: { canonical: "/" },
   robots: { index: true, follow: true },
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml", sizes: "any" }] },
   openGraph: {
     title: "Loud Weekend 2027",
-    description: "50 European rock and metal festivals in one place.",
+    description: "European rock and metal festivals: dates, lineups, tickets, playlists and setlists.",
     type: "website",
   },
 };
