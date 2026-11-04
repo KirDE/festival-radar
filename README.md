@@ -1,6 +1,6 @@
-# Festival Radar
+# Loud Weekend
 
-Festival Radar is a public discovery app for European rock and metal festivals,
+Loud Weekend is a public discovery app for European rock and metal festivals,
 with dates, lineups, official ticket links, artist pages, playlists and setlists.
 It also contains the playlist-generation engine that seeds listening links from
 recent setlist.fm songs and streaming-platform catalogue matches.
@@ -9,7 +9,7 @@ See [the product status and gap inventory](docs/product-status.md) for the
 deployed function set and the production-verified gaps against the original
 concept.
 
-The static MVP for [festivals.kir-it.de](https://festivals.kir-it.de) includes 50 European festivals,
+The static MVP for [loudweekend.eu](https://loudweekend.eu) includes 50 European festivals,
 filterable cards, festival details, artist pages and links to official ticket,
 Spotify and setlist.fm resources.
 
@@ -168,7 +168,7 @@ verify accepted counts without visitor data:
 
 ```bash
 curl -fsS -H "Authorization: Bearer $ANALYTICS_OPERATOR_TOKEN" \
-  "https://festivals.kir-it.de/api/analytics/page-view/?days=7"
+  "https://loudweekend.eu/api/analytics/page-view/?days=7"
 ```
 
 The response contains only the time window, total views and aggregate rows.

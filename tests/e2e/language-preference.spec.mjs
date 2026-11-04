@@ -18,7 +18,7 @@ test("[no-db] prefixed switch preserves query/hash and preference survives reloa
   await page.goto("/en/submit/?filter=keep&filter=second#main-content");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   for (const language of ["de", "ru", "en", "ru"]) await switchWithoutNavigation(page, language);
-  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://festivals.kir-it.de/en/submit/");
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://loudweekend.eu/en/submit/");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Предложить фестиваль");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "ru");

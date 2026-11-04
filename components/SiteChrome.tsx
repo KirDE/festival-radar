@@ -9,14 +9,14 @@ export function SiteHeader() {
   return (
     <header className="siteHeader">
       <Link className="brand" href="/">
-        <span className="brandMark">FR</span>
-        <span>Festival Radar</span>
+        <span className="brandMark">LW</span>
+        <span>Loud Weekend</span>
       </Link>
       <nav>
         <Link href="/">{t("festivals")}</Link>
         <Link href="/planner/">{t("myPlan")}</Link>
         <Link href="/notifications/">{t("notifications")}</Link>
-        <a href="https://github.com/KirDE/festival-radar">{t("aboutData")}</a>
+        <a href="https://github.com/KirDE/loud-weekend">{t("aboutData")}</a>
       </nav>
       <AccountMenu />
     </header>
@@ -27,7 +27,7 @@ export function SiteFooter() {
   const { language, setLanguage, t } = useLanguage();
   return (
     <footer>
-      <span>Festival Radar · {t("region")}</span>
+      <span>Loud Weekend · {t("region")}</span>
       <span>{t("footerNote")} · {t("privacy")}</span>
       <Link href="/submit/">{t("submitFestival")}</Link>
       <label className="languagePicker">

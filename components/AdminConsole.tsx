@@ -68,7 +68,7 @@ export function AdminConsole({ festivals, initialChanges, parserRuns, auditEntri
   const pendingSubmissions = submissions.filter((item) => item.status === "pending").length;
   return <div className="adminShell">
     <nav className="adminNav" aria-label={ta("navigation")}>
-      <div><div className="eyebrow">Festival Radar</div><h1>{ta("console")}</h1><p>{ta("subtitle")}</p></div>
+      <div><div className="eyebrow">Loud Weekend</div><h1>{ta("console")}</h1><p>{ta("subtitle")}</p></div>
       {(["review", "submissions", "content", "assets", "diagnostics", "audit"] as Section[]).map((id) => <button type="button" key={id} className={section === id ? "active" : ""} aria-current={section === id ? "page" : undefined} onClick={() => setSection(id)}>{ta(id)}{id === "review" && <b aria-label={`${pending} ${ta("pendingCount")}`}>{pending}</b>}{id === "submissions" && <b>{pendingSubmissions}</b>}</button>)}
       <label className="adminLanguage"><span>{ta("language")}</span><select value={language} onChange={(event) => setLanguage(event.target.value as Language)}><option value="en">English</option><option value="de">Deutsch</option><option value="ru">Русский</option></select></label>
       <a href="/">← {ta("publicSite")}</a>

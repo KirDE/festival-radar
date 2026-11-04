@@ -46,7 +46,7 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
           accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
           "accept-language": "en-GB,en;q=0.8",
           "cache-control": "no-cache",
-          "user-agent": "FestivalRadarBot/1.1 (+https://festivals.kir-it.de/; public festival-data monitor)",
+          "user-agent": "LoudWeekendBot/1.1 (+https://loudweekend.eu/; public festival-data monitor)",
           ...source.headers,
           ...requestHeaders,
         },

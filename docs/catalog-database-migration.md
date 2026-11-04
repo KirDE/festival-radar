@@ -6,7 +6,7 @@
 > asset storage, and workers remain the operational paths.
 
 
-Issue [#195](https://github.com/KirDE/festival-radar/issues/195) tracks the staged move from repository data files to PostgreSQL.
+Issue [#195](https://github.com/KirDE/loud-weekend/issues/195) tracks the staged move from repository data files to PostgreSQL.
 
 ## Phase 1: foundation
 

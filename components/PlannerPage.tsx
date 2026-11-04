@@ -120,7 +120,7 @@ export function PlannerPage({ festivals }: { festivals: Festival[] }) {
               <a
                 className="primaryButton"
                 href={`data:text/calendar;charset=utf-8,${encodeURIComponent(calendarFile(dated))}`}
-                download="festival-radar-2027.ics"
+                download="loud-weekend-2027.ics"
               >
                 {t.download}
               </a>
@@ -164,7 +164,7 @@ export function PlannerPage({ festivals }: { festivals: Festival[] }) {
                 <a
                   className="outlineButton"
                   href={`data:text/plain;charset=utf-8,${encodeURIComponent(artists.join("\n"))}`}
-                  download="festival-radar-playlist-artists.txt"
+                  download="loud-weekend-playlist-artists.txt"
                 >
                   {t.downloadArtists}
                 </a>
@@ -191,7 +191,7 @@ function calendarFile(items: Festival[]) {
   const out = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Festival Radar//Trip Planner//EN",
+    "PRODID:-//Loud Weekend//Trip Planner//EN",
     "CALSCALE:GREGORIAN",
   ];
   for (const f of items) {

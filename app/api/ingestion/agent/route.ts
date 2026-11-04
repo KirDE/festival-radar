@@ -29,7 +29,7 @@ const requestSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("repair_claim"), repairId: digest }).strict(),
   z.object({ operation: z.literal("repair_finish"), repairId: digest, leaseToken: z.string().uuid(),
     result: z.object({ status: z.enum(["completed", "retry"]), reason: z.string().min(10).max(2000),
-      prUrl: z.string().regex(/^https:\/\/github\.com\/KirDE\/festival-radar\/pull\/\d+$/).optional(),
+      prUrl: z.string().regex(/^https:\/\/github\.com\/KirDE\/(?:loud-weekend|festival-radar)\/pull\/\d+$/).optional(),
       commit: z.string().regex(/^[a-f0-9]{40}$/).optional() }).strict() }).strict(),
   z
     .object({

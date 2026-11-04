@@ -63,7 +63,11 @@
   font-weight: 800;
   text-decoration: underline;
 }
-.artistPage > .favoriteButton {
+.artistToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
   margin-top: 25px;
 }
 .plannerPage {
@@ -988,6 +992,7 @@ footer {
 }
 .directoryPage > h1 {
   max-width: 1000px;
+  overflow-wrap: anywhere;
   font: clamp(42px, 7vw, 88px)/0.95 "Archivo Black";
   text-transform: uppercase;
   letter-spacing: -0.05em;
@@ -1023,6 +1028,8 @@ footer {
 }
 .submissionForm input,
 .submissionForm textarea {
+  min-width: 0;
+  max-width: 100%;
   padding: 13px;
   border: 1px solid #888;
   background: white;
@@ -1033,6 +1040,7 @@ footer {
 }
 .submissionForm button {
   width: max-content;
+  max-width: 100%;
   border: 0;
   padding: 15px 20px;
   background: var(--ink);
@@ -1281,3 +1289,35 @@ footer {
 .lineupSort { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
 .lineupSort select { max-width: 100%; padding: 0.5rem; font: inherit; }
 .artistStats { margin: 1.5rem 0; }
+
+/* Consistent feedback for public actions, including keyboard interaction. */
+@media (min-width: 601px) and (max-width: 1100px) {
+  .siteHeader { height: auto; min-height: 78px; flex-wrap: wrap; gap: 12px 20px; padding-top: 16px; padding-bottom: 16px; }
+  .siteHeader nav { order: 3; flex-basis: 100%; flex-wrap: wrap; gap: 12px 24px; }
+  .siteHeader .accountMenu { margin-left: auto; max-width: min(48%, 240px); min-width: 0; }
+  .siteHeader .accountButton { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+:is(.favoriteButton:not(.selected), .outlineButton, .accountButton,
+    .accountPopover button:not([aria-selected="true"]), .accountSync button,
+    .notificationPage button, .monthNav button, .search button,
+    .compareTray button, .adminNav button:not(.active),
+    .adminMain button.secondary, .adminMain button.textButton):not(:disabled):is(:hover, :focus-visible) {
+  background: var(--acid);
+  color: var(--ink);
+}
+.favoriteButton.selected:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--ink);
+  color: var(--acid);
+  border-color: var(--ink);
+}
+.primaryButton:not(:disabled):is(:hover, :focus-visible),
+.adminMain button:not(.secondary):not(.textButton):not(:disabled):is(:hover, :focus-visible),
+.adminNav button.active:not(:disabled):is(:hover, :focus-visible),
+.submissionForm button:not(:disabled):focus-visible {
+  background: var(--orange);
+  color: var(--ink);
+}
+button:focus-visible, .outlineButton:focus-visible, .primaryButton:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}

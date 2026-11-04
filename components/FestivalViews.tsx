@@ -22,7 +22,7 @@ export function FestivalViews({ festivals }: { festivals: Festival[] }) {
     <section className="plannerSection" aria-labelledby="festival-calendar-title">
       <div className="viewHeading"><div><div className="eyebrow">{t.dates}</div><h2 id="festival-calendar-title">{t.calendar}</h2></div><div className="monthNav"><button onClick={() => setMonth((month + 11) % 12)} aria-label={t.previous}>←</button><strong>{t.months[month]} 2027</strong><button onClick={() => setMonth((month + 1) % 12)} aria-label={t.next}>→</button></div></div>
       <div className="calendarGrid" role="list">{visible.length ? visible.map((f) => <Link role="listitem" href={`/festivals/${f.slug}/`} key={f.slug}><time dateTime={f.startDate}>{Number(f.startDate!.slice(8,10))}</time><span><strong>{f.name}</strong><small>{f.endDate && f.endDate !== f.startDate ? `${t.until} ${Number(f.endDate.slice(8,10))} ${t.months[month]}` : t.months[month]} · {f.city || f.country}</small></span></Link>) : <p>{t.noDates}</p>}</div>
-      <a className="primaryButton" href={`data:text/calendar;charset=utf-8,${encodeURIComponent(calendarFile(dated))}`} download="festival-radar-2027.ics">{t.download}</a>
+      <a className="primaryButton" href={`data:text/calendar;charset=utf-8,${encodeURIComponent(calendarFile(dated))}`} download="loud-weekend-2027.ics">{t.download}</a>
     </section>
     <section className="plannerSection" aria-labelledby="festival-map-title">
       <div className="viewHeading"><div><div className="eyebrow">{t.area}</div><h2 id="festival-map-title">{t.map}</h2></div><p>{t.mapHelp}</p></div>

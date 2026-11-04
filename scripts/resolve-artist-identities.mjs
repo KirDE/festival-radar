@@ -66,7 +66,7 @@ async function resolveBase(name, token) {
   const spotifyPayload = await requestJson(`https://api.spotify.com/v1/search?type=artist&limit=10&q=${encodeURIComponent(name)}`, { headers: { Authorization: `Bearer ${token}` } });
   const spotify = spotifyPayload.artists.items.map((artist) => ({ id: artist.id, name: artist.name, url: artist.external_urls.spotify, popularity: artist.popularity, exactName: normalize(artist.name) === normalize(name) }));
   await sleep(1100);
-  const headers = { "User-Agent": "FestivalRadar/1.0 (https://github.com/KirDE/festival-radar)" };
+  const headers = { "User-Agent": "FestivalRadar/1.0 (https://github.com/KirDE/loud-weekend)" };
   const payload = await requestJson(`https://musicbrainz.org/ws/2/artist?query=${encodeURIComponent(`artist:\"${name}\"`)}&limit=10&fmt=json`, { headers });
   const musicBrainz = (payload.artists || []).filter((artist) => normalize(artist.name) === normalize(name)).map((artist) => ({ id: artist.id, name: artist.name, disambiguation: artist.disambiguation || "", score: artist.score, spotifyUrls: [], url: `https://musicbrainz.org/artist/${artist.id}` }));
   // Base search is deliberately cheap. Relationship enrichment is a separate phase.
@@ -74,7 +74,7 @@ async function resolveBase(name, token) {
 }
 
 async function enrich(candidate) {
-  const headers = { "User-Agent": "FestivalRadar/1.0 (https://github.com/KirDE/festival-radar)" };
+  const headers = { "User-Agent": "FestivalRadar/1.0 (https://github.com/KirDE/loud-weekend)" };
   const detail = await requestJson(`https://musicbrainz.org/ws/2/artist/${candidate.id}?inc=url-rels+aliases&fmt=json`, { headers });
   return { ...candidate, aliases: (detail.aliases || []).map((alias) => alias.name), spotifyUrls: (detail.relations || []).map((relation) => relation.url?.resource).filter((url) => /^https:\/\/open\.spotify\.com\/artist\/[A-Za-z0-9]{22}\/?$/.test(url || "")) };
 }

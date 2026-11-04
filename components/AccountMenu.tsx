@@ -44,7 +44,7 @@ export function AccountMenu() {
       const result = await response.json();
       if (!response.ok) { setError(authErrorMessage(language, result.error, t.failed)); return; }
       setUser(result.user); setOpen(false);
-      window.dispatchEvent(new CustomEvent("festival-radar-authenticated"));
+      window.dispatchEvent(new CustomEvent("loud-weekend-authenticated"));
     } catch { setError(t.failed); }
     finally { setBusy(false); }
   }
@@ -71,7 +71,7 @@ export function AccountMenu() {
       const verificationResult = await verificationResponse.json();
       if (!verificationResponse.ok) { setError(authErrorMessage(language, verificationResult.error, t.failed)); return; }
       setUser(verificationResult.user); setOpen(false);
-      window.dispatchEvent(new CustomEvent("festival-radar-authenticated"));
+      window.dispatchEvent(new CustomEvent("loud-weekend-authenticated"));
     } catch (reason) {
       setError(reason instanceof DOMException && reason.name === "NotAllowedError"
         ? t.cancelled

@@ -18,7 +18,7 @@ for (let index = 0; index < sources.length; index += 5) {
     try {
       const response = await fetch(source.fetchUrl ?? source.url, {
         redirect: "follow", signal: AbortSignal.timeout(20_000),
-        headers: { "User-Agent": "FestivalRadar/1.0 (+https://festivals.kir-it.de)", ...source.headers },
+        headers: { "User-Agent": "FestivalRadar/1.0 (+https://loudweekend.eu)", ...source.headers },
       });
       if (response.status === 404 || response.status === 410 || response.status >= 500) reviewRequired++;
       else if (response.status === 401 || response.status === 403 || response.status === 429) restricted++;

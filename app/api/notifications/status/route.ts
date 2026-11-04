@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const enrolled = await db.notificationSubscription.findFirst({ where: { userId: user.id, channel: parsed.data.channel, enabled: true } });
     if (!enrolled) return error("Enroll and enable this channel before sending a test.", 409);
   }
-  const event = await db.notificationEvent.create({ data: { dedupeKey: `user-test:${user.id}:${parsed.data.channel}:${Date.now()}`, festivalId: "notification-test", type: "TIMETABLE_PUBLISHED", title: "Festival Radar test", message: "Your notification channel is connected.", occurredAt: new Date() } });
+  const event = await db.notificationEvent.create({ data: { dedupeKey: `user-test:${user.id}:${parsed.data.channel}:${Date.now()}`, festivalId: "notification-test", type: "TIMETABLE_PUBLISHED", title: "Loud Weekend test", message: "Your notification channel is connected.", occurredAt: new Date() } });
   const delivery = await db.notificationDelivery.create({ data: { eventId: event.id, userId: user.id, channel: parsed.data.channel, frequency: NotificationFrequency.IMMEDIATE, status: NotificationStatus.PENDING, nextAttemptAt: new Date() } });
   return Response.json({ queued: true, deliveryId: delivery.id }, { status: 202 });
 }

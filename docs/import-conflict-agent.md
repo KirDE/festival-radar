@@ -14,7 +14,7 @@ Only the private local client configuration contains the token; use mode 0600.
 Example shape (never commit the real file):
 
 ```json
-{"baseUrl":"https://festivals.kir-it.de","token":"<private generated secret>"}
+{"baseUrl":"https://loudweekend.eu","token":"<private generated secret>"}
 ```
 
 GET lists at most ten **ready** cases, with an exact catalog/source/attempt snapshot.

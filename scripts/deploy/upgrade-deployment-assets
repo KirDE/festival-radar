@@ -3,7 +3,7 @@ set -euo pipefail
 
 commit="${1:?usage: upgrade-deployment-assets COMMIT}"
 deploy_user="festival-radar-deploy"
-repository="KirDE/festival-radar"
+repository="KirDE/loud-weekend"
 destination="/usr/local/libexec/festival-radar"
 
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "invalid commit" >&2; exit 2; }

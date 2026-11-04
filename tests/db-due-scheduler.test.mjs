@@ -214,9 +214,9 @@ test('deployment only rearms previously armed DB-due timer after health; schedul
 
 test('DB-due timer is ten minutes with a bounded long-tick stale window', async () => {
   const installer = await readFile('scripts/deploy/install-release.sh', 'utf8');
-  const timer = installer.slice(installer.indexOf('Description=Opt-in Festival Radar DB due schedule'));
+  const timer = installer.slice(installer.indexOf('Description=Opt-in Loud Weekend DB due schedule'));
   assert.match(timer, /OnBootSec=10min\nOnUnitInactiveSec=10min\nAccuracySec=15s/);
-  const timeout = Number(installer.match(/Description=Serialized bounded Festival Radar DB due tick[\s\S]*?TimeoutStartSec=(\d+)/)?.[1]);
+  const timeout = Number(installer.match(/Description=Serialized bounded Loud Weekend DB due tick[\s\S]*?TimeoutStartSec=(\d+)/)?.[1]);
   assert.ok(timeout >= 1100 + 120 + 60 && timeout <= 1400);
   const scheduler = await readFile('scripts/deploy/db-due-scheduler', 'utf8');
   assert.match(scheduler, /now - 10#\$stamp <= 2400/);

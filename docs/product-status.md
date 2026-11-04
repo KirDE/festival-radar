@@ -1,6 +1,6 @@
-# Festival Radar product status
+# Loud Weekend product status
 
-Last verified: 2026-09-02 (production at `https://festivals.kir-it.de`, exact
+Last verified: 2026-09-02 (production at `https://loudweekend.eu`, exact
 commit `95d710b579d17b575a441be8d6fa95e6fe65df08`).
 
 This document is the product-function inventory requested at the end of the
@@ -14,7 +14,7 @@ is still pending or externally blocked.
 
 ## Original concept
 
-Festival Radar is a multilingual public discovery and planning service for
+Loud Weekend is a multilingual public discovery and planning service for
 European rock and metal festivals. The concept combines trustworthy festival
 facts and provenance, search and comparison, personal planning, streaming and
 setlist discovery, timely change notifications, community submissions, and an
@@ -71,9 +71,9 @@ and deploys can be verified and rolled back.
 - Store notification preferences and channel subscriptions, derive events from
   ingestion changes, claim deliveries safely and dispatch authenticated jobs.
 - Dispatch notifications from a production-owned systemd timer every ten
-  minutes. PRs [#139](https://github.com/KirDE/festival-radar/pull/139),
-  [#155](https://github.com/KirDE/festival-radar/pull/155) and
-  [#157](https://github.com/KirDE/festival-radar/pull/157) installed and made
+  minutes. PRs [#139](https://github.com/KirDE/loud-weekend/pull/139),
+  [#155](https://github.com/KirDE/loud-weekend/pull/155) and
+  [#157](https://github.com/KirDE/loud-weekend/pull/157) installed and made
   the timer compatible with the production curl version.
 
 ### Languages, accessibility and offline use
@@ -128,28 +128,28 @@ each sequentially and recorded issue-specific production acceptance.
 
 | Issue and merged implementation | Production status |
 | --- | --- |
-| [#168](https://github.com/KirDE/festival-radar/issues/168) / [PR #170](https://github.com/KirDE/festival-radar/pull/170): database roles on real Admin Console routes | Deployed; full-proxy role acceptance remains pending. |
-| [#126](https://github.com/KirDE/festival-radar/issues/126) / [PR #143](https://github.com/KirDE/festival-radar/pull/143): trusted origins on authenticated mutations | Accepted in production. |
-| [#40](https://github.com/KirDE/festival-radar/issues/40) / [PR #171](https://github.com/KirDE/festival-radar/pull/171): production notification provider readiness | Deployed and fails closed correctly. **External blocker:** no dedicated production delivery-provider credential is configured, so real delivery is not accepted. |
-| [#172](https://github.com/KirDE/festival-radar/issues/172) / [PR #173](https://github.com/KirDE/festival-radar/pull/173): email verification before delivery | API enforcement is accepted. EN/DE/RU notification routes, localized copy, navigation and language switching are accepted after the later [PR #150](https://github.com/KirDE/festival-radar/pull/150) deployment; [#182](https://github.com/KirDE/festival-radar/issues/182) adds the missing post-build route regression. |
-| [#169](https://github.com/KirDE/festival-radar/issues/169) / [PR #174](https://github.com/KirDE/festival-radar/pull/174): suppress analytics ingestion access logs | Deployed; controlled production log-count acceptance remains pending. |
-| [#22](https://github.com/KirDE/festival-radar/issues/22) / [PR #176](https://github.com/KirDE/festival-radar/pull/176): recover persistent source HTTP 403 failures | Accepted in production. |
-| [#175](https://github.com/KirDE/festival-radar/issues/175) / [PR #177](https://github.com/KirDE/festival-radar/pull/177): replace defunct MetalDays with Tolminator 2027 | Accepted by catalogue, route, sitemap and official-source checks. |
-| [#125](https://github.com/KirDE/festival-radar/issues/125) / [PR #158](https://github.com/KirDE/festival-radar/pull/158), repaired by [PR #179](https://github.com/KirDE/festival-radar/pull/179): production-owned collection schedulers | Accepted with all four production systemd timers enabled and GitHub collection workflows manual-only. |
-| [#133](https://github.com/KirDE/festival-radar/issues/133) / [PR #144](https://github.com/KirDE/festival-radar/pull/144): scoped ingestion acceptance | Accepted in production. |
-| [#124](https://github.com/KirDE/festival-radar/issues/124) / [PR #151](https://github.com/KirDE/festival-radar/pull/151): mobile map popup and overflow | Accepted at 320, 375 and 390 px. |
-| [#128](https://github.com/KirDE/festival-radar/issues/128) / [PR #150](https://github.com/KirDE/festival-radar/pull/150): canonical notification enums and mobile layout | Accepted with authenticated persistence and 320–390 px layout checks. |
-| [#130](https://github.com/KirDE/festival-radar/issues/130) / [PR #152](https://github.com/KirDE/festival-radar/pull/152): localized planner and navigation | Accepted across EN, DE and RU routes. |
-| [#131](https://github.com/KirDE/festival-radar/issues/131) / [PR #145](https://github.com/KirDE/festival-radar/pull/145): first-fetch offline payload | Accepted in a fresh browser context with networking disabled after install. |
-| [#132](https://github.com/KirDE/festival-radar/issues/132) / [PR #146](https://github.com/KirDE/festival-radar/pull/146): edition-specific future evidence | Accepted for Wacken 2026/2027, unsupported 2028 and sitemap behavior. |
-| [#135](https://github.com/KirDE/festival-radar/issues/135) / [PR #148](https://github.com/KirDE/festival-radar/pull/148): curated artist provenance | Accepted on the production Electric Callboy profile. |
-| [#136](https://github.com/KirDE/festival-radar/issues/136) / [PR #153](https://github.com/KirDE/festival-radar/pull/153): localized artist routes | Accepted across EN, DE and RU navigation, reload and language switching. |
-| [#129](https://github.com/KirDE/festival-radar/issues/129) / [PR #149](https://github.com/KirDE/festival-radar/pull/149): playlist editor and real parser-log UI | Accepted through reversible authenticated production CRUD and parser-log read-back. |
-| [#134](https://github.com/KirDE/festival-radar/issues/134) / [PR #147](https://github.com/KirDE/festival-radar/pull/147): YouTube Music production refresh | Spotify succeeded and YouTube failed closed before publishing. **External blocker:** the YouTube Data API returned `403 quotaExceeded`; successful write/read-back awaits quota reset or increase. |
-| [#97](https://github.com/KirDE/festival-radar/issues/97) / [PR #141](https://github.com/KirDE/festival-radar/pull/141), repaired by [PR #180](https://github.com/KirDE/festival-radar/pull/180): remove system npm dependency | Accepted through standalone packaging, upload, activation and external production verification. |
-| [#98](https://github.com/KirDE/festival-radar/issues/98) / [PR #142](https://github.com/KirDE/festival-radar/pull/142): configure both Plesk vhosts | Accepted at the exact deployed commit: HTTP redirects to HTTPS and both paths render the application. |
+| [#168](https://github.com/KirDE/loud-weekend/issues/168) / [PR #170](https://github.com/KirDE/loud-weekend/pull/170): database roles on real Admin Console routes | Deployed; full-proxy role acceptance remains pending. |
+| [#126](https://github.com/KirDE/loud-weekend/issues/126) / [PR #143](https://github.com/KirDE/loud-weekend/pull/143): trusted origins on authenticated mutations | Accepted in production. |
+| [#40](https://github.com/KirDE/loud-weekend/issues/40) / [PR #171](https://github.com/KirDE/loud-weekend/pull/171): production notification provider readiness | Deployed and fails closed correctly. **External blocker:** no dedicated production delivery-provider credential is configured, so real delivery is not accepted. |
+| [#172](https://github.com/KirDE/loud-weekend/issues/172) / [PR #173](https://github.com/KirDE/loud-weekend/pull/173): email verification before delivery | API enforcement is accepted. EN/DE/RU notification routes, localized copy, navigation and language switching are accepted after the later [PR #150](https://github.com/KirDE/loud-weekend/pull/150) deployment; [#182](https://github.com/KirDE/loud-weekend/issues/182) adds the missing post-build route regression. |
+| [#169](https://github.com/KirDE/loud-weekend/issues/169) / [PR #174](https://github.com/KirDE/loud-weekend/pull/174): suppress analytics ingestion access logs | Deployed; controlled production log-count acceptance remains pending. |
+| [#22](https://github.com/KirDE/loud-weekend/issues/22) / [PR #176](https://github.com/KirDE/loud-weekend/pull/176): recover persistent source HTTP 403 failures | Accepted in production. |
+| [#175](https://github.com/KirDE/loud-weekend/issues/175) / [PR #177](https://github.com/KirDE/loud-weekend/pull/177): replace defunct MetalDays with Tolminator 2027 | Accepted by catalogue, route, sitemap and official-source checks. |
+| [#125](https://github.com/KirDE/loud-weekend/issues/125) / [PR #158](https://github.com/KirDE/loud-weekend/pull/158), repaired by [PR #179](https://github.com/KirDE/loud-weekend/pull/179): production-owned collection schedulers | Accepted with all four production systemd timers enabled and GitHub collection workflows manual-only. |
+| [#133](https://github.com/KirDE/loud-weekend/issues/133) / [PR #144](https://github.com/KirDE/loud-weekend/pull/144): scoped ingestion acceptance | Accepted in production. |
+| [#124](https://github.com/KirDE/loud-weekend/issues/124) / [PR #151](https://github.com/KirDE/loud-weekend/pull/151): mobile map popup and overflow | Accepted at 320, 375 and 390 px. |
+| [#128](https://github.com/KirDE/loud-weekend/issues/128) / [PR #150](https://github.com/KirDE/loud-weekend/pull/150): canonical notification enums and mobile layout | Accepted with authenticated persistence and 320–390 px layout checks. |
+| [#130](https://github.com/KirDE/loud-weekend/issues/130) / [PR #152](https://github.com/KirDE/loud-weekend/pull/152): localized planner and navigation | Accepted across EN, DE and RU routes. |
+| [#131](https://github.com/KirDE/loud-weekend/issues/131) / [PR #145](https://github.com/KirDE/loud-weekend/pull/145): first-fetch offline payload | Accepted in a fresh browser context with networking disabled after install. |
+| [#132](https://github.com/KirDE/loud-weekend/issues/132) / [PR #146](https://github.com/KirDE/loud-weekend/pull/146): edition-specific future evidence | Accepted for Wacken 2026/2027, unsupported 2028 and sitemap behavior. |
+| [#135](https://github.com/KirDE/loud-weekend/issues/135) / [PR #148](https://github.com/KirDE/loud-weekend/pull/148): curated artist provenance | Accepted on the production Electric Callboy profile. |
+| [#136](https://github.com/KirDE/loud-weekend/issues/136) / [PR #153](https://github.com/KirDE/loud-weekend/pull/153): localized artist routes | Accepted across EN, DE and RU navigation, reload and language switching. |
+| [#129](https://github.com/KirDE/loud-weekend/issues/129) / [PR #149](https://github.com/KirDE/loud-weekend/pull/149): playlist editor and real parser-log UI | Accepted through reversible authenticated production CRUD and parser-log read-back. |
+| [#134](https://github.com/KirDE/loud-weekend/issues/134) / [PR #147](https://github.com/KirDE/loud-weekend/pull/147): YouTube Music production refresh | Spotify succeeded and YouTube failed closed before publishing. **External blocker:** the YouTube Data API returned `403 quotaExceeded`; successful write/read-back awaits quota reset or increase. |
+| [#97](https://github.com/KirDE/loud-weekend/issues/97) / [PR #141](https://github.com/KirDE/loud-weekend/pull/141), repaired by [PR #180](https://github.com/KirDE/loud-weekend/pull/180): remove system npm dependency | Accepted through standalone packaging, upload, activation and external production verification. |
+| [#98](https://github.com/KirDE/loud-weekend/issues/98) / [PR #142](https://github.com/KirDE/loud-weekend/pull/142): configure both Plesk vhosts | Accepted at the exact deployed commit: HTTP redirects to HTTPS and both paths render the application. |
 
-Issue [#159](https://github.com/KirDE/festival-radar/issues/159) tracks this
+Issue [#159](https://github.com/KirDE/loud-weekend/issues/159) tracks this
 inventory refresh. The table records the remaining acceptance gaps without
 claiming that merge or deployment alone resolved them.
 

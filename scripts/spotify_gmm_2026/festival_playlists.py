@@ -925,7 +925,7 @@ def parse_canonical_festivals(catalog):
         festivals.append(Festival(
             key=slug, display_name=f'{entry["name"]} {season}',
             playlist_name=f'{entry["name"]} {season}: Festival Crash Course',
-            description=f'Current {season} lineup from Festival Radar.',
+            description=f'Current {season} lineup from Loud Weekend.',
             lineup_fn=lambda artists=eligible, headliners=headliners: (artists, headliners),
             edition_year=season,
             spotify_repertoire_profiles=profiles,

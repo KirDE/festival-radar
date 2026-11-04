@@ -1,6 +1,6 @@
 # Production deployment key rotation
 
-Festival Radar deployments use the GitHub `production` environment secrets
+Loud Weekend deployments use the GitHub `production` environment secrets
 `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_PORT`, and `DEPLOY_KNOWN_HOSTS`. Keep
 the private key only in the environment secret and install only its public half
 on the production server.

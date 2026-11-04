@@ -96,13 +96,13 @@ test("uses the supported Plesk httpdmng executable", async () => {
   const httpdmng = path.join(directory, "httpdmng");
   await executable(httpdmng, `printf 'httpdmng:%s\\n' "$*" >> "${log}"`);
 
-  const result = spawnSync("bash", [script, "festivals.kir-it.de"], {
+  const result = spawnSync("bash", [script, "loudweekend.eu"], {
     encoding: "utf8",
     env: { ...process.env, PLESK_HTTPDMNG: httpdmng },
   });
 
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(await readFile(log, "utf8"), "httpdmng:--reconfigure-domain festivals.kir-it.de\n");
+  assert.equal(await readFile(log, "utf8"), "httpdmng:--reconfigure-domain loudweekend.eu\n");
 });
 
 test("validates Apache before reloading when Plesk is unavailable", async () => {
@@ -111,7 +111,7 @@ test("validates Apache before reloading when Plesk is unavailable", async () => 
   await executable(path.join(directory, "apache2ctl"), `printf 'apache2ctl:%s\\n' "$*" >> "${log}"`);
   await executable(path.join(directory, "systemctl"), `printf 'systemctl:%s\\n' "$*" >> "${log}"`);
 
-  const result = spawnSync("bash", [script, "festivals.kir-it.de"], {
+  const result = spawnSync("bash", [script, "loudweekend.eu"], {
     encoding: "utf8",
     env: {
       ...process.env,

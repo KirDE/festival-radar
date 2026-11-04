@@ -35,7 +35,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://build:build@127.0.0.1:5432/build
           AUTH_SECRET: build-only-secret-that-is-never-used-at-runtime
-          APP_URL: https://festivals.kir-it.de
+          APP_URL: https://loudweekend.eu
           NEXT_PUBLIC_ANALYTICS_ENDPOINT: /api/analytics/page-view/
       - name: Package standalone release with reviewed DB-only cutover gate
         env:
@@ -140,18 +140,18 @@ jobs:
         run: |
           for attempt in {1..12}; do
             marker="$(curl --fail --silent --show-error --retry 2 --max-time 20 \
-              https://festivals.kir-it.de/api/health/deployment/)" || true
+              https://loudweekend.eu/api/health/deployment/)" || true
             auth_status="$(curl --silent --output /tmp/auth.json --write-out '%{http_code}' \
-              --max-time 20 https://festivals.kir-it.de/api/auth/me/)" || true
+              --max-time 20 https://loudweekend.eu/api/auth/me/)" || true
             if grep --fixed-strings --quiet "\"commit\":\"$GITHUB_SHA\"" <<<"$marker" \
               && grep --fixed-strings --quiet '"database":"ok"' <<<"$marker" \
               && grep --fixed-strings --quiet '"catalog":"database"' <<<"$marker" \
               && test "$auth_status" = 401 \
-              && grep --quiet 'application/json' <(curl --silent --head https://festivals.kir-it.de/api/auth/me/) \
-              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/ | grep --quiet 'Festival Radar' \
-              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/planner/ >/dev/null \
-              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/festivals/wacken-open-air/ >/dev/null \
-              && curl --fail --silent --show-error --max-time 20 https://festivals.kir-it.de/artists/architects/ >/dev/null; then
+              && grep --quiet 'application/json' <(curl --silent --head https://loudweekend.eu/api/auth/me/) \
+              && curl --fail --silent --show-error --max-time 20 https://loudweekend.eu/ | grep --quiet 'Loud Weekend' \
+              && curl --fail --silent --show-error --max-time 20 https://loudweekend.eu/planner/ >/dev/null \
+              && curl --fail --silent --show-error --max-time 20 https://loudweekend.eu/festivals/wacken-open-air/ >/dev/null \
+              && curl --fail --silent --show-error --max-time 20 https://loudweekend.eu/artists/architects/ >/dev/null; then
               exit 0
             fi
             sleep 5
