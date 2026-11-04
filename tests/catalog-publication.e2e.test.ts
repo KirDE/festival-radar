@@ -71,7 +71,10 @@ test.before(async () => {
   const rfp = JSON.parse(await readFile(new URL('./fixtures/official-markup/rfp-reviewed-20261103.json', import.meta.url), 'utf8'));
   const rfpFestival = {...rockharz, ...rfp, name:'Synthetic Rock for People'};
   const graspop={...rockharz,slug:'graspop',name:'Synthetic Graspop',status:'tba' as const,startDate:'2027-06-17',endDate:'2027-06-20'};
-  await seedCatalog(db, { ...catalogSeed, festivals: [...catalogSeed.festivals, rfpFestival, rockharz, {...rockharz,slug:"idays",name:"Synthetic I-Days"},graspop], editions: [...catalogSeed.editions,
+  const rfpArtists = [...rfp.headliners, ...rfp.lineup].map((name: string) => ({
+    ...catalogSeed.artists[0], name, slug: name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+  }));
+  await seedCatalog(db, { ...catalogSeed, artists:[...catalogSeed.artists,...rfpArtists], festivals: [...catalogSeed.festivals, rfpFestival, rockharz, {...rockharz,slug:"idays",name:"Synthetic I-Days"},graspop], editions: [...catalogSeed.editions,
     { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rfpFestival, recordState: "current" as const },
     { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, recordState: "current" as const },
     { ...catalogSeed.editions.find((e) => e.recordState === "current")!, ...rockharz, slug:"idays", recordState: "current" as const },
