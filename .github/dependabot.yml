@@ -27,3 +27,19 @@ updates:
     groups:
       github-actions:
         patterns: ['*']
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    groups:
+      compatible-python:
+        applies-to: version-updates
+        patterns: ['*']
+        update-types: [minor, patch]
+      python-security:
+        applies-to: security-updates
+        patterns: ['*']
