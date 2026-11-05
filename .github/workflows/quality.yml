@@ -28,15 +28,16 @@ jobs:
     env:
       DATABASE_URL: postgresql://festival:festival@127.0.0.1:5432/festival_integration
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
       - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm run prisma:generate
       - run: npx prisma migrate deploy
       - run: npm run test:logo-assets
@@ -78,7 +79,7 @@ jobs:
       - run: npm run build
       # Exercise the actual archive: builder is Python 3.11, production is 3.9.
       - run: bash scripts/deploy/package-release.sh "$GITHUB_SHA" "$RUNNER_TEMP/python39-release.tar.gz"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.9"
       - run: bash scripts/deploy/check-python39-release.sh "$RUNNER_TEMP/python39-release.tar.gz"
