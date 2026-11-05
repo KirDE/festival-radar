@@ -9,12 +9,16 @@ test("public catalogue routes resolve fresh data at request time", async () => {
   const catalogueRoutes = [];
   for (const file of files) {
     const source = await readFile(path.join("app", file), "utf8");
-    if (!source.includes("getCatalog")) continue;
+    if (!/\b(?:getCatalog|getHomeCatalog)\b/.test(source)) continue;
     catalogueRoutes.push(file);
     assert.match(source, /export const dynamic = "force-dynamic"/);
     if (file !== "[lang]/page.tsx") assert.doesNotMatch(source, /generateStaticParams/);
   }
+  assert.ok(catalogueRoutes.includes("[lang]/page.tsx"), "localized homepage must remain in the freshness check");
+  assert.ok(catalogueRoutes.includes("page.tsx"), "root homepage must remain in the freshness check");
   assert.ok(catalogueRoutes.length >= 16);
+  const homeLoader = await readFile("lib/home-metadata.ts", "utf8");
+  assert.match(homeLoader, /getHomeCatalog\s*=\s*cache\(getCatalog\)/);
 });
 
 test("festival details receive related catalogue data from the database snapshot", async () => {
