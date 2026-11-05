@@ -6,7 +6,7 @@ import type { Festival } from "@/lib/domain/festival";
 import { FestivalLogo } from "./FestivalLogo";
 import { useLanguage } from "./LanguageProvider";
 import { lineupOverlap } from "@/lib/planning";
-import { useLocalPlanner } from "./LocalPlanner";
+import { emptyPlannerState, useLocalPlanner } from "./LocalPlanner";
 import { hasAvailableTickets } from "@/lib/tickets";
 import { distanceKm, festivalGenres, festivalMatchesDiscoveryFilters, type Coordinates } from "@/lib/festival-discovery";
 import { announcedArtists, hasAnnouncedLineup, lineupPreviewArtists } from "@/lib/festival-lineup";
@@ -69,6 +69,19 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
   useEffect(() => { if (planner.ready && !filtersReady) { setQuery(planner.savedFilters.query); setCountry(planner.savedFilters.country); setAnnouncedOnly(planner.savedFilters.announcedOnly); setMonth(planner.savedFilters.month); setTicketsOnly(planner.savedFilters.ticketsOnly); setFiltersReady(true); } }, [planner.ready, filtersReady]);
   useEffect(() => { if (filtersReady) planner.setSavedFilters({ query, country, announcedOnly, month, ticketsOnly }); }, [query, country, announcedOnly, month, ticketsOnly, filtersReady]);
 
+  const clearFilters = () => {
+    const defaults = emptyPlannerState.savedFilters;
+    setQuery(defaults.query);
+    setCountry(defaults.country);
+    setMonth(defaults.month);
+    setAnnouncedOnly(defaults.announcedOnly);
+    setTicketsOnly(defaults.ticketsOnly);
+    setGenre("all");
+    setOrigin("berlin");
+    setMaxDistance("all");
+    searchRef.current?.focus();
+  };
+
   return <section className="explorer">
     <div className="filterBar">
       <div className="search" data-ready={filtersReady}><span aria-hidden="true">⌕</span><input ref={searchRef} aria-label={t("filterSearch")} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("search")} />{query && <button type="button" aria-label={t("clearSearch")} onClick={() => { setQuery(""); searchRef.current?.focus(); }}><span aria-hidden="true">✕</span></button>}</div>
@@ -79,6 +92,7 @@ export function FestivalExplorer({ festivals }: { festivals: Festival[] }) {
       <select aria-label={t("filterDistance")} value={maxDistance} onChange={(event) => setMaxDistance(event.target.value)}><option value="all">{t("anyDistance")}</option>{[100, 250, 500, 1000, 2000].map((value) => <option key={value} value={value}>{t("withinDistance", { distance: value.toLocaleString(locale) })}</option>)}</select>
       <label className="toggle"><input type="checkbox" checked={announcedOnly} onChange={(event) => setAnnouncedOnly(event.target.checked)} /><span/>{t("lineupAnnounced")}</label>
       <label className="toggle"><input type="checkbox" checked={ticketsOnly} onChange={(event) => setTicketsOnly(event.target.checked)} /><span aria-hidden="true"/>{t("officialTicketsOnly")}</label>
+      <button type="button" className="outlineButton clearFilters" onClick={clearFilters} disabled={!filtersReady}>{t("clearAllFilters")}</button>
     </div>
     <p className="srOnly" role="status" aria-live="polite" aria-atomic="true">{comparisonStatus}</p>
     {compared.length > 0 && <div className="compareTray"><div className="compareHeading"><strong>{t("compare")} ({compared.length}/3)</strong>{compared.map((item) => <button aria-label={t("removeFestivalComparison", { festival: item.name })} onClick={() => toggleSelected(item)} key={item.slug}>{item.name} <span aria-hidden="true">×</span></button>)}</div>{compared.length < 2 ? <p className="compareHint">{t("comparisonInstructions")}</p> : <div className="comparisonScroll" tabIndex={0}><table className="comparisonTable"><thead><tr><th scope="col">{t("planningDetail")}</th>{compared.map((item) => <th scope="col" key={item.slug}><Link href={`/festivals/${item.slug}/`}>{item.name}</Link></th>)}</tr></thead><tbody><tr><th scope="row">{t("dates")}</th>{compared.map((item) => <td key={item.slug}>{formatDates(item, locale, t("datesTba"))} · 2027</td>)}</tr><tr><th scope="row">{t("locationDistance", { origin: origins[origin].label })}</th>{compared.map((item) => <td key={item.slug}>{item.city || item.country}{item.coordinates ? ` · ${distanceKm(originCoordinates, item.coordinates).toLocaleString(locale)} km` : ` · ${t("distanceUnavailable")}`}</td>)}</tr><tr><th scope="row">{t("tickets")}</th>{compared.map((item) => <td key={item.slug}>{item.ticketsUrl ? <a href={item.ticketsUrl} rel="noreferrer" target="_blank">{t("officialTickets")}</a> : item.ticketStatus === "unavailable" ? t("unavailable") : t("availabilityNotConfirmed")}</td>)}</tr><tr><th scope="row">{t("lineupOverlap")}</th><td colSpan={compared.length}>{overlap.length ? <><strong>{t("sharedActs", { count: overlap.length })}</strong><br/>{overlap.join(", ")}</> : t("noLineupOverlap")}</td></tr></tbody></table></div>}</div>}
