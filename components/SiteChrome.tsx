@@ -26,7 +26,7 @@ export function SiteHeader() {
 export function SiteFooter() {
   const { language, setLanguage, t } = useLanguage();
   return (
-    <footer>
+    <footer className="siteFooter">
       <span>Loud Weekend · {t("region")}</span>
       <span>{t("footerNote")} · {t("privacy")}</span>
       <Link href="/submit/">{t("submitFestival")}</Link>

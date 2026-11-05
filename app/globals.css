@@ -256,7 +256,7 @@ nav {
   font-size: 14px;
   font-weight: 700;
 }
-nav a:hover {
+nav a:is(:hover, :focus-visible) {
   text-decoration: underline;
 }
 .accountMenu { position: relative; }
@@ -275,12 +275,14 @@ nav a:hover {
 main {
   min-height: calc(100vh - 160px);
 }
-footer {
+.siteFooter {
   max-width: 1440px;
   margin: 70px auto 0;
   padding: 30px 44px;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px 24px;
   border-top: 1px solid var(--line);
   color: #66645e;
   font-size: 13px;
@@ -406,7 +408,13 @@ footer {
   cursor: pointer;
 }
 .toggle input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 .toggle span {
   width: 38px;
@@ -505,8 +513,8 @@ footer {
   padding: 7px 9px;
   cursor: pointer;
 }
-.festivalCard:hover {
-  background: white;
+.festivalCard:is(:hover, :focus-within) {
+  background: var(--acid);
   transform: translateY(-4px);
   box-shadow: 0 15px 30px rgba(0, 0, 0, 0.09);
   z-index: 2;
@@ -679,7 +687,7 @@ footer {
   border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
-.actionGrid > a:hover {
+.actionGrid > a:is(:hover, :focus-visible) {
   background: var(--acid);
 }
 .actionGrid small {
@@ -735,7 +743,7 @@ footer {
   flex-direction: column;
   justify-content: space-between;
 }
-.headlinerGrid a:hover {
+.headlinerGrid a:is(:hover, :focus-visible) {
   background: var(--orange);
 }
 .headlinerGrid span {
@@ -755,7 +763,7 @@ footer {
   font-size: 13px;
   font-weight: 700;
 }
-.lineupGrid a:hover {
+.lineupGrid a:is(:hover, :focus-visible) {
   background: white;
 }
 .lineupEmpty {
@@ -802,7 +810,7 @@ footer {
   font-size: 12px;
   font-weight: 800;
 }
-.planningActions a:hover {
+.planningActions a:is(:hover, :focus-visible) {
   background: var(--acid);
 }
 .timetable {
@@ -982,7 +990,7 @@ footer {
   font-size: 12px;
   font-weight: 800;
 }
-.artistActions a:hover {
+.artistActions a:is(:hover, :focus-visible) {
   background: var(--acid);
 }
 .directoryPage {
@@ -1100,7 +1108,7 @@ footer {
 .appearances > a:last-child {
   border-bottom: 1px solid var(--line);
 }
-.appearances > a:hover {
+.appearances > a:is(:hover, :focus-visible) {
   background: white;
 }
 .appearances span,
@@ -1257,16 +1265,19 @@ footer {
   .appearances em {
     display: none;
   }
-  footer {
+  .siteFooter {
+    display: flex;
     padding: 25px 20px;
-    display: block;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
-  footer > span {
+  .siteFooter > span {
     display: block;
-    margin: 6px 0;
+    margin: 0;
   }
   .languagePicker {
-    margin-top: 18px;
+    margin-top: 0;
   }
   .languagePicker span {
     margin: 0;
@@ -1320,4 +1331,59 @@ footer {
 button:focus-visible, .outlineButton:focus-visible, .primaryButton:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 3px;
+}
+
+/* All framed controls need feedback, including native select triggers. Keep
+   options neutral when the browser uses these styles for its native popup. */
+select:not(:disabled) { cursor: pointer; }
+select:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--acid);
+  color: var(--ink);
+}
+select option, select optgroup { background: var(--paper); color: var(--ink); }
+summary:is(:hover, :focus-visible),
+.playlistFestivalGrid label:is(:hover, :focus-within),
+.toggle:is(:hover, :focus-within),
+.recommendations a:is(:hover, :focus-visible),
+.calendarGrid > a:is(:hover, :focus-visible),
+.mapMarker > div a:is(:hover, :focus-visible),
+.artistChips a:is(:hover, :focus-visible) {
+  background: var(--acid);
+  color: var(--ink);
+}
+.compareButton:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--ink);
+  color: var(--acid);
+}
+.accountTabs button[aria-selected="true"]:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--orange);
+  color: var(--ink);
+}
+/* Passkey's base colors are !important; its feedback must win that cascade. */
+.passkeyButton:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--acid) !important;
+  color: var(--ink) !important;
+}
+summary { cursor: pointer; }
+a:focus-visible, select:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+.compareButton.active:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--orange);
+  color: var(--ink);
+}
+.filterBar .clearFilters {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--paper);
+}
+.filterBar .clearFilters:not(:disabled):is(:hover, :focus-visible) {
+  background: var(--acid);
+  border-color: var(--acid);
+}
+
+@media (min-width: 601px) and (max-width: 1100px) {
+  .siteFooter { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 12px; }
 }
