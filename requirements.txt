@@ -2,7 +2,7 @@
 # Pin the complete runtime graph so a newer upstream release cannot silently
 # introduce Python >=3.10 syntax or metadata into the packaged .python tree.
 ytmusicapi==1.10.0
-requests==2.32.3
+requests==2.33.0
 urllib3==2.5.0
 charset-normalizer==3.5.2
 idna==3.20
