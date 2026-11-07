@@ -19,12 +19,18 @@ for (const [language, label] of [["en", "Dark mode"], ["de", "Dunkelmodus"], ["r
     await expect(toggle).toHaveAttribute("aria-checked", "true");
     await page.locator("footer > a").click();
     await expect(toggle).toHaveAttribute("aria-checked", "true");
-    for (const width of [320, 375, 768, 1440]) {
+    for (const width of [320, 375, 700, 768, 850, 1100, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await toggle.scrollIntoViewIfNeeded();
       await expect(toggle).toBeVisible();
       await expect(page.locator(".languagePicker select")).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const geometry = await page.locator("footer").evaluate(footer => {
+        const boxes = [...footer.children].map(el => el.getBoundingClientRect());
+        return { pickerLeft: footer.querySelector(".languagePicker").getBoundingClientRect().left, firstLeft: boxes[0].left, centers: boxes.map(b => b.top + b.height / 2) };
+      });
+      if (width <= 700) expect(Math.abs(geometry.pickerLeft - geometry.firstLeft)).toBeLessThan(1);
+      if (width === 1440) expect(Math.max(...geometry.centers) - Math.min(...geometry.centers)).toBeLessThan(1);
     }
     await toggle.click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

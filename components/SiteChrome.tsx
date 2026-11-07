@@ -34,9 +34,6 @@ export function SiteFooter() {
       <span>{t("footerNote")} · {t("privacy")}</span>
       <Link href="/submit/">{t("submitFestival")}</Link>
       <div className="footerPreferences">
-        <button type="button" className="themeToggle" role="switch" aria-checked={theme === "dark"} onClick={toggleTheme}>
-          <span aria-hidden="true">{theme === "dark" ? "☾" : "☀"}</span> {themeLabel}
-        </button>
         <label className="languagePicker">
           <span>{t("language")}</span>
           <select
@@ -49,6 +46,9 @@ export function SiteFooter() {
             <option value="ru">Русский</option>
           </select>
         </label>
+        <button type="button" className="themeToggle" role="switch" aria-checked={theme === "dark"} onClick={toggleTheme}>
+          <span aria-hidden="true">{theme === "dark" ? "☾" : "☀"}</span> {themeLabel}
+        </button>
       </div>
     </footer>
   );
