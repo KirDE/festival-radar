@@ -1,3 +1,4 @@
+import {extractRoskildeCandidate} from "./adapters/roskilde.ts";
 import { extractRoadburnCandidate } from "./adapters/roadburn.ts";
 import { extractCopenhellCurrent } from "./adapters/copenhell-current.ts";
 import { extractRockInRomaCandidate } from "./adapters/rock-in-roma.ts";
@@ -28,6 +29,8 @@ export function extractFestivalCandidate(html: string, source: FestivalSource, f
 }
 
 function extractConfiguredCandidate(html: string, source: FestivalSource, fetchedAt: string): FestivalCandidate {
+  const roskilde=extractRoskildeCandidate(html,source,fetchedAt);
+  if(roskilde)return roskilde;
   const roadburn = extractRoadburnCandidate(html, source, fetchedAt);
   if (roadburn) return roadburn;
   const copenhell = extractCopenhellCurrent(html, source, fetchedAt);

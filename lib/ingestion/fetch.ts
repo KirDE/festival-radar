@@ -1,3 +1,4 @@
+import {isRoskildeSource,fetchRoskildeDocuments} from "./adapters/roskilde.ts";
 import { isImpericonCurrentSource, discoverImpericonAnnouncements, sameImpericonArticle, impericonArticleUrl, IMPERICON_DOCUMENTS } from "./adapters/impericon-current.ts";
 import { isRoadburnSource, roadburnUrl, roadburnLinked, discoverRoadburnAnnouncements, roadburnDocuments, type RoadburnDocument } from "./adapters/roadburn.ts";
 import { isPolandrockSource, polandrockAnnouncementUrl } from "./adapters/polandrock.ts";
@@ -64,6 +65,8 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   }
     throw new Error("Fetch attempts exhausted without a response");
   };
+
+  if (isRoskildeSource(source) && !options.fetchImpl) return fetchRoskildeDocuments(source.editionYear);
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
   if (initial.response.ok && isGraspopSource(source)) {
