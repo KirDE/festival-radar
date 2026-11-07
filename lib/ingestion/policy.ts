@@ -63,7 +63,7 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     !(unchangedLeyendas && warning === LEYENDAS_ARTIST_REVIEW) &&
     !(unchangedNovaLineup && warning === "Agent review required before lineup-triggered provider activity")));
   // Dynamo/Tons of Rock/Heavy Week-End retain their separate provider policy.
-  if (["dynamo-metal-fest", "tons-of-rock", "heavy-weekend", "barcelona-rock-fest"].includes(current.slug) && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))
+  if (["dynamo-metal-fest", "tons-of-rock", "heavy-weekend", "barcelona-rock-fest", "vainstream", "rock-the-lakes"].includes(current.slug) && changes.some(change => change.kind === "artist_added" || change.kind === "headliner_added"))
     reviewReasons.add("Agent review required before lineup-triggered provider activity");
   // Verified official RFP announcements may use normal publication/playlist
   // processing. A successful parse alone is not enough: keep provenance,

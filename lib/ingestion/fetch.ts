@@ -69,6 +69,11 @@ export async function fetchSource(source: FestivalSource, options: FetchOptions 
   if (isRoskildeSource(source) && !options.fetchImpl) return fetchRoskildeDocuments(source.editionYear);
 
   let initial = await fetchWithRetry(source.fetchUrl ?? source.url);
+  if (["vainstream", "rock-the-lakes"].includes(source.festivalSlug) && source.strategies.includes("official_markup")) {
+    if (source.fetchUrl || source.followLinkPattern || (initial.response.url && initial.response.url !== source.url))
+      throw new Error("Official artist listing changed its configured identity");
+    return initial;
+  }
   if (initial.response.ok && isGraspopSource(source)) {
     if (initial.response.url && initial.response.url !== source.url) throw new Error('Graspop FAQ changed its official identity');
     const faq = await initial.response.text();
