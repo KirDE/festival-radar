@@ -1,3 +1,4 @@
+import {vainstream, rockTheLakes} from "./onboarding-official.ts";
 import { heavyWeekEnd } from "./heavy-weekend.ts";
 import { pinkpop } from "./pinkpop.ts";
 import { tuska } from "./tuska.ts";
@@ -476,6 +477,8 @@ const adapters: Record<string, (html: string, source: FestivalSource, fetchedAt:
   "rock-am-ring": ringAndPark,
   "rock-for-people": rockForPeople,
   "heavy-weekend": heavyWeekEnd,
+  vainstream,
+  "rock-the-lakes": rockTheLakes,
   "rock-im-park": ringAndPark,
   "southside": fkpLineup,
   "tons-of-rock": tonsOfRock,
