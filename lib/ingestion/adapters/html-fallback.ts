@@ -84,7 +84,7 @@ function ticketLink(html: string, sourceUrl: string): { value: string; excerpt: 
   return undefined;
 }
 
-function markedNames(html: string): { values: string[]; excerpt: string; warnings: string[] } | undefined {
+function markedNames(html: string, barcelona = false): { values: string[]; excerpt: string; warnings: string[] } | undefined {
   const values: string[] = [];
   const combinedFlags: boolean[] = [];
   let excerpt = "";
@@ -92,6 +92,11 @@ function markedNames(html: string): { values: string[]; excerpt: string; warning
   for (const match of html.matchAll(pattern)) {
     const attrs = attributes(`<${match[1]} ${match[2]}>`);
     const inner = match[3];
+    // Barcelona's section title is decoration, not an artist assertion. Keep
+    // malformed explicit performers and all other source warnings unchanged.
+    if (barcelona && match[1].toLowerCase() === "h2" &&
+        /(?:^|\s)lineup-text(?:\s|$)/.test(attrs.get("class") ?? "") &&
+        !attrs.has("data-artist") && !attrs.has("itemprop") && /^line up$/i.test(decode(inner))) continue;
     const value = decode(attrs.get("data-artist") ?? inner.replace(/<[^>]+>/g, " "));
     if (value) {
       values.push(value);
@@ -142,7 +147,7 @@ export function extractHtmlFallbackCandidate(html: string, source: FestivalSourc
   const end = metaContent(html, ["event:end_time", "event:end_date", "festival:end_date"]) ?? timeValue(html, "end");
   const city = metaContent(html, ["event:location", "festival:city", "geo.placename"]);
   const tickets = ticketLink(html, source.url);
-  const lineup = markedNames(html);
+  const lineup = markedNames(html, source.festivalSlug === "barcelona-rock-fest" && new URL(source.url).hostname === "www.barcelonarockfest.com");
 
   const add = (field: SupportedField, value: string | string[] | undefined, excerpt: string | undefined) => {
     if (value === undefined) return;
