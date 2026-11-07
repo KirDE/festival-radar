@@ -1344,7 +1344,7 @@ main {
 .adminNav button.active:not(:disabled):is(:hover, :focus-visible),
 .submissionForm button:not(:disabled):focus-visible {
   background: var(--orange);
-  color: var(--ink);
+  color: var(--solid);
 }
 button:focus-visible, .outlineButton:focus-visible, .primaryButton:focus-visible {
   outline: 2px solid var(--ink);
@@ -1375,7 +1375,7 @@ summary:is(:hover, :focus-visible),
 }
 .accountTabs button[aria-selected="true"]:not(:disabled):is(:hover, :focus-visible) {
   background: var(--orange);
-  color: var(--ink);
+  color: var(--solid);
 }
 /* Passkey's base colors are !important; its feedback must win that cascade. */
 .passkeyButton:not(:disabled):is(:hover, :focus-visible) {
@@ -1390,7 +1390,7 @@ a:focus-visible, select:focus-visible, summary:focus-visible {
 
 .compareButton.active:not(:disabled):is(:hover, :focus-visible) {
   background: var(--orange);
-  color: var(--ink);
+  color: var(--solid);
 }
 .filterBar .clearFilters {
   background: var(--paper);
@@ -1406,9 +1406,6 @@ a:focus-visible, select:focus-visible, summary:focus-visible {
   .siteFooter { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 12px; }
 }
 
-/* Bright accent surfaces always need dark text, independent of the page theme. */
-:is(.favoriteButton.selected, .skipLink, .calendarGrid time, .adminNotice, .adminNav button.active),
-.actionGrid > a:is(:hover, :focus-visible) { color: var(--solid); }
 .toggle input:checked + span:after { background: var(--solid); }
 :is(input, select, textarea) { color: var(--ink); }
 :root[data-theme="dark"] .europeMap { background: linear-gradient(135deg, #1b333c, #263c42); }
