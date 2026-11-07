@@ -15,7 +15,7 @@ const canonical = (html: string) => [...clean(html).matchAll(/<link\b[^>]*>/gi)]
 const picture = (value: string) => value.split('/').at(-1)?.replace(/\.(?:jpg|jpeg|webp|png)$/i, '');
 // Official roster/news copy may abbreviate the same featuring credit differently.
 // Keep the roster spelling in the candidate; do not alias artists or collaborators.
-const announcementName = (value: string) => value.toLowerCase().replace(/\b(?:ft|feat)\.?(?=\s)/g, 'featuring');
+const announcementName = (value: string) => value.normalize('NFKC').replace(/[’‘]/g, "'").toLowerCase().replace(/\b(?:ft|feat)\.?(?=\s)/g, 'featuring');
 
 export function isGraspopSource(source: FestivalSource) {
   return source.festivalSlug === 'graspop' && source.url === GRASPOP_FAQ && source.strategies.includes('official_markup') && !source.fetchUrl && !source.followLinkPattern;
@@ -34,7 +34,7 @@ function announcementCards(html: string) {
   const cards: {url:string;image:string}[] = [];
   for (const article of content.matchAll(/<article\b[^>]*class=["']news["'][^>]*>([\s\S]*?)<\/article>/gi)) {
     const title = plain(article[1].match(/<h[1-6]\b[^>]*class=["']news__title["'][^>]*>([\s\S]*?)<\/h[1-6]>/i)?.[1] ?? '');
-    if (!/\bheadliner\b|\b(?:first|new)\b.{0,40}\b(?:names|bands|announcement)\b|line[ -]?up/i.test(title)) continue;
+    if (!/\bheadliner\b|\b(?:first|new)\b.{0,40}\b(?:names|bands|acts|announcement)\b|line[ -]?up/i.test(title)) continue;
     const link = article[1].match(/<a\b[^>]*>/i)?.[0];
     const url = link && graspopNewsUrl(attr(link, 'href') ?? '');
     const image=attr(article[1].match(/<img\b[^>]*>/i)?.[0] ?? '', 'src') ?? '';
@@ -88,7 +88,29 @@ export function graspop(input: string, source: FestivalSource) {
     const grid=grids[0][1];
     const cards = [...grid.matchAll(/<article\b[^>]*class=["']artist["'][^>]*>([\s\S]*?)<\/article>/gi)];
     if (!cards.length || cards.length > 250 || cards.length !== [...grid.matchAll(/<article\b[^>]*class=["']artist["']/gi)].length) return fail();
-    const names: string[] = [];
+    // A full official confirmations paragraph corroborates support artists;
+    // individual headline news continues to determine billing independently.
+    const confirmations: string[] = [];
+    for (const a of e.articles as {url:string;html:string}[]) {
+      const body = main(a.html);
+      if (!body || attr(canonical(a.html) ?? '', 'href') !== a.url) return fail();
+      const title = plain(body.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? '');
+      const count = title.match(/^(\d+) new (?:acts|names|bands) confirmed for #?GMM(\d{2}|20\d{2})!$/i);
+      if (!count) continue;
+      if (Number(count[2]) !== source.editionYear && Number(count[2]) + 2000 !== source.editionYear) return fail();
+      const intro = plain(body.match(/<p\b[^>]*class=["']intro["'][^>]*>([\s\S]*?)<\/p>/i)?.[1] ?? '');
+      if (!intro.includes(`Graspop Metal Meeting ${source.editionYear}`)) return fail();
+      const paragraphs = [...body.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)];
+      const lists = paragraphs.map(p => plain(p[1].split(/<br\s*\/?>(?:\s*<br\s*\/?>)?/i)[0]))
+        .filter(p => p.startsWith(`Here is the full list of new confirmations for the GMM${source.editionYear} bill: `));
+      if (lists.length !== 1 || /(?:cancelled|canceled|withdrawn|will not (?:play|perform))/i.test(intro + lists[0])) return fail();
+      const list = lists[0].split(' bill: ')[1].replace(/\.$/, '').replace(/ and ([^,]+)$/, ', $1').split(',').map(n => n.trim());
+      if (list.length !== Number(count[1]) || list.some(n => !n || n.length > 120) || new Set(list.map(announcementName)).size !== list.length) return fail();
+      const ranges = [...plain(body).matchAll(/\bFrom\s+(\d{1,2})\s*[-–—]\s*(\d{1,2})\s+(June|July|August)\s+(20\d{2})\b/gi)];
+      if (!ranges.length || ranges.some(d => `${d[4]}-${String(months.findIndex(m => m.toLowerCase() === d[3].toLowerCase()) + 1).padStart(2,'0')}-${d[1].padStart(2,'0')}` !== dates.startDate || `${d[4]}-${String(months.findIndex(m => m.toLowerCase() === d[3].toLowerCase()) + 1).padStart(2,'0')}-${d[2].padStart(2,'0')}` !== dates.endDate)) return fail();
+      confirmations.push(...list);
+    }
+    const names: string[] = [], headliners: string[] = [], lineup: string[] = [];
     for (const card of cards) {
       const name = plain(card[1].match(/<h3\b[^>]*class=["']artist__name["'][^>]*>([\s\S]*?)<\/h3>/i)?.[1] ?? '');
       const link = attr(card[1].match(/<a\b[^>]*>/i)?.[0] ?? '', 'href') ?? '';
@@ -113,14 +135,25 @@ export function graspop(input: string, source: FestivalSource) {
         const date = days.find(d=>d.day===day)?.date;
         return !!date && new RegExp(`\\b${day}\\s+${date.getUTCDate()}\\s+${months[date.getUTCMonth()]}\\b`, 'i').test(intro) && picture(newsImage)===picture(image);
       });
-      if (proofs.length !== 1) return fail();
+      if (proofs.length > 1) return fail();
+      if (proofs.length === 1) headliners.push(name);
+      else {
+        if (!confirmations.some(n => announcementName(n) === announcementName(name))) return fail();
+        // Support cards also require a day within the current edition.
+        const day = timing.split(' • ')[0].trim();
+        const days: string[] = [];
+        for (let d = new Date(dates.startDate); d <= new Date(dates.endDate); d.setUTCDate(d.getUTCDate()+1)) days.push(d.toLocaleDateString('en-GB',{weekday:'long',timeZone:'UTC'}));
+        if (!days.includes(day)) return fail();
+        lineup.push(name);
+      }
       names.push(name);
     }
-    return {...dates, editionYear:source.editionYear, headliners:names, status:'partial' as const, artistListMode:'additive' as const, lineupScope:'announcement' as const,
-      excerpt:dates.excerpt+' Official current roster and edition-bound headline announcements: '+names.join(', ')};
+    if (!headliners.length || confirmations.some(n => !names.some(name => announcementName(n) === announcementName(name)))) return fail();
+    return {...dates, editionYear:source.editionYear, headliners, ...(lineup.length ? {lineup} : {}), status:'partial' as const, artistListMode:'additive' as const, lineupScope:'announcement' as const,
+      excerpt:dates.excerpt+' Official current roster and edition-bound announcements: '+names.join(', ')};
   } catch { return fail(); }
 }
 
 export function isGraspopAnnouncement(candidate: FestivalCandidate, year: number) {
-  return !!candidate && candidate.festivalSlug === 'graspop' && candidate.sourceUrl === GRASPOP_FAQ && candidate.artistListMode === 'additive' && candidate.lineupScope === 'announcement' && Array.isArray(candidate.observedEditionYears) && candidate.observedEditionYears.length === 1 && candidate.observedEditionYears[0] === year && Array.isArray(candidate.headliners) && candidate.headliners.length>0 && candidate.status==='partial' && candidate.lineup===undefined && Array.isArray(candidate.evidence) && ['startDate','endDate','headliners','status'].every(field=>candidate.evidence.some(e=>e?.field===field && e.sourceUrl===GRASPOP_FAQ));
+  return !!candidate && candidate.festivalSlug === 'graspop' && candidate.sourceUrl === GRASPOP_FAQ && candidate.artistListMode === 'additive' && candidate.lineupScope === 'announcement' && Array.isArray(candidate.observedEditionYears) && candidate.observedEditionYears.length === 1 && candidate.observedEditionYears[0] === year && Array.isArray(candidate.headliners) && candidate.headliners.length>0 && candidate.status==='partial' && (candidate.lineup===undefined || (Array.isArray(candidate.lineup) && candidate.lineup.length>0)) && Array.isArray(candidate.evidence) && ['startDate','endDate','headliners','status',...(candidate.lineup ? ['lineup'] : [])].every(field=>candidate.evidence.some(e=>e?.field===field && e.sourceUrl===GRASPOP_FAQ));
 }

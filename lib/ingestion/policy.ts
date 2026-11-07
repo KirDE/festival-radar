@@ -84,7 +84,7 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     reviewReasons.add("Impericon billing promotion requires reviewed reclassification");
   if(candidate.festivalSlug==='graspop' && changes.some(change=>['lineup','headliners'].includes(change.field))) {
     if(!isGraspopAnnouncement(candidate,current.editionYear ?? Number(current.startDate?.slice(0,4))))reviewReasons.add('Graspop additions require verified current official announcement evidence');
-    if(candidate.headliners?.some(name=>current.lineup.some(old=>old.toLowerCase()===name.toLowerCase())))reviewReasons.add('Graspop billing promotion requires reviewed reclassification');
+    if(candidate.headliners?.some(name=>current.lineup.some(old=>old.toLowerCase()===name.toLowerCase())) || candidate.lineup?.some(name=>[...current.headliners,...(candidate.headliners ?? [])].some(old=>old.toLowerCase()===name.toLowerCase())))reviewReasons.add('Graspop billing changes require reviewed reclassification');
   }
   if (candidate.festivalSlug !== current.slug) reviewReasons.add("Candidate slug does not match the current festival");
   if (candidate.festivalSlug === "idays" && changes.some(change => ["lineup", "headliners"].includes(change.field))) {
