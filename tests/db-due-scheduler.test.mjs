@@ -192,7 +192,7 @@ test('deployment only rearms previously armed DB-due timer after health; schedul
     const guardSource = await readFile('scripts/deploy/check-db-due-tick-ready', 'utf8');
     const lock = path.join(dir, 'activation.lock');
     const guard = path.join(dir, 'condition-script');
-    await writeFile(lock, '');
+    // Simulate a reboot: /run lock is absent, not a failed deployment.
     await writeFile(guard, guardSource.replace('/run/festival-radar-activation.lock', lock)
       .replace('$(id -u)" == 0', '$(id -u)" == ' + process.getuid())
       .replace('$(stat -c %u "$lock")" == 0', '$(stat -c %u "$lock")" == ' + process.getuid()));
@@ -203,6 +203,8 @@ test('deployment only rearms previously armed DB-due timer after health; schedul
     assert.equal(check.stdout, 'DB_DUE_TICK_DEFERRED reason=activation-lock\n');
     check = spawnSync('bash', [guard], { encoding: 'utf8' });
     assert.equal(check.status, 0, check.stderr);
+    const before = await readFile(lock, 'utf8');
+    assert.equal(before, '');
     const badProbe = path.join(dir, 'bad-condition-script');
     await writeFile(badProbe, (await readFile(guard, 'utf8')).replace('flock -n -E 1 9', '(exit 64)'));
     check = spawnSync('bash', [badProbe], { encoding: 'utf8' });

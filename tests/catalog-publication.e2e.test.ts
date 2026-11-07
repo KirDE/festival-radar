@@ -474,3 +474,23 @@ test('RFP official additions publish once, retain Neck Deep and queue normal pla
   const full={...current,headliners:edition.lineup.filter(x=>x.billing==='HEADLINER').map(x=>x.artist.name),lineup:edition.lineup.filter(x=>x.billing!=='HEADLINER').map(x=>x.artist.name)};
   assert.deepEqual(evaluateCandidate(full,candidate).changes,[]);
 });
+
+
+test('real Graspop full bill crosses persisted publication fences once, preserving provider deferral and old artists',async()=>{
+ const bundle=JSON.parse(await readFile(new URL('./fixtures/graspop-current/full-announcement.json',import.meta.url),'utf8'));
+ const candidate=extractFestivalCandidate(JSON.stringify(bundle),parserSource('graspop',{url:'https://www.graspop.be/en/info/festival-essentials'}),new Date().toISOString());
+ const value=evaluateCandidate({slug:'graspop',editionYear:2027,name:'Synthetic Graspop',startDate:'2027-06-17',endDate:'2027-06-20',status:'partial',ticketStatus:'unknown',headliners:[],lineup:[]} as any,candidate);
+ assert.equal(value.publishable,true);assert.equal(candidate.lineup?.length,102);
+ const old=await db.festivalEdition.findFirstOrThrow({where:{festival:{slug:'graspop'},recordState:'CURRENT'},include:{lineup:true}});
+ const jobs=await db.catalogPlaylistRefresh.count();const artists=new Set((await db.artist.findMany({select:{slug:true}})).map(a=>a.slug));
+ const attempt=await persist(value);const publication=await publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix});assert.ok(publication);
+ for(const a of await db.artist.findMany({select:{slug:true}}))if(!artists.has(a.slug))createdArtists.push(a.slug);
+ const saved=await db.festivalEdition.findUniqueOrThrow({where:{id:old.id},include:{lineup:{include:{artist:true}}}});
+ assert.equal(saved.lineup.length,old.lineup.length+110);assert.ok(old.lineup.every(a=>saved.lineup.some(b=>b.id===a.id&&b.billing===a.billing)));
+ assert.equal(saved.lineup.filter(a=>candidate.lineup?.some(n=>n.toLowerCase()===a.artist.name.toLowerCase()) && a.billing==='LINEUP').length,102);
+ assert.equal(publication.playlistRefreshRequested,false);assert.equal(await db.catalogPlaylistRefresh.count(),jobs);
+ assert.equal((await publishIngestionResult(db,{attemptId:attempt.id,result:value,sourceCommit:suffix}))?.id,publication.id);
+ const broken=structuredClone(value);broken.candidate.evidence=broken.candidate.evidence.filter(e=>e.field!=='lineup');const invalid=await persist(broken);
+ const counts=()=>Promise.all([db.artist.count(),db.lineupEntry.count(),db.catalogPublication.count(),db.catalogPlaylistRefresh.count()]);
+ const before=await counts();await assert.rejects(publishIngestionResult(db,{attemptId:invalid.id,result:broken,sourceCommit:suffix}),/Graspop publication requires/);assert.deepEqual(await counts(),before);
+});

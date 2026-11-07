@@ -4,6 +4,11 @@
 set -euo pipefail
 [[ $# == 0 && "$(id -u)" == 0 ]] || exit 255
 lock=/run/festival-radar-activation.lock
+# /run is ephemeral. Recreate an absent lock after boot without replacing an
+# existing inode (a deployment may already hold it). Refuse symlinks as before.
+if [[ ! -e "$lock" && ! -L "$lock" ]]; then
+  (umask 077; set -o noclobber; : > "$lock") || exit 255
+fi
 [[ -f "$lock" && ! -L "$lock" && "$(stat -c %u "$lock")" == 0 ]] || exit 255
 exec 9<"$lock" || exit 255
 status=0
