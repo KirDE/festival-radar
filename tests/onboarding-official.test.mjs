@@ -12,10 +12,10 @@ for(const [slug,url,count,start,end] of [['vainstream','https://vainstream.com/a
  test(`${slug}: wrong edition, identity, missing dates, truncated HTML fail closed`,()=>{
   for(const [h,s]of [[html,{editionYear:2028}],[html,{url:'https://evil.test/'}],[html.replaceAll('2027','2026'),{}],[html.replace('</main>',''),{}],[html.replace(/Juni|August/g,'Unknown'),{}]])assert.deepEqual(parse(h,s).evidence,[]);
  });
- test(`${slug}: replay preserves saved headline rank, confirmed status and omitted names; new acts need review`,()=>{
+ test(`${slug}: replay preserves saved headline rank, confirmed status and omitted names; new official acts use normal ingestion`,()=>{
   const c=parse(),current={slug,editionYear:2027,startDate:start,endDate:end,status:'confirmed',headliners:[c.lineup[0]],lineup:[...c.lineup.slice(1),'Preserved Artist'],city:'City',ticketsUrl:'https://tickets.test/'};
   assert.deepEqual(evaluateCandidate(current,c).changes,[]);assert.deepEqual(evaluateCandidate(current,c).reviewReasons,[]);
-  const later={...c,lineup:[...c.lineup,'Later Artist']};const r=evaluateCandidate(current,later);assert.equal(r.publishable,false);assert.ok(r.reviewReasons.includes('Agent review required before lineup-triggered provider activity'));assert.ok(!r.changes.some(x=>x.kind.endsWith('_removed')));
+  const later={...c,lineup:[...c.lineup,'Later Artist']};const r=evaluateCandidate(current,later);assert.equal(r.publishable,true);assert.deepEqual(r.reviewReasons,[]);assert.ok(!r.changes.some(x=>x.kind.endsWith('_removed')));
  });
  test(`${slug}: corroborated date move remains visible for review`,()=>{const changed=slug==='vainstream'?html.replace('25.-26. Juni','18.-19. Juni'):html.replaceAll('20 ● 21 ● 22','13 ● 14 ● 15');assert.notEqual(parse(changed).startDate,start)});
 }
