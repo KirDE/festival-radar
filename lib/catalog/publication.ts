@@ -263,8 +263,8 @@ export async function publishIngestionResult(client: PrismaClient, input: { atte
     if(graspopLineup && !(isGraspopAnnouncement(input.result.candidate,applied.edition.year) &&
       isGraspopAnnouncement(candidate.normalized as unknown as FestivalCandidate,applied.edition.year) &&
       candidate.festivalSlug==='graspop' && candidate.attempt.requestedUrl===GRASPOP_FAQ && input.result.sourceUrl===GRASPOP_FAQ &&
-      input.result.changes.every(({field,kind})=>['startDate','endDate','headliners','status'].includes(field) &&
-        (field!=='headliners'||kind==='headliner_added') &&
+      input.result.changes.every(({field,kind})=>['startDate','endDate','headliners','lineup','status'].includes(field) &&
+        (field!=='headliners'||kind==='headliner_added') && (field!=='lineup'||kind==='artist_added') &&
         candidate.evidence.some(e=>e.field===field && e.sourceUrl===GRASPOP_FAQ && same(e.observedValue,(input.result.candidate as unknown as Record<string,unknown>)[field])))))throw new Error('Graspop publication requires matching persisted official addition evidence');
     if(graspopLineup && applied.edition.completeness==='TBA') {
       await db.festivalEdition.update({where:{id:applied.edition.id},data:{completeness:'PARTIAL'}});
