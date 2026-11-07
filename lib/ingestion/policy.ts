@@ -1,3 +1,4 @@
+import {ROSKILDE_HOME,ROSKILDE_REVIEW} from "./adapters/roskilde.ts";
 import { ROADBURN_ARTIST_REVIEW } from "./adapters/roadburn.ts";
 import { ALPEN_ARTIST_REVIEW } from './adapters/alpen-flair.ts';
 import { isCopenhellCurrentSource, COPENHELL_REVIEW } from "./adapters/copenhell-current.ts";
@@ -52,7 +53,9 @@ export function evaluateCandidate(current: Festival, candidate: FestivalCandidat
     current.editionYear === candidate.observedEditionYears[0] && candidate.observedEditionYears.length === 1 &&
     isCopenhellCurrentSource({ festivalSlug: candidate.festivalSlug, url: candidate.sourceUrl, editionYear: current.editionYear, strategies: ["official_markup"], enabled: true, refreshPolicy: "weekly" }) &&
     !changes.some(change => ["lineup", "headliners"].includes(change.field));
+  const unchangedRoskilde = current.slug === "roskilde" && candidate.festivalSlug === current.slug && candidate.sourceUrl === ROSKILDE_HOME && candidate.observedEditionYears.length === 1 && candidate.observedEditionYears[0] === current.editionYear && candidate.artistListMode === "additive" && !changes.some(c => ["lineup","headliners"].includes(c.field));
   const reviewReasons = new Set(warnings.filter(warning =>
+    !(unchangedRoskilde && warning === ROSKILDE_REVIEW) &&
     !(unchangedMystic && warning === MYSTIC_ARTIST_REVIEW) &&
     !(unchangedRoadburn && warning === ROADBURN_ARTIST_REVIEW) &&
     !(candidate.festivalSlug === "alpen-flair" && !changes.some(change => ["lineup", "headliners"].includes(change.field)) && warning === ALPEN_ARTIST_REVIEW) &&
