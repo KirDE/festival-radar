@@ -13,7 +13,7 @@ const current={slug:'graspop',editionYear:2027,startDate:'2027-06-17',endDate:'2
 test('real November full bill: 102 support acts corroborated by dated official announcement, eight independently billed heads',()=>{
  const e=fixture();assert.equal(discoverGraspopAnnouncements(e.home).length,9);
  const c=parse(e);assert.deepEqual(c.warnings,[]);assert.equal(c.lineup.length,102);assert.deepEqual([...c.headliners].sort(),[...heads].sort());
- assert.ok(c.lineup.includes('Body Count Feat. Ice-T'));assert.ok(c.lineup.includes('Humanity’s Last Breath'));
+ assert.ok(c.lineup.includes('Body Count Feat. Ice-T'));assert.ok(c.lineup.includes("Humanity's Last Breath"));
  const p=evaluateCandidate(current,c);assert.deepEqual(p.reviewReasons,[]);assert.equal(p.publishable,true);assert.equal(p.changes.filter(c=>c.kind==='artist_added').length,102);
  assert.equal(c.ticketStatus,undefined);assert.equal(c.ticketsUrl,undefined);assert.equal(c.artistListMode,'additive');
  assert.equal(evaluateCandidate({...current,lineup:c.lineup},c).changes.length,0);
@@ -41,4 +41,14 @@ test('later full announcements use declared counts rather than freezing this cap
  const p=evaluateCandidate({...current,lineup:['Previously Confirmed Act']},c);
  assert.deepEqual(p.reviewReasons,[]);assert.equal(p.changes.some(c=>c.kind.includes('removed')),false);
  const broken=structuredClone(c);broken.evidence=broken.evidence.filter(e=>e.field!=='lineup');assert.ok(evaluateCandidate(current,broken).reviewReasons.length);
+});
+
+test('roster apostrophe typography preserves existing catalogue identity and replay',()=>{
+ const e=fixture();
+ const c=parse(e);
+ assert.ok(c.lineup.includes("Humanity's Last Breath"));
+ assert.ok(!c.lineup.includes('Humanity’s Last Breath'));
+ const again=parse({...e,roster:e.roster.replaceAll('Humanity’s Last Breath',"Humanity's Last Breath")});
+ assert.deepEqual(again.lineup,c.lineup);
+ assert.equal(evaluateCandidate({...current,lineup:c.lineup},again).changes.length,0);
 });

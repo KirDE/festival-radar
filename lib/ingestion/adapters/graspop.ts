@@ -112,7 +112,7 @@ export function graspop(input: string, source: FestivalSource) {
     }
     const names: string[] = [], headliners: string[] = [], lineup: string[] = [];
     for (const card of cards) {
-      const name = plain(card[1].match(/<h3\b[^>]*class=["']artist__name["'][^>]*>([\s\S]*?)<\/h3>/i)?.[1] ?? '');
+      const name = plain(card[1].match(/<h3\b[^>]*class=["']artist__name["'][^>]*>([\s\S]*?)<\/h3>/i)?.[1] ?? '').replace(/[’‘]/g, "'");
       const link = attr(card[1].match(/<a\b[^>]*>/i)?.[0] ?? '', 'href') ?? '';
       const image = attr(card[1].match(/<img\b[^>]*>/i)?.[0] ?? '', 'src') ?? '';
       const target = new URL(link, GRASPOP_HOME);
