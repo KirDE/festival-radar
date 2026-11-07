@@ -106,7 +106,9 @@ export function ArtistDetail({
       )}
       <section className="appearances">
         <div className="eyebrow">{t("appearances")}</div>
-        {appearances.map((festival) => (
+        {[...appearances].sort((a, b) =>
+          (a.startDate || "9999").localeCompare(b.startDate || "9999") || a.slug.localeCompare(b.slug)
+        ).map((festival) => (
           <Link href={`/festivals/${festival.slug}/`} key={festival.slug}>
             <span>{festival.countryCode}</span>
             <strong>{festival.name}</strong>

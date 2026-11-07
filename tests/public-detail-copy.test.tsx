@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ArtistDetail } from "../components/ArtistDetail";
+import { artist } from "./support/catalog";
 import { FestivalDetail } from "../components/FestivalDetail";
 import { LanguageProvider, translate, type Language } from "../components/LanguageProvider";
 import { LocalPlannerProvider } from "../components/LocalPlanner";
@@ -165,5 +167,24 @@ for (const language of ["en", "de", "ru"] as const) {
       if (hasYoutubeCounts) assert.ok(youtube.includes(`43 ${translate(language, "artists")} · 205 ${translate(language, "tracks")}`));
       else assert.ok(!youtube.includes(translate(language, "tracks")), "Missing YouTube counts stay unknown");
     }
+  });
+}
+
+for (const language of ["en", "de", "ru"] as const) {
+  test(`artist appearances follow festival dates, not import order, in ${language}`, () => {
+    const appearances = [
+      { ...festival, slug: "unknown", startDate: undefined },
+      { ...festival, slug: "late", startDate: "2027-08-01", updatedAt: "2026-01-01" },
+      { ...festival, slug: "early-b", startDate: "2027-06-01", updatedAt: "2026-11-07" },
+      { ...festival, slug: "early-a", startDate: "2027-06-01", updatedAt: "2026-11-06" },
+    ];
+    const before = structuredClone(appearances);
+    const html = renderToStaticMarkup(
+      <LanguageProvider initialLanguage={language}><LocalPlannerProvider>
+        <ArtistDetail artist={artist} appearances={appearances} />
+      </LocalPlannerProvider></LanguageProvider>,
+    );
+    assert.deepEqual([...html.matchAll(/href="\/festivals\/([^/"\s]+)\/?"/g)].map(match => match[1]), ["early-a", "early-b", "late", "unknown"]);
+    assert.deepEqual(appearances, before);
   });
 }

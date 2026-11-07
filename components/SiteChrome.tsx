@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLanguage, type Language } from "./LanguageProvider";
+import { useTheme } from "./ThemeProvider";
 import { AccountMenu } from "./AccountMenu";
 
 export function SiteHeader() {
@@ -25,23 +26,30 @@ export function SiteHeader() {
 
 export function SiteFooter() {
   const { language, setLanguage, t } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
+  const themeLabel = { en: "Dark mode", de: "Dunkelmodus", ru: "Тёмная тема" }[language];
   return (
     <footer className="siteFooter">
       <span>Loud Weekend · {t("region")}</span>
       <span>{t("footerNote")} · {t("privacy")}</span>
       <Link href="/submit/">{t("submitFestival")}</Link>
-      <label className="languagePicker">
-        <span>{t("language")}</span>
-        <select
-          value={language}
-          onChange={(event) => setLanguage(event.target.value as Language)}
-          aria-label={t("language")}
-        >
-          <option value="en">English</option>
-          <option value="de">Deutsch</option>
-          <option value="ru">Русский</option>
-        </select>
-      </label>
+      <div className="footerPreferences">
+        <label className="languagePicker">
+          <span>{t("language")}</span>
+          <select
+            value={language}
+            onChange={(event) => setLanguage(event.target.value as Language)}
+            aria-label={t("language")}
+          >
+            <option value="en">English</option>
+            <option value="de">Deutsch</option>
+            <option value="ru">Русский</option>
+          </select>
+        </label>
+        <button type="button" className="themeToggle" role="switch" aria-checked={theme === "dark"} onClick={toggleTheme}>
+          <span aria-hidden="true">{theme === "dark" ? "☾" : "☀"}</span> {themeLabel}
+        </button>
+      </div>
     </footer>
   );
 }

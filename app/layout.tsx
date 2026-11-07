@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { cookies } from "next/headers";
 import { headers } from "next/headers";
 import type { Language } from "@/components/LanguageProvider";
 import { LanguageProvider } from "@/components/LanguageProvider";
@@ -33,19 +35,22 @@ export const viewport: Viewport = { themeColor: "#171712" };
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const theme = (await cookies()).get("lw_theme")?.value === "dark" ? "dark" : "light";
   const requested = (await headers()).get("x-festival-locale");
   const language: Language = requested === "de" || requested === "ru" ? requested : "en";
   const skip = { en: "Skip to content", de: "Zum Inhalt springen", ru: "Перейти к содержимому" }[language];
   return (
-    <html lang={language}>
+    <html lang={language} data-theme={theme}>
       <body>
-        <LanguageProvider initialLanguage={language}>
-          <LocalPlannerProvider>
-            <AppShell>{children}</AppShell>
-            <ServiceWorkerRegistration />
-            <PrivacyAnalytics />
-          </LocalPlannerProvider>
-        </LanguageProvider>
+        <ThemeProvider initialTheme={theme}>
+          <LanguageProvider initialLanguage={language}>
+            <LocalPlannerProvider>
+              <AppShell>{children}</AppShell>
+              <ServiceWorkerRegistration />
+              <PrivacyAnalytics />
+            </LocalPlannerProvider>
+          </LanguageProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
