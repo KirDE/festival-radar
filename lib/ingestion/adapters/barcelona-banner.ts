@@ -38,6 +38,26 @@ export function applyBarcelonaBanner(html: string, source: FestivalSource, candi
   }
   add("startDate", iso(days[0]), dates[0].excerpt);
   add("endDate", iso(days.at(-1)!), dates[0].excerpt);
+  // Visible dated announcement headings are independent of the stale image
+  // poster and hidden multilingual Nuxt payload. Never infer headline billing.
+  const visible = html.replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+  const names: string[] = [];
+  for (const heading of visible.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)) {
+    const text = heading[1].replace(/<[^>]+>/g, " ").replace(/&amp;/gi, "&").replace(/&#39;|&apos;/gi, "'").replace(/\s+/g, " ").trim();
+    const announcement = text.match(/^(.{1,100}?),\s*(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), July (\d{1,2})(?:st|nd|rd|th)? at|(?:lunes|martes|miércoles|jueves|viernes|sábado|domingo) (\d{1,2}) de julio en|(?:dilluns|dimarts|dimecres|dijous|divendres|dissabte|diumenge) (\d{1,2}) de juliol al) Barcelona Rock Fest (20\d{2})$/iu);
+    if (!announcement || Number(announcement[5]) !== year || month !== 7) continue;
+    const day = Number(announcement[2] ?? announcement[3] ?? announcement[4]);
+    if (!days.includes(day)) continue;
+    const name = announcement[1].trim();
+    if (!name || /^(?:line up|tickets?|artists?)$/i.test(name)) continue;
+    if (!names.includes(name)) names.push(name);
+    candidate.evidence.push({ field: "lineup", sourceUrl: source.url, observedAt: candidate.fetchedAt, excerpt: heading[0].slice(0, 500) });
+  }
+  if (names.length) {
+    candidate.lineup = [...new Set([...(candidate.lineup ?? []), ...names])];
+    candidate.lineupScope = "announcement";
+    candidate.artistListMode = "additive";
+  }
   const sales = headings.filter(h => h.role === "3");
   if (sales.length === 1 && /^(?:tickets? ya a la venta|tickets? (?:are )?(?:now on sale|on sale(?: now)?)|entrades ja a la venda)$/i.test(sales[0].text)) {
     add("ticketStatus", "available", sales[0].excerpt);
