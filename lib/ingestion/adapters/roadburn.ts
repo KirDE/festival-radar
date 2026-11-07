@@ -101,6 +101,22 @@ export function extractRoadburnCandidate(input: string, source: FestivalSource, 
       const name = text(a[2].match(/<strong\b[^>]*>([\s\S]*?)<\/strong>/i)?.[1] ?? "");
       if (nameValid(name)) acts.add(name);
     }
+    // Current-edition news can recap the bill in a cumulative, linked roster.
+    // Scope to this explicit section, not generic /band/ links or album prose.
+    const rosterHeading = [...article.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)]
+      .find(h => /^Here[’']s where we[’']re at so far$/i.test(text(h[1])));
+    if (rosterHeading) {
+      const after = article.slice(rosterHeading.index! + rosterHeading[0].length);
+      const roster = after.match(/^((?:\s|<\/?div\b[^>]*>)*)<ul\b[^>]*>([\s\S]*?)<\/ul>/i)?.[2];
+      if (roster) for (const li of roster.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)) {
+        const heading = li[1].match(/^\s*<h5\b[^>]*>\s*<a\b([^>]*)>([\s\S]*?)<\/a>([\s\S]*?)<\/h5>/i);
+        if (!heading || !/^(?:\([^)]{1,150}\)\s*)?[—–-]\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s+and\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday))?$/i.test(text(heading[3]))) continue;
+        let link: URL; try { link = new URL(attr(heading[1], "href") ?? "", origin); } catch { continue; }
+        if (link.origin !== origin || link.username || link.password || !/^\/band\/[a-z0-9-]+\/$/.test(link.pathname) || link.search || link.hash) continue;
+        const name = text(heading[2]);
+        if (nameValid(name)) acts.add(name);
+      }
+    }
     for (const name of acts) names.set(name.toLowerCase(), name);
     if (acts.size) candidate.evidence.push({ field: "lineup", sourceUrl: document.url, observedAt: fetchedAt, excerpt: `${title}; ${[...acts].join(", ")}; Roadburn ${source.editionYear}`.slice(0, 500) });
     else candidate.warnings.push("Current Roadburn announcement exposes no supported artist assertion");
