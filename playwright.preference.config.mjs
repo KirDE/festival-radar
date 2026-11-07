@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 // Run the focused browser regressions without a catalogue, accounts or database access.
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: "language-preference.spec.mjs",
+  testMatch: ["language-preference.spec.mjs", "theme.spec.mjs"],
   grep: /\[no-db\]/,
   workers: 1,
   timeout: 30_000,
