@@ -80,8 +80,11 @@ test("[no-db] fresh prefixed links honor their locale and bare HTML reads the pr
   await page.waitForFunction(() => document.cookie.includes("festival-radar-language=de"));
   const response = await page.request.get("/submit/");
   expect((await response.text()).includes("Festival vorschlagen")).toBe(true);
-  // Next dev overrides middleware caching with no-cache; production retains private, no-store.
-  expect(response.headers()["cache-control"]).toMatch(/private.*no-store|no-cache.*must-revalidate/);
+  // Next dev uses no-store in16.4 and no-cache/must-revalidate in older
+  // versions; production middleware's private/no-store guard is tested separately.
+  const cacheControl = response.headers()["cache-control"];
+  expect(cacheControl).toMatch(/(?:^|,\s*)no-store(?:,|$)|no-cache.*must-revalidate/);
+  expect(cacheControl).not.toMatch(/\bpublic\b|\bs-maxage\b|\bmax-age=[1-9]/);
   expect(response.headers()["set-cookie"]).toBeUndefined();
 });
 

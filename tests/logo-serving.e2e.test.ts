@@ -79,7 +79,15 @@ test("synthetic DB logos serve through actual Next HTTP routing with exact bytes
   const head = await request(url, { method: "HEAD" });
   assert.equal(head.status, 200);
   assert.equal(await head.text(), "");
-  assert.equal(head.headers.get("content-length"), String(first.sizeBytes));
+  assert.equal(head.headers.get("content-type"), first.mimeType);
+  assert.equal(head.headers.get("etag"), `"${first.sha256}"`);
+  assert.equal(head.headers.get("cache-control"), "public, max-age=0, must-revalidate");
+  // Next 16.4 owns HTTP framing and strips user-provided Content-Length in
+  // send-response.js. HEAD may omit this optional header (RFC 9110 §9.3.2).
+  // Handler-level size/headers remain covered by logo-serving.test.ts; keep
+  // validating the length when a transport chooses to include it.
+  const headLength = head.headers.get("content-length");
+  if (headLength !== null) assert.equal(headLength, String(first.sizeBytes));
   // Missing binding must not be mistaken for a wildcard conditional hit.
   const binding = await db.festivalLogo.findFirstOrThrow({ where: { festival: { slug: first.slug } } });
   await db.festivalLogo.delete({ where: { festivalId: binding.festivalId } });

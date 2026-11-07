@@ -23,7 +23,7 @@ test("production installer owns every collection schedule", async () => {
   assert.match(packager, /scripts\/spotify_gmm_2026\/\./);
   assert.match(packager, /spotify_gmm_2026\/spotify_auth\.py/);
   assert.match(packager, /python3 -m pip install[^\n]+--target[^\n]+\.python/);
-  assert.match(deploy, /actions\/setup-python@v5/);
+  assert.match(deploy, /actions\/setup-python@[0-9a-f]{40}/);
   assert.match(installer, /Environment=PYTHONPATH=\$app_root\/current\/\.python/);
   assert.match(installer, /Environment=PLAYLIST_PYTHON=python3/);
   assert.doesNotMatch(installer, /python3 -m venv|playlist-venv\/bin\/pip/);
